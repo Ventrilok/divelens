@@ -4,16 +4,19 @@
 // moment of Apply, in one undoable step.
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { onApplyProgress, tagSelection } from "../api";
+import { onApplyProgress, onSelectionPreview, selectionPreview, tagSelection } from "../api";
+import { coveringDive } from "../covers";
 import { DiveDetail } from "../components/DiveDetail";
 import { DiveList } from "../components/DiveList";
 import { FilterBar } from "../components/FilterBar";
 import { NO_PICK, pickAround, SitePicker, type SitePick } from "../components/SitePicker";
-import { DEFAULT_UNITS, formatGps } from "../format";
+import { DEFAULT_UNITS, formatGps, formatPhotoSpan } from "../format";
 import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters } from "../filters";
 import { t, tn } from "../i18n";
 import { gpsInput } from "../sites";
-import type { ApplyOutcome, Dive, DiveLog, LightroomStatus, Site, TagChoice, TagError } from "../types";
+import type { ApplyOutcome, Dive, DiveLog, LightroomStatus, SelectionPreview, Site, TagChoice, TagError } from "../types";
+
+const THUMBNAILS = 6;
 
 type Run =
   | { state: "idle" }
@@ -72,6 +75,27 @@ export function TagScreen({ log, lr, onCancel }: { log: DiveLog; lr: LightroomSt
       stop.then((f) => f());
     };
   }, []);
+
+  // Thumbnails of the current selection, as they arrive.
+  const [preview, setPreview] = useState<SelectionPreview>({ version: 0, thumbnails: [] });
+  useEffect(() => {
+    selectionPreview().then(setPreview);
+    const stop = onSelectionPreview(setPreview);
+    return () => {
+      stop.then((f) => f());
+    };
+  }, []);
+  const thumbnails = preview.version === lr.selectionVersion ? preview.thumbnails : [];
+
+  // The dive covering the selection is pointed out and shown in the detail
+  // card, never chosen for the user.
+  const covering = useMemo(
+    () => coveringDive(dives, lr.selectionFrom, lr.selectionTo),
+    [dives, lr.selectionFrom, lr.selectionTo],
+  );
+  useEffect(() => {
+    if (covering) setFocusedId(covering.id);
+  }, [covering]);
 
   const focused = dives.find((d) => d.id === focusedId) ?? null;
   const chosen: Dive | null = withDive ? (dives.find((d) => d.id === chosenId) ?? null) : null;
@@ -137,13 +161,30 @@ export function TagScreen({ log, lr, onCancel }: { log: DiveLog; lr: LightroomSt
       </header>
 
       <section className="card tag-selection" aria-label={t("tag.live")}>
-        <span className="tag-live">
-          <span className={`dot ${lr.connected ? "" : "dot-warn"}`} />
-          {t("tag.live")}
-        </span>
-        <span className="tag-count">
-          {!lr.connected ? t("tag.disconnected") : lr.selected > 0 ? tn("tag.photos", lr.selected) : t("tag.selectInLr")}
-        </span>
+        <div className="tag-selection-text">
+          <span className="tag-live">
+            <span className={`dot ${lr.connected ? "" : "dot-warn"}`} />
+            {t("tag.live")}
+          </span>
+          <span className="tag-count">
+            {!lr.connected ? t("tag.disconnected") : lr.selected > 0 ? tn("tag.photos", lr.selected) : t("tag.selectInLr")}
+            {lr.connected && lr.selected > 0 && lr.selectionFrom && lr.selectionTo && (
+              <span className="tag-span"> · {formatPhotoSpan(lr.selectionFrom, lr.selectionTo)}</span>
+            )}
+          </span>
+        </div>
+        {lr.connected && lr.selected > 0 && (
+          <div className="thumbs" aria-label={t("tag.preview")}>
+            {Array.from({ length: Math.min(THUMBNAILS, lr.selected) }, (_, i) =>
+              thumbnails[i] ? (
+                <img key={i} className="thumb" src={thumbnails[i] as string} alt="" />
+              ) : (
+                <div key={i} className="thumb" aria-hidden="true" />
+              ),
+            )}
+            {lr.selected > THUMBNAILS && <div className="thumb thumb-more">+{lr.selected - THUMBNAILS}</div>}
+          </div>
+        )}
       </section>
 
       <section className="card tag-what" aria-label={t("tag.what")}>
@@ -172,6 +213,7 @@ export function TagScreen({ log, lr, onCancel }: { log: DiveLog; lr: LightroomSt
                     onFocus={setFocusedId}
                     chosenId={chosenId}
                     onChoose={setChosenId}
+                    mark={covering ? { id: covering.id, label: t("tag.covers") } : null}
                     capabilities={capabilities}
                     units={units}
                   />

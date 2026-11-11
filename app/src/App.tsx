@@ -8,7 +8,16 @@ import { SourceError } from "./screens/SourceError";
 import type { DiveLog, LightroomStatus, LoadError } from "./types";
 import "./App.css";
 
-const offline: LightroomStatus = { connected: false, catalog: null, lightroomVersion: null, pluginVersion: null, selected: 0 };
+const offline: LightroomStatus = {
+  connected: false,
+  catalog: null,
+  lightroomVersion: null,
+  pluginVersion: null,
+  selected: 0,
+  selectionVersion: 0,
+  selectionFrom: null,
+  selectionTo: null,
+};
 
 type State = { status: "loading" } | { status: "ok"; log: DiveLog } | { status: "error"; failure: LoadError };
 

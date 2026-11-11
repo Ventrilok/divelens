@@ -12,6 +12,10 @@ describe("dates are wall-clock times", () => {
   it("runs in a time zone far from UTC", () => {
     expect(new Date(Date.UTC(2025, 0, 1)).getTimezoneOffset()).toBe(-840);
   });
+  it("shows the photos' time span", () => {
+    expect(f.formatPhotoSpan("2025-12-30T07:31:12", "2025-12-30T08:12:40")).toBe("30 déc. 2025, 07:31 → 08:12");
+    expect(f.formatPhotoSpan("2025-12-31T23:50:00", "2026-01-01T00:10:00")).toBe("31 déc. 2025, 23:50 → 1 janv. 2026, 00:10");
+  });
   it("keeps the dive computer's time", () => {
     expect(f.formatRowDate("2025-12-31T07:14:03")).toBe("31 déc. · 07:14");
     expect(f.formatDiveSpan("2025-12-31T07:14:03", "2025-12-31T07:49:13")).toBe("Mer. 31 déc. 2025 · 07:14 → 07:49");

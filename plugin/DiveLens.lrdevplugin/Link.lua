@@ -26,6 +26,7 @@ local LrFunctionContext = import "LrFunctionContext"
 local LrMD5 = import "LrMD5"
 local LrPathUtils = import "LrPathUtils"
 local LrSocket = import "LrSocket"
+local LrStringUtils = import "LrStringUtils"
 local LrTasks = import "LrTasks"
 
 local Framing = require "Framing"
@@ -40,6 +41,9 @@ local TICK = 0.1           -- seconds between two passes of the link task
 local SELECTION_EVERY = 5  -- selection checked every 5 ticks while the app is connected
 local PENDING_SCREEN_FOR = 30 -- seconds a menu choice waits for a just-launched app
 local SILENCE = 8          -- seconds without news before the app is considered gone
+local THUMBNAILS = 6       -- thumbnails of the selection shown by the app
+local THUMBNAIL_SIZE = 160 -- pixels, minimum; Lightroom may return larger
+local THUMBNAILS_PER_TICK = 2
 
 local Link = {}
 
@@ -130,23 +134,76 @@ local function catalogName()
     return LrPathUtils.removeExtension(LrPathUtils.leafName(path))
 end
 
--- Number of selected photos, and a cheap signature of the selection. Nothing
--- when no photo is selected (getTargetPhotos alone would return the whole
--- filmstrip in that case). The app asks for the photos themselves when it
--- needs them, so a large selection is never pushed around.
+-- The selection: photos (none when nothing is selected: getTargetPhotos alone
+-- would return the whole filmstrip) and a cheap signature to notice changes.
 local function selection()
     local catalog = LrApplication.activeCatalog()
     local active = catalog:getTargetPhoto()
-    if not active then return 0, "" end
-    local count = #catalog:getTargetPhotos()
-    return count, count .. ":" .. tostring(active.localIdentifier)
+    if not active then return {}, "" end
+    local photos = catalog:getTargetPhotos()
+    local signature = table.concat({
+        #photos, tostring(active.localIdentifier),
+        tostring(photos[1].localIdentifier), tostring(photos[#photos].localIdentifier),
+    }, ":")
+    return photos, signature
+end
+
+-- Earliest and latest capture times, as wall-clock "YYYY-MM-DDTHH:MM:SS"
+-- (Lightroom's local time, as it shows them), or nil.
+local function timeRange(photos)
+    if #photos == 0 then return nil end
+    local raw = LrApplication.activeCatalog():batchGetRawMetadata(photos, { "dateTimeOriginal", "dateTime" })
+    local first, last
+    for _, photo in ipairs(photos) do
+        local m = raw[photo]
+        local t = m and (m.dateTimeOriginal or m.dateTime)
+        if t then
+            if not first or t < first then first = t end
+            if not last or t > last then last = t end
+        end
+    end
+    if not first then return nil end
+    local function wallClock(t) return LrDate.timeToUserFormat(t, "%Y-%m-%dT%H:%M:%S") end
+    return wallClock(first), wallClock(last)
+end
+
+-- Asks Lightroom for the first thumbnails. Callbacks only queue the result;
+-- the link task sends it. Older requests are released (no longer wanted).
+local function requestThumbnails(s, photos, version)
+    s.thumbnailRequests = {}
+    for i = 1, math.min(THUMBNAILS, #photos) do
+        s.thumbnailRequests[i] = photos[i]:requestJpegThumbnail(THUMBNAIL_SIZE, THUMBNAIL_SIZE, function(jpeg)
+            if jpeg and version == s.selectionVersion then
+                s.thumbnailOutbox[#s.thumbnailOutbox + 1] = { version = version, index = i, jpeg = jpeg }
+            end
+        end)
+    end
+end
+
+local function sendThumbnails(s)
+    for _ = 1, THUMBNAILS_PER_TICK do
+        local item = table.remove(s.thumbnailOutbox, 1)
+        if not item then return end
+        if item.version == s.selectionVersion then
+            send(s, {
+                type = "thumbnail",
+                version = item.version,
+                index = item.index,
+                jpeg = LrStringUtils.encodeBase64(item.jpeg),
+            })
+        end
+    end
 end
 
 local function pushSelection(s, force)
-    local count, signature = selection()
+    local photos, signature = selection()
     if not force and signature == s.selectionSignature then return end
-    if send(s, { type = "selection", count = count }) then
+    s.selectionVersion = s.selectionVersion + 1
+    s.thumbnailOutbox = {}
+    local from, to = timeRange(photos)
+    if send(s, { type = "selection", count = #photos, version = s.selectionVersion, from = from, to = to }) then
         s.selectionSignature = signature
+        requestThumbnails(s, photos, s.selectionVersion)
     end
 end
 
@@ -273,6 +330,8 @@ local function closeSockets(s)
     s.receiverConnected = false
     s.authed = false
     s.selectionSignature = nil
+    s.thumbnailRequests = {}
+    s.thumbnailOutbox = {}
     s.framing = Framing.new()
     s.inbox = {}
     s.ports = {}
@@ -380,6 +439,7 @@ local function run(s)
                 local ok, err = LrTasks.pcall(pushSelection, s, false)
                 if not ok then Log.error("selection failed: %s", err) end
             end
+            if s.authed then sendThumbnails(s) end
             checkSilence(s)
             LrTasks.sleep(TICK)
         end
@@ -405,6 +465,9 @@ function Link.start()
         framing = Framing.new(),
         authed = false,
         generation = 0,
+        selectionVersion = 0,
+        thumbnailRequests = {},
+        thumbnailOutbox = {},
     }
     _G.DiveLensLink = s
     LrTasks.startAsyncTask(function()

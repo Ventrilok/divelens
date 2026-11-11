@@ -124,6 +124,21 @@ fn set_source_path(app: AppHandle, path: PathBuf) -> Result<(), String> {
 struct Lightroom {
     status: Mutex<Status>,
     commands: Mutex<Sender<Command>>,
+    /// Thumbnails of the current selection, as data URLs, by position.
+    preview: Mutex<Preview>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+struct Preview {
+    version: u64,
+    thumbnails: Vec<Option<String>>,
+}
+
+/// Thumbnails received so far for the current selection; new ones arrive as
+/// `selection-preview` events.
+#[tauri::command]
+fn selection_preview(state: State<Lightroom>) -> Preview {
+    state.preview.lock().expect("preview").clone()
 }
 
 /// Current Lightroom link state; updates arrive as `lightroom-status` events.
@@ -296,6 +311,26 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                     Event::Progress { done, total } => {
                         let _ = app.emit("apply-progress", (done, total));
                     }
+                    Event::Thumbnail {
+                        version,
+                        index,
+                        jpeg,
+                    } => {
+                        let state = app.state::<Lightroom>();
+                        let mut preview = state.preview.lock().expect("preview");
+                        if preview.version != version {
+                            *preview = Preview {
+                                version,
+                                thumbnails: Vec::new(),
+                            };
+                        }
+                        let slot = index.saturating_sub(1).min(31);
+                        if preview.thumbnails.len() <= slot {
+                            preview.thumbnails.resize(slot + 1, None);
+                        }
+                        preview.thumbnails[slot] = Some(format!("data:image/jpeg;base64,{jpeg}"));
+                        let _ = app.emit("selection-preview", preview.clone());
+                    }
                 },
             );
             // Log changes only: a stale link file fails every second.
@@ -331,13 +366,15 @@ pub fn run() {
             set_source_path,
             lightroom_status,
             initial_screen,
-            tag_selection
+            tag_selection,
+            selection_preview
         ])
         .setup(|app| {
             let (commands, inbox) = mpsc::channel();
             app.manage(Lightroom {
                 status: Mutex::new(Status::default()),
                 commands: Mutex::new(commands),
+                preview: Mutex::new(Preview::default()),
             });
             let handle = app.handle().clone();
             std::thread::Builder::new()
