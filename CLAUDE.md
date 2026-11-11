@@ -23,7 +23,9 @@ V1 sources: MacDive (SQLite, macOS) and Subsurface (XML file and git-based stora
 - `libdivecomputer-sys/`: compiles libdivecomputer (git submodule `third_party/libdivecomputer`, pinned to the commit DiverCity validated) and declares the few C functions used. Parsing only: no USB/Bluetooth/serial.
 - MacDive profiles come from `ZRAWDATA` decoded by libdivecomputer (Shearwater data is decompressed first). `ZSAMPLES` is proprietary and not used. A `ZSAMPLES_JSON` column seen in some test databases was added by DiverCity's tooling, not by MacDive: never rely on it.
 - `app/`: Tauri 2 app (React + TypeScript front end in `app/src`, Rust side in `app/src-tauri`, crate `divelens`).
-- `plugin/` (to come): the Lua Lightroom plugin. Never port `LicenseHelper.lua`, compiled bytecode or the `luac5.1` binary from the legacy repo.
+- `plugin/DiveLens.lrdevplugin/`: the Lua Lightroom plugin, shipped as plain source (no compile step). Never port `LicenseHelper.lua`, compiled bytecode or the `luac5.1` binary from the legacy repo, and never copy Adobe SDK files.
+- Link app ↔ plugin: the plugin listens on two local sockets (one per direction, LrSocket) and writes their ports and a token to `lightroom-link.json` in the app's settings folder; the app connects, says hello with the token, and receives the live selection. One JSON object per line. Plugin side `Link.lua`, app side `app/src-tauri/src/lightroom.rs`.
+- The plugin's pure-Lua parts (JSON, framing, manifest, fields) are tested under Lua 5.1 from `app/src-tauri/tests/plugin_lua.rs`.
 - Cargo workspace at the root: one `target/` and one `Cargo.lock` for both crates.
 
 App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where app settings live). Version is set once in `app/package.json`.
@@ -31,6 +33,8 @@ App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where a
 ## Commands
 
 - Core tests: `cargo test -p divelens-core`
+- App and plugin tests: `cargo test -p divelens` (needs `app/dist`, i.e. one front-end build)
+- Plugin in Lightroom (dev): Plug-in Manager › Add › `plugin/DiveLens.lrdevplugin`. Its menus launch `target/release/bundle/macos/DiveLens.app` (macOS) or `target/release/divelens.exe` (Windows) when no app ships in the plugin folder; a running dev window connects by itself. Plugin log: `DiveLens.log` in Lightroom's log folder (macOS `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/`).
 - Lint: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`
 - Front-end tests (from `app/`): `npm test` (runs in a UTC+14 time zone on purpose: dive times are wall-clock and must never shift)
 - Check the MacDive reader against a real database (local only, output is personal data): `cargo run -p divelens-core --example macdive_dump -- <path> [dive number]`
