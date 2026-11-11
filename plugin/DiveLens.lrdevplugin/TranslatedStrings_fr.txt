@@ -18,3 +18,4 @@
 "$$$/DiveLens/Metadata/TempHigh=Temp. max"
 "$$$/DiveLens/Metadata/TempLow=Temp. min"
 "$$$/DiveLens/Metadata/Rating=Note"
+"$$$/DiveLens/Undo/TagSelection=Tagger la sélection (DiveLens)"

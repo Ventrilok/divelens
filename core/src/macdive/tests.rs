@@ -16,6 +16,9 @@ INSERT INTO ZDIVESITE (Z_PK, ZNAME, ZLOCATION, ZCOUNTRY, ZGPSLAT, ZGPSLON)
   VALUES (1, 'Coral Garden', 'North Reef', 'Atlantis', 12.5, -45.25),
          (2, 'Glacier Wall', NULL, 'Égypte', 0, 0),
          (3, '  ', '', NULL, NULL, NULL);
+-- 4: a site with no dive yet, and a UUID.
+INSERT INTO ZDIVESITE (Z_PK, ZUUID, ZNAME, ZLOCATION, ZCOUNTRY, ZGPSLAT, ZGPSLON)
+  VALUES (4, 'SITE-4', 'Blue Lagoon', 'East Bay', 'Atlantis', -8.25, 115.5);
 
 -- 1: full dive with raw data from a known computer, rated 4, GPS.
 INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH, ZTEMPHIGH, ZTEMPLOW, ZRATING, ZRELATIONSHIPDIVESITE, ZCOMPUTER, ZRAWDATA)
@@ -70,6 +73,7 @@ fn reads_a_full_dive() {
     assert_eq!(d.max_depth_m, Some(18.4));
     assert_eq!((d.temp_low_c, d.temp_high_c), (Some(24.0), Some(26.0)));
     assert_eq!(d.rating, Some(4));
+    assert_eq!(d.site.id.as_deref(), Some("pk:1"));
     assert_eq!(d.site.name.as_deref(), Some("Coral Garden"));
     assert_eq!(d.site.location.as_deref(), Some("North Reef"));
     assert_eq!(d.site.country.as_deref(), Some("Atlantis"));
@@ -112,6 +116,24 @@ fn blank_site_fields_are_missing() {
     let d = by_id(&dives, "UUID-D");
     assert_eq!(d.site, Site::default());
     assert!(!d.has_profile, "no raw data");
+}
+
+#[test]
+fn lists_named_sites_even_without_dives() {
+    let (_dir, md) = fixture();
+    let mut sites = md.sites().unwrap();
+    sites.sort_by(|a, b| a.id.cmp(&b.id));
+    let ids: Vec<_> = sites.iter().map(|s| s.id.as_deref().unwrap()).collect();
+    assert_eq!(ids, ["SITE-4", "pk:1", "pk:2"], "blank site 3 left out");
+    let lagoon = &sites[0];
+    assert_eq!(lagoon.name.as_deref(), Some("Blue Lagoon"));
+    assert_eq!((lagoon.lat, lagoon.lon), (Some(-8.25), Some(115.5)));
+    assert_eq!(sites[2].country.as_deref(), Some("Égypte"));
+    assert_eq!(
+        (sites[2].lat, sites[2].lon),
+        (None, None),
+        "GPS 0/0 is missing"
+    );
 }
 
 #[test]

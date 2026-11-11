@@ -10,6 +10,7 @@ pub mod error;
 pub mod macdive;
 pub mod model;
 pub mod profile;
+pub mod tags;
 
 pub use error::{Error, Result};
 pub use model::{Capabilities, Dive, DiveSource, Site};

@@ -3,6 +3,7 @@ import { initialScreen, lightroomStatus, loadDives, onLightroomStatus, onShowScr
 import { isReadyScreen, Sidebar, type Screen } from "./components/Sidebar";
 import { t } from "./i18n";
 import { DivesScreen } from "./screens/DivesScreen";
+import { TagScreen } from "./screens/TagScreen";
 import { SourceError } from "./screens/SourceError";
 import type { DiveLog, LightroomStatus, LoadError } from "./types";
 import "./App.css";
@@ -44,6 +45,7 @@ function App() {
       )}
       {state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
       {state.status === "ok" && screen === "dives" && <DivesScreen log={state.log} />}
+      {state.status === "ok" && screen === "tag" && <TagScreen log={state.log} lr={lr} onCancel={() => setScreen("dives")} />}
     </div>
   );
 }

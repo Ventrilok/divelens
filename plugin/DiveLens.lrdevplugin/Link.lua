@@ -31,6 +31,7 @@ local LrTasks = import "LrTasks"
 local Framing = require "Framing"
 local Json = require "Json"
 local Log = require "Log"
+local Tagging = require "Tagging"
 
 local PROTOCOL = 1
 local APP_ID = "com.querton.divelens.desktop" -- the app's bundle identifier
@@ -149,6 +150,60 @@ local function pushSelection(s, force)
     end
 end
 
+-- Writing ---------------------------------------------------------------------
+
+local WRITE_TIMEOUT = 10 -- seconds to wait for Lightroom's write access
+local PROGRESS_EVERY = 50 -- photos between two progress messages
+
+-- Lightroom's own date format for StartDate and EndDate, exactly as the
+-- previous plugin wrote them (the time zone does not matter: the same one
+-- is used both ways, so the wall-clock time is kept).
+local function formatDate(iso)
+    local y, mo, d, h, mi, sec = Tagging.dateParts(iso)
+    if not y then return nil end
+    local t = LrDate.timeFromComponents(y, mo, d, h, mi, sec)
+    return LrDate.formatShortDate(t) .. " " .. LrDate.formatMediumTime(t)
+end
+
+-- Tags the photos selected in Lightroom now (not when the app last looked),
+-- in one catalog write, so one Undo reverts it. Always answers the app.
+local function applyTags(s, message)
+    local id = message.id
+    local function fail(reason, detail)
+        Log.warn("tagging refused: %s %s", reason, detail or "")
+        send(s, { type = "applyFailed", id = id, reason = reason, detail = detail })
+    end
+    local changes, why = Tagging.plan(message, formatDate)
+    if not changes then return fail("badRequest", why) end
+    local catalog = LrApplication.activeCatalog()
+    -- Never the whole filmstrip: getTargetPhotos returns it when nothing is selected.
+    if not catalog:getTargetPhoto() then return fail("noSelection") end
+    local photos = catalog:getTargetPhotos()
+    local total = #photos
+    local ok, status = LrTasks.pcall(function()
+        return catalog:withWriteAccessDo(LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (DiveLens)", function()
+            for i, photo in ipairs(photos) do
+                for _, change in ipairs(changes) do
+                    if change.kind == "plugin" then
+                        photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
+                    else
+                        photo:setRawMetadata(change.field, change.value)
+                    end
+                end
+                if i % PROGRESS_EVERY == 0 and i < total then
+                    send(s, { type = "progress", id = id, done = i, total = total })
+                    LrTasks.yield()
+                end
+            end
+        end, { timeout = WRITE_TIMEOUT })
+    end)
+    s.lastHeard = LrDate.currentTime() -- the app's pings waited during the write
+    if not ok then return fail("error", tostring(status)) end
+    if status ~= "executed" then return fail("busy") end
+    Log.info("tagged %d photos", total)
+    send(s, { type = "applied", id = id, count = total })
+end
+
 -- Receiving -------------------------------------------------------------------
 
 local function isWholeMessage(text)
@@ -187,6 +242,8 @@ local function handle(s, text)
     if not s.authed then return end
     if message.type == "ping" then
         send(s, { type = "pong" })
+    elseif message.type == "apply" then
+        applyTags(s, message)
     else
         Log.debug("ignored message type %s", tostring(message.type))
     end

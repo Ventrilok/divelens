@@ -1,6 +1,8 @@
 // Mirrors the Rust common dive format (core/src/model.rs).
 
 export interface Site {
+  /** Stable id inside the dive log; null when the dive has no site. */
+  id: string | null;
   name: string | null;
   location: string | null;
   country: string | null;
@@ -48,6 +50,8 @@ export interface DiveLog {
   source: SourceInfo;
   capabilities: Capabilities;
   dives: Dive[];
+  /** Every named site of the log, including sites with no dive yet. */
+  sites: Site[];
 }
 
 export type ReaderError =
@@ -76,3 +80,17 @@ export interface LightroomStatus {
   /** Photos selected in Lightroom; 0 when nothing is selected. */
   selected: number;
 }
+
+/** What Tag Selection writes (app/src-tauri/src/lib.rs, TagChoice). */
+export interface TagChoice {
+  diveId: string | null;
+  location: { kind: "diveSite" } | { kind: "site"; siteId: string; lat: number | null; lon: number | null } | null;
+}
+
+export type ApplyOutcome =
+  | { outcome: "applied"; count: number }
+  | { outcome: "failed"; reason: "noSelection" | "busy" | "badRequest" | "error" | string; detail: string | null };
+
+export type TagError =
+  | { error: "nothingChosen" | "notConnected" | "linkLost" | "badGps" | "unknownDive" | "unknownSite" }
+  | { error: "source"; detail: ReaderError };

@@ -778,6 +778,7 @@ dependencies = [
 name = "divelens"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "divelens-core",
  "mlua",
  "serde",

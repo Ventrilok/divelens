@@ -11,6 +11,9 @@ use crate::profile::Sample;
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Site {
+    /// Stable identifier of the site inside the source; `None` when the dive
+    /// has no site.
+    pub id: Option<String>,
     pub name: Option<String>,
     pub location: Option<String>,
     pub country: Option<String>,
@@ -61,4 +64,7 @@ pub trait DiveSource {
     fn dives(&self) -> Result<Vec<Dive>>;
     /// Profile of one dive, sorted by time; empty when the dive has none.
     fn profile(&self, dive_id: &str) -> Result<Vec<Sample>>;
+    /// Every named site of the log, including sites with no dive yet, in no
+    /// particular order.
+    fn sites(&self) -> Result<Vec<Site>>;
 }

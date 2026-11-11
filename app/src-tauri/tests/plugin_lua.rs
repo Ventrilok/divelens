@@ -181,3 +181,126 @@ fn plugin_keeps_its_identifier_and_fields() {
         "#,
     );
 }
+
+/// The plan the plugin makes from a request built by the app, as
+/// "kind field=value" lines (value "nil" clears the field).
+fn plan(request: &divelens_core::tags::TagRequest) -> Result<Vec<String>, String> {
+    let lua = lua();
+    lua.globals()
+        .set("input", serde_json::to_string(request).unwrap())
+        .unwrap();
+    let out: mlua::Table = lua
+        .load(
+            r#"
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            local changes, why = Tagging.plan(Json.decode(input), function(iso)
+                return "date(" .. iso .. ")"
+            end)
+            if not changes then return { error = why } end
+            local lines = {}
+            for i, c in ipairs(changes) do
+                local v = c.value
+                if type(v) == "table" then v = ("%s,%s"):format(v.latitude, v.longitude) end
+                lines[i] = ("%s %s=%s"):format(c.kind, c.field, tostring(v))
+            end
+            return { lines = lines }
+            "#,
+        )
+        .eval()
+        .unwrap();
+    if let Ok(why) = out.get::<String>("error") {
+        return Err(why);
+    }
+    Ok(out.get("lines").unwrap())
+}
+
+fn sample_dive() -> divelens_core::Dive {
+    let start = chrono::NaiveDate::from_ymd_opt(2025, 12, 31)
+        .unwrap()
+        .and_hms_opt(7, 14, 0)
+        .unwrap();
+    divelens_core::Dive {
+        id: "A".into(),
+        number: Some(700),
+        start,
+        end: start + chrono::Duration::seconds(2100),
+        duration_s: 2100,
+        max_depth_m: Some(31.2),
+        temp_high_c: Some(28.0),
+        temp_low_c: None,
+        rating: None,
+        site: divelens_core::Site {
+            id: Some("S".into()),
+            name: Some("Coral Garden".into()),
+            location: None,
+            country: Some("Atlantis".into()),
+            lat: Some(12.5),
+            lon: Some(-45.25),
+        },
+        has_profile: true,
+    }
+}
+
+#[test]
+fn tagging_plan_writes_dive_fields_and_clears_missing_ones() {
+    use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units};
+    let dive = sample_dive();
+    let lines = plan(&TagRequest {
+        dive: Some(DiveTags::new(&dive, Units::default())),
+        location: Some(LocationTags::new(&dive.site, None, None)),
+    })
+    .unwrap();
+    assert_eq!(
+        lines,
+        [
+            "plugin DiveId=700",
+            "plugin StartDate=date(2025-12-31T07:14:00)",
+            "plugin EndDate=date(2025-12-31T07:49:00)",
+            "plugin Duration=35:00",
+            "plugin MaxDepth=31.2 m",
+            "plugin TempHigh=28.0°C",
+            "plugin TempLow=nil",
+            "plugin Rating=nil",
+            // No city: the photo's city is left as it is.
+            "raw country=Atlantis",
+            "raw location=Coral Garden",
+            "raw gps=12.5,-45.25",
+        ]
+    );
+}
+
+#[test]
+fn tagging_plan_location_only_and_bad_requests() {
+    use divelens_core::tags::{LocationTags, TagRequest};
+    let mut site = sample_dive().site;
+    site.lat = None;
+    site.lon = None;
+    let lines = plan(&TagRequest {
+        dive: None,
+        location: Some(LocationTags::new(&site, None, None)),
+    })
+    .unwrap();
+    assert_eq!(lines, ["raw country=Atlantis", "raw location=Coral Garden"]);
+    assert_eq!(
+        plan(&TagRequest {
+            dive: None,
+            location: None
+        }),
+        Err("nothing to write".into())
+    );
+}
+
+#[test]
+fn tagging_reads_wall_clock_dates() {
+    let lua = lua();
+    run(
+        &lua,
+        r#"
+        local Tagging = require "Tagging"
+        local y, mo, d, h, mi, s = Tagging.dateParts("2025-12-31T07:04:09")
+        assert(y == 2025 and mo == 12 and d == 31 and h == 7 and mi == 4 and s == 9)
+        assert(Tagging.dateParts("31/12/2025") == nil)
+        "#,
+    );
+}
