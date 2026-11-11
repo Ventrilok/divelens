@@ -161,6 +161,30 @@ fn missing_file_and_wrong_file_are_reported() {
     assert!(matches!(MacDive::open(&text), Err(Error::NotADiveLog(_))));
 }
 
+/// Real MacDive databases have no readable profile column.
+#[test]
+fn real_macdive_schema_without_readable_profile() {
+    let dir = TempDir::new().unwrap();
+    let path = dir.path().join("MacDive.sqlite");
+    let conn = Connection::open(&path).unwrap();
+    conn.execute_batch(&SCHEMA.replace(" , ZSAMPLES_JSON TEXT", ""))
+        .unwrap();
+    conn.execute_batch(
+        "INSERT INTO ZDIVESITE (Z_PK, ZNAME) VALUES (1, 'Coral Garden');
+         INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZRELATIONSHIPDIVESITE)
+           VALUES (1, 'UUID-A', 1, 771586200, 600.0, 1);",
+    )
+    .unwrap();
+    drop(conn);
+    let md = MacDive::open(&path).unwrap();
+    assert!(!md.has_json_profile);
+    let dives = md.dives().unwrap();
+    assert_eq!(dives.len(), 1);
+    assert!(!dives[0].has_profile);
+    assert!(md.profile("UUID-A").unwrap().is_empty());
+    assert!(matches!(md.profile("nope"), Err(Error::UnknownDive(_))));
+}
+
 #[test]
 fn bad_profile_json_is_an_error() {
     assert!(matches!(

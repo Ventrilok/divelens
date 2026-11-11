@@ -2,8 +2,11 @@
 //!
 //! - Dates are Core Data timestamps: seconds since 2001-01-01, holding the
 //!   dive computer's wall-clock time.
-//! - The profile is the readable copy MacDive keeps in `ZSAMPLES_JSON`
-//!   (one point every 10 s). The encoded and raw copies are not used.
+//! - Profile: real MacDive databases store it only in encoded form
+//!   (`ZSAMPLES`, proprietary) and as the dive computer's raw download
+//!   (`ZRAWDATA`). Decoding is not implemented yet. Some prepared test
+//!   databases carry an extra readable `ZSAMPLES_JSON` column (added by an
+//!   external tool, not by MacDive); it is used when present.
 //! - Missing values: NULL temperature, rating 0, GPS 0/0.
 
 use std::path::{Path, PathBuf};
@@ -24,6 +27,8 @@ pub const DEFAULT_RELATIVE_PATH: &str = "Library/Application Support/MacDive/Mac
 
 pub struct MacDive {
     conn: Connection,
+    /// The database has the extra readable profile column (see module doc).
+    has_json_profile: bool,
 }
 
 impl MacDive {
@@ -46,7 +51,17 @@ impl MacDive {
         if !is_macdive {
             return Err(Error::NotADiveLog(path.to_path_buf()));
         }
-        Ok(Self { conn })
+        let has_json_profile: bool = conn
+            .query_row(
+                "SELECT count(*) > 0 FROM pragma_table_info('ZDIVE') WHERE name = 'ZSAMPLES_JSON'",
+                [],
+                |r| r.get(0),
+            )
+            .map_err(Error::from)?;
+        Ok(Self {
+            conn,
+            has_json_profile,
+        })
     }
 
     /// Standard database location for the given home folder.
@@ -146,7 +161,12 @@ impl DiveSource for MacDive {
     }
 
     fn dives(&self) -> Result<Vec<Dive>> {
-        let mut stmt = self.conn.prepare(
+        let has_profile = if self.has_json_profile {
+            "D.ZSAMPLES_JSON IS NOT NULL AND length(D.ZSAMPLES_JSON) > 2"
+        } else {
+            "0"
+        };
+        let mut stmt = self.conn.prepare(&format!(
             "SELECT COALESCE(D.ZUUID, 'pk:' || D.Z_PK) AS id,
                     D.ZDIVENUMBER AS number,
                     D.ZRAWDATE AS start,
@@ -157,11 +177,11 @@ impl DiveSource for MacDive {
                     D.ZRATING AS rating,
                     S.ZNAME AS site, S.ZLOCATION AS location, S.ZCOUNTRY AS country,
                     S.ZGPSLAT AS lat, S.ZGPSLON AS lon,
-                    D.ZSAMPLES_JSON IS NOT NULL AND length(D.ZSAMPLES_JSON) > 2 AS has_profile
+                    {has_profile} AS has_profile
              FROM ZDIVE D
              LEFT JOIN ZDIVESITE S ON D.ZRELATIONSHIPDIVESITE = S.Z_PK
-             WHERE D.ZRAWDATE IS NOT NULL",
-        )?;
+             WHERE D.ZRAWDATE IS NOT NULL"
+        ))?;
         let dives = stmt
             .query_map([], dive_from_row)?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -169,6 +189,18 @@ impl DiveSource for MacDive {
     }
 
     fn profile(&self, dive_id: &str) -> Result<Vec<Sample>> {
+        if !self.has_json_profile {
+            let exists: bool = self.conn.query_row(
+                "SELECT count(*) > 0 FROM ZDIVE WHERE COALESCE(ZUUID, 'pk:' || Z_PK) = ?1",
+                [dive_id],
+                |r| r.get(0),
+            )?;
+            return if exists {
+                Ok(Vec::new())
+            } else {
+                Err(Error::UnknownDive(dive_id.to_string()))
+            };
+        }
         let json: Option<Option<String>> = self
             .conn
             .query_row(
