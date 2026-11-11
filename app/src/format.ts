@@ -1,0 +1,128 @@
+// How dive data is shown. One function per kind of value, used everywhere,
+// so the same data looks the same on every screen (spec: consistency rule).
+
+import { locale } from "./i18n";
+import type { Units } from "./types";
+
+// Units become a setting later (Settings screen); metric until then.
+export const DEFAULT_UNITS: Units = { depth: "m", temp: "c" };
+
+const FT_PER_M = 3.28084;
+
+const oneDecimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const upToOneDecimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
+const integer = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+const gps = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4, useGrouping: false });
+
+export const DASH = "—";
+
+/** Depth in the display unit. */
+export function depthValue(m: number, units: Units): number {
+  return units.depth === "ft" ? m * FT_PER_M : m;
+}
+
+/** Display-unit depth back to metres (filters). */
+export function depthToMetres(v: number, units: Units): number {
+  return units.depth === "ft" ? v / FT_PER_M : v;
+}
+
+export function depthUnit(units: Units): string {
+  return units.depth === "ft" ? "ft" : "m";
+}
+
+/** "29,2 m" / "96 ft". */
+export function formatDepth(m: number | null, units: Units): string {
+  if (m === null) return DASH;
+  return units.depth === "ft"
+    ? `${integer.format(depthValue(m, units))} ft`
+    : `${oneDecimal.format(m)} m`;
+}
+
+function tempValue(c: number, units: Units): number {
+  return units.temp === "f" ? (c * 9) / 5 + 32 : c;
+}
+
+function tempUnit(units: Units): string {
+  return units.temp === "f" ? "°F" : "°C";
+}
+
+/** "27 °C" / "26,5 °C". */
+export function formatTemp(c: number | null, units: Units): string {
+  if (c === null) return DASH;
+  return `${upToOneDecimal.format(tempValue(c, units))} ${tempUnit(units)}`;
+}
+
+/** "27 → 28 °C", or a single value when both are equal or one is missing. */
+export function formatTempRange(low: number | null, high: number | null, units: Units): string {
+  if (low === null || high === null || low === high) return formatTemp(low ?? high, units);
+  return `${upToOneDecimal.format(tempValue(low, units))} → ${formatTemp(high, units)}`;
+}
+
+/** "35 min" (rounded to the minute). */
+export function formatDuration(seconds: number): string {
+  if (seconds <= 0) return DASH;
+  return `${integer.format(Math.round(seconds / 60))} min`;
+}
+
+/** "3.5985, 73.5033" — GPS is never localised. */
+export function formatGps(lat: number | null, lon: number | null): string | null {
+  if (lat === null || lon === null) return null;
+  return `${gps.format(lat)}, ${gps.format(lon)}`;
+}
+
+// --- Dates -----------------------------------------------------------------
+// Dive times are wall-clock times without a time zone. They are parsed and
+// formatted as UTC so the computer's own time zone never shifts them.
+
+export function parseWallClock(s: string): Date {
+  const [d, t = "00:00:00"] = s.split("T");
+  const [y, mo, day] = d.split("-").map(Number);
+  const [h, mi, sec] = t.split(":").map(Number);
+  return new Date(Date.UTC(y, mo - 1, day, h, mi, sec || 0));
+}
+
+const fmt = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale, { timeZone: "UTC", ...o });
+const fTime = fmt({ hour: "2-digit", minute: "2-digit" });
+const fDayMonth = fmt({ day: "2-digit", month: "short" });
+const fFullDate = fmt({ weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const fDate = fmt({ day: "numeric", month: "short", year: "numeric" });
+const fMonth = fmt({ month: "long", year: "numeric" });
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** List row: "31 déc. · 07:14". */
+export function formatRowDate(start: string): string {
+  const d = parseWallClock(start);
+  return `${fDayMonth.format(d)} · ${fTime.format(d)}`;
+}
+
+/** Month group header: "DÉCEMBRE 2025" (upper-cased by CSS). */
+export function formatMonth(start: string): string {
+  return fMonth.format(parseWallClock(start));
+}
+
+/** Month grouping key: "2025-12". */
+export function monthKey(start: string): string {
+  return start.slice(0, 7);
+}
+
+/** Detail: "Mer. 31 déc. 2025 · 07:14 → 07:49". */
+export function formatDiveSpan(start: string, end: string): string {
+  const s = parseWallClock(start);
+  const e = parseWallClock(end);
+  const sameDay = start.slice(0, 10) === end.slice(0, 10);
+  const endText = sameDay ? fTime.format(e) : `${fDate.format(e)}, ${fTime.format(e)}`;
+  return `${cap(fFullDate.format(s))} · ${fTime.format(s)} → ${endText}`;
+}
+
+/** Selection: "31 déc. 2025, 07:14 → 1 janv. 2026, 08:23". */
+export function formatRange(start: string, end: string): string {
+  const s = parseWallClock(start);
+  const e = parseWallClock(end);
+  return `${fDate.format(s)}, ${fTime.format(s)} → ${fDate.format(e)}, ${fTime.format(e)}`;
+}
+
+/** Text used by search: lower case, accents removed ("Égypte" → "egypte"). */
+export function fold(s: string): string {
+  return s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+}

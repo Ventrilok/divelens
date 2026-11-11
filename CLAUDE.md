@@ -30,6 +30,8 @@ App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where a
 
 - Core tests: `cargo test -p divelens-core`
 - Lint: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`
+- Front-end tests (from `app/`): `npm test` (runs in a UTC+14 time zone on purpose: dive times are wall-clock and must never shift)
+- Check the MacDive reader against a real database (local only, output is personal data): `cargo run -p divelens-core --example macdive_dump -- <path> [dive number]`
 - App build (from `app/`): `npm ci`, then `npm run tauri build -- --bundles app` (macOS, skips the DMG) or `-- --no-bundle`
 - Dev window (from `app/`): `npm run tauri dev` (opens a window and keeps running)
 

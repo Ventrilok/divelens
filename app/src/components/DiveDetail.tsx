@@ -1,0 +1,126 @@
+// Dive detail card. Shared by the Dives screen and (later) Tag Selection.
+
+import { useEffect, useState } from "react";
+import { diveProfile } from "../api";
+import { formatDepth, formatDiveSpan, formatDuration, formatGps, formatTempRange } from "../format";
+import { t } from "../i18n";
+import type { Capabilities, Dive, Sample, Units } from "../types";
+import { Icon } from "./Icon";
+import { ProfileChart } from "./ProfileChart";
+import { Stars } from "./Stars";
+
+// Profiles already loaded, by dive id (they never change while the app runs).
+const cache = new Map<string, Sample[]>();
+
+type ProfileState = { status: "loading" } | { status: "ok"; samples: Sample[] } | { status: "error" };
+
+function useProfile(dive: Dive): ProfileState {
+  const [state, setState] = useState<ProfileState>({ status: "loading" });
+  useEffect(() => {
+    if (!dive.hasProfile) return;
+    const cached = cache.get(dive.id);
+    if (cached) {
+      setState({ status: "ok", samples: cached });
+      return;
+    }
+    let live = true;
+    setState({ status: "loading" });
+    diveProfile(dive.id)
+      .then((samples) => {
+        cache.set(dive.id, samples);
+        if (live) setState({ status: "ok", samples });
+      })
+      .catch(() => live && setState({ status: "error" }));
+    return () => {
+      live = false;
+    };
+  }, [dive.id, dive.hasProfile]);
+  return state;
+}
+
+export function siteSubtitle(dive: Dive): string {
+  return [dive.site.location, dive.site.country].filter(Boolean).join(" · ");
+}
+
+function Profile({ dive, units }: { dive: Dive; units: Units }) {
+  const state = useProfile(dive);
+  if (!dive.hasProfile || (state.status === "ok" && state.samples.length < 2)) {
+    return (
+      <>
+        <div className="profile-empty">
+          <Icon name="noCurve" size={16} />
+          {t("detail.noProfile")}
+        </div>
+        <p className="detail-hint">{t("detail.noProfileHint")}</p>
+      </>
+    );
+  }
+  return (
+    <figure className="profile">
+      {state.status === "ok" ? (
+        <ProfileChart samples={state.samples} units={units} />
+      ) : (
+        <div className="profile-placeholder">
+          {state.status === "loading" ? t("detail.profileLoading") : t("detail.profileError")}
+        </div>
+      )}
+      <figcaption>
+        <Icon name="check" size={14} className="accent" />
+        {t("detail.profileOk")}
+      </figcaption>
+    </figure>
+  );
+}
+
+export function DiveDetail({ dive, units, capabilities }: { dive: Dive | null; units: Units; capabilities: Capabilities }) {
+  if (!dive) {
+    return (
+      <aside className="card detail detail-empty">
+        <p className="muted">{t("detail.empty")}</p>
+      </aside>
+    );
+  }
+  const gps = formatGps(dive.site.lat, dive.site.lon);
+  const label = dive.number !== null ? t("detail.label", { n: dive.number }) : t("detail.labelNoNumber");
+  return (
+    <aside className="card detail" aria-label={label}>
+      <div className="detail-head">
+        <span className="lbl">{label}</span>
+        <h2>{dive.site.name ?? t("detail.unknownSite")}</h2>
+        {siteSubtitle(dive) && <span className="detail-place">{siteSubtitle(dive)}</span>}
+        <span className="muted small">{formatDiveSpan(dive.start, dive.end)}</span>
+      </div>
+      {capabilities.profile && <Profile dive={dive} units={units} />}
+      <dl className="facts">
+        <div>
+          <dt className="lbl">{t("detail.duration")}</dt>
+          <dd>{formatDuration(dive.durationS)}</dd>
+        </div>
+        <div>
+          <dt className="lbl">{t("detail.depth")}</dt>
+          <dd>{formatDepth(dive.maxDepthM, units)}</dd>
+        </div>
+        {capabilities.temperature && (
+          <div>
+            <dt className="lbl">{t("detail.temp")}</dt>
+            <dd>{formatTempRange(dive.tempLowC, dive.tempHighC, units)}</dd>
+          </div>
+        )}
+        {capabilities.rating && (
+          <div>
+            <dt className="lbl">{t("detail.rating")}</dt>
+            <dd>
+              <Stars rating={dive.rating} />
+            </dd>
+          </div>
+        )}
+        {capabilities.gps && gps && (
+          <div className="span2">
+            <dt className="lbl">{t("detail.gps")}</dt>
+            <dd className="gps">{gps}</dd>
+          </div>
+        )}
+      </dl>
+    </aside>
+  );
+}
