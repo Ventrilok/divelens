@@ -1,5 +1,5 @@
 import { tn, t } from "../i18n";
-import type { DiveLog } from "../types";
+import type { DiveLog, LightroomStatus } from "../types";
 import { Icon, type IconName } from "./Icon";
 
 export type Screen = "dives" | "collections" | "tag" | "settings";
@@ -26,7 +26,46 @@ function NavItem({ id, icon, label, ready, current, onGo }: (typeof items)[numbe
   );
 }
 
-export function Sidebar({ current, onGo, log }: { current: Screen; onGo: (s: Screen) => void; log: DiveLog | null }) {
+/** Screens that exist so far; a request for another one is ignored. */
+export function isReadyScreen(id: string): id is Screen {
+  return items.some((it) => it.id === id && it.ready);
+}
+
+function LightroomLine({ lr }: { lr: LightroomStatus }) {
+  if (!lr.connected) {
+    return (
+      <>
+        <div className="status-line">
+          <span className="dot dot-warn" />
+          <span className="status-title">{t("lr.disconnected")}</span>
+        </div>
+        <div>{t("lr.disconnectedHint")}</div>
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="status-line">
+        <span className="dot" />
+        <span className="status-title">{t("lr.connected")}</span>
+      </div>
+      {lr.catalog && <div className="status-catalog">{lr.catalog}</div>}
+      <div>{lr.selected > 0 ? tn("lr.selected", lr.selected) : t("lr.noSelection")}</div>
+    </>
+  );
+}
+
+export function Sidebar({
+  current,
+  onGo,
+  log,
+  lr,
+}: {
+  current: Screen;
+  onGo: (s: Screen) => void;
+  log: DiveLog | null;
+  lr: LightroomStatus;
+}) {
   return (
     <nav className="sidebar" aria-label="DiveLens">
       <div className="brand">
@@ -39,10 +78,7 @@ export function Sidebar({ current, onGo, log }: { current: Screen; onGo: (s: Scr
       <div className="sidebar-bottom">
         <NavItem id="settings" icon="settings" label={() => t("nav.settings")} ready={false} current={current} onGo={onGo} />
         <div className="status">
-          <div className="status-line">
-            <span className="dot dot-warn" />
-            <span className="status-title">{t("lr.disconnected")}</span>
-          </div>
+          <LightroomLine lr={lr} />
           {log && (
             <div>
               {t("source.macDive")} · {tn("source.dives", log.dives.length)}

@@ -66,3 +66,13 @@ export interface Units {
   depth: "m" | "ft";
   temp: "c" | "f";
 }
+
+/** State of the link with the Lightroom plugin (app/src-tauri/src/lightroom.rs). */
+export interface LightroomStatus {
+  connected: boolean;
+  catalog: string | null;
+  lightroomVersion: string | null;
+  pluginVersion: string | null;
+  /** Photos selected in Lightroom; 0 when nothing is selected. */
+  selected: number;
+}

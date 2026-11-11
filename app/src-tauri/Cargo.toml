@@ -23,3 +23,8 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-dialog = "2"
+tauri-plugin-single-instance = "2"
+
+[dev-dependencies]
+# Runs the plugin's pure-Lua modules under Lua 5.1, the version Lightroom embeds.
+mlua = { version = "0.12", features = ["lua51", "vendored"] }

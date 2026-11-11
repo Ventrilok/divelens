@@ -52,6 +52,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
+          components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: npm ci
         working-directory: app
@@ -59,3 +60,6 @@ jobs:
         working-directory: app
       - run: npm run tauri build -- --no-bundle
         working-directory: app
+      # After the build: the app crate embeds the built front end.
+      - run: cargo clippy -p divelens --all-targets -- -D warnings
+      - run: cargo test -p divelens
