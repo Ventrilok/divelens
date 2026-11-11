@@ -3,15 +3,17 @@ mod settings;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::mpsc::{self, Sender};
 use std::time::Duration;
 
 use divelens_core::macdive::MacDive;
 use divelens_core::profile::Sample;
-use divelens_core::{Capabilities, Dive, DiveSource, Error};
-use serde::Serialize;
+use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
+use divelens_core::{Capabilities, Dive, DiveSource, Error, Site};
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use lightroom::{End, Event, LinkFile, Status, Timing};
+use lightroom::{ApplyOutcome, Command, End, Event, LinkFile, Status, Timing};
 use settings::{Settings, SourceKind};
 
 /// Versions of the app and of the core library, shown in Settings › About.
@@ -37,6 +39,8 @@ struct DiveLog {
     source: SourceInfo,
     capabilities: Capabilities,
     dives: Vec<Dive>,
+    /// Every named site of the log (Tag Selection › other site).
+    sites: Vec<Site>,
 }
 
 /// Error sent to the UI: the reader error plus the source it concerns.
@@ -84,12 +88,13 @@ fn open(info: &SourceInfo) -> Result<MacDive, Error> {
 async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
     tauri::async_runtime::spawn_blocking(move || {
         let source = source_info(&app);
-        let result = open(&source).and_then(|s| Ok((s.capabilities(), s.dives()?)));
+        let result = open(&source).and_then(|s| Ok((s.capabilities(), s.dives()?, s.sites()?)));
         match result {
-            Ok((capabilities, dives)) => Ok(DiveLog {
+            Ok((capabilities, dives, sites)) => Ok(DiveLog {
                 source,
                 capabilities,
                 dives,
+                sites,
             }),
             Err(error) => Err(LoadError { source, error }),
         }
@@ -115,14 +120,125 @@ fn set_source_path(app: AppHandle, path: PathBuf) -> Result<(), String> {
     settings.save(&dir).map_err(|e| e.to_string())
 }
 
-/// Last known state of the Lightroom link, for screens that open later.
-#[derive(Default)]
-struct Lightroom(Mutex<Status>);
+/// Last known state of the Lightroom link, and the way to send it requests.
+struct Lightroom {
+    status: Mutex<Status>,
+    commands: Mutex<Sender<Command>>,
+}
 
 /// Current Lightroom link state; updates arrive as `lightroom-status` events.
 #[tauri::command]
 fn lightroom_status(state: State<Lightroom>) -> Status {
-    state.0.lock().expect("lightroom state").clone()
+    state.status.lock().expect("lightroom state").clone()
+}
+
+/// Where the location written by Tag Selection comes from.
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum LocationChoice {
+    /// The chosen dive's site.
+    DiveSite,
+    /// Another site of the log, with coordinates possibly edited.
+    #[serde(rename_all = "camelCase")]
+    Site {
+        site_id: String,
+        lat: Option<f64>,
+        lon: Option<f64>,
+    },
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TagChoice {
+    /// Write this dive's data; `None`: dive data unticked.
+    dive_id: Option<String>,
+    /// Write a location; `None`: location unticked.
+    location: Option<LocationChoice>,
+}
+
+/// Why Tag Selection wrote nothing before reaching Lightroom, or lost track.
+#[derive(Debug, Serialize)]
+#[serde(tag = "error", rename_all = "camelCase")]
+enum TagError {
+    NothingChosen,
+    NotConnected,
+    /// The link dropped while Lightroom was writing: the result is unknown.
+    LinkLost,
+    BadGps,
+    UnknownDive,
+    UnknownSite,
+    Source {
+        detail: Error,
+    },
+}
+
+fn tag_request(app: &AppHandle, choice: &TagChoice) -> Result<TagRequest, TagError> {
+    let source = open(&source_info(app)).map_err(|detail| TagError::Source { detail })?;
+    let units = Units::default(); // the units setting comes with the Settings screen
+    let dive = match &choice.dive_id {
+        Some(id) => Some(
+            source
+                .dives()
+                .map_err(|detail| TagError::Source { detail })?
+                .into_iter()
+                .find(|d| &d.id == id)
+                .ok_or(TagError::UnknownDive)?,
+        ),
+        None => None,
+    };
+    let location = match &choice.location {
+        None => None,
+        Some(LocationChoice::DiveSite) => {
+            let dive = dive.as_ref().ok_or(TagError::NothingChosen)?;
+            Some(LocationTags::new(&dive.site, None, None))
+        }
+        Some(LocationChoice::Site { site_id, lat, lon }) => {
+            match (lat, lon) {
+                (Some(a), Some(b)) if !valid_gps(*a, *b) => return Err(TagError::BadGps),
+                (Some(_), None) | (None, Some(_)) => return Err(TagError::BadGps),
+                _ => {}
+            }
+            let site = source
+                .sites()
+                .map_err(|detail| TagError::Source { detail })?
+                .into_iter()
+                .find(|s| s.id.as_deref() == Some(site_id.as_str()))
+                .ok_or(TagError::UnknownSite)?;
+            Some(LocationTags::new(&site, *lat, *lon))
+        }
+    };
+    if dive.is_none() && location.is_none() {
+        return Err(TagError::NothingChosen);
+    }
+    Ok(TagRequest {
+        dive: dive.map(|d| DiveTags::new(&d, units)),
+        location,
+    })
+}
+
+/// Tags the photos selected in Lightroom (at the moment Lightroom gets the
+/// request) with a dive's data and/or a location, in one undoable step.
+#[tauri::command]
+async fn tag_selection(app: AppHandle, choice: TagChoice) -> Result<ApplyOutcome, TagError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let request = tag_request(&app, &choice)?;
+        let state = app.state::<Lightroom>();
+        if !state.status.lock().expect("lightroom state").connected {
+            return Err(TagError::NotConnected);
+        }
+        let (reply, outcome) = mpsc::channel();
+        let sent = state
+            .commands
+            .lock()
+            .expect("lightroom commands")
+            .send(Command::Apply { request, reply });
+        if sent.is_err() {
+            return Err(TagError::NotConnected);
+        }
+        outcome.recv().map_err(|_| TagError::LinkLost)
+    })
+    .await
+    .expect("tagging task failed")
 }
 
 /// Screen asked for on the command line (`--screen tag`), when Lightroom
@@ -157,26 +273,31 @@ fn show_screen(app: &AppHandle, screen: String) {
 
 /// Keeps trying to reach the plugin for as long as the app runs: whichever of
 /// Lightroom and the app starts first, they find each other.
-fn lightroom_link(app: AppHandle) {
+fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
     let dir = config_dir(&app);
     let version = app.package_info().version.to_string();
     let mut last_end = None;
     loop {
         if let Some(link) = LinkFile::read(&dir) {
-            let end =
-                lightroom::run_session(
-                    &link,
-                    &version,
-                    Timing::default(),
-                    &mut |event| match event {
-                        Event::Status(status) => {
-                            *app.state::<Lightroom>().0.lock().expect("lightroom state") =
-                                status.clone();
-                            let _ = app.emit("lightroom-status", status);
-                        }
-                        Event::Show(screen) => show_screen(&app, screen),
-                    },
-                );
+            let end = lightroom::run_session(
+                &link,
+                &version,
+                Timing::default(),
+                &commands,
+                &mut |event| match event {
+                    Event::Status(status) => {
+                        *app.state::<Lightroom>()
+                            .status
+                            .lock()
+                            .expect("lightroom state") = status.clone();
+                        let _ = app.emit("lightroom-status", status);
+                    }
+                    Event::Show(screen) => show_screen(&app, screen),
+                    Event::Progress { done, total } => {
+                        let _ = app.emit("apply-progress", (done, total));
+                    }
+                },
+            );
             // Log changes only: a stale link file fails every second.
             let text = format!("{end:?}");
             if last_end.as_ref() != Some(&text) {
@@ -209,14 +330,19 @@ pub fn run() {
             dive_profile,
             set_source_path,
             lightroom_status,
-            initial_screen
+            initial_screen,
+            tag_selection
         ])
-        .manage(Lightroom::default())
         .setup(|app| {
+            let (commands, inbox) = mpsc::channel();
+            app.manage(Lightroom {
+                status: Mutex::new(Status::default()),
+                commands: Mutex::new(commands),
+            });
             let handle = app.handle().clone();
             std::thread::Builder::new()
                 .name("lightroom-link".into())
-                .spawn(move || lightroom_link(handle))?;
+                .spawn(move || lightroom_link(handle, inbox))?;
             Ok(())
         })
         .run(tauri::generate_context!())

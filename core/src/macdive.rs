@@ -73,6 +73,30 @@ fn non_empty(s: Option<String>) -> Option<String> {
     s.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
+/// Site from the `site_id, site, location, country, lat, lon` columns. A site
+/// with nothing usable in it counts as no site.
+fn site_from_row(r: &Row) -> rusqlite::Result<Site> {
+    let lat: Option<f64> = r.get("lat")?;
+    let lon: Option<f64> = r.get("lon")?;
+    let (lat, lon) = match (lat, lon) {
+        (Some(a), Some(b)) if !(a == 0.0 && b == 0.0) => (Some(a), Some(b)),
+        _ => (None, None),
+    };
+    let site = Site {
+        id: r.get("site_id")?,
+        name: non_empty(r.get("site")?),
+        location: non_empty(r.get("location")?),
+        country: non_empty(r.get("country")?),
+        lat,
+        lon,
+    };
+    let empty = site.name.is_none()
+        && site.location.is_none()
+        && site.country.is_none()
+        && site.lat.is_none();
+    Ok(if empty { Site::default() } else { site })
+}
+
 fn dive_from_row(r: &Row, computers: &Catalog) -> rusqlite::Result<Dive> {
     let start_raw: f64 = r.get("start")?;
     let duration_s = r
@@ -81,12 +105,6 @@ fn dive_from_row(r: &Row, computers: &Catalog) -> rusqlite::Result<Dive> {
         .max(0.0)
         .round() as u32;
     let start = wall_clock(start_raw);
-    let lat: Option<f64> = r.get("lat")?;
-    let lon: Option<f64> = r.get("lon")?;
-    let (lat, lon) = match (lat, lon) {
-        (Some(a), Some(b)) if !(a == 0.0 && b == 0.0) => (Some(a), Some(b)),
-        _ => (None, None),
-    };
     let rating = r
         .get::<_, Option<f64>>("rating")?
         .map(|v| v.round() as i64)
@@ -107,13 +125,7 @@ fn dive_from_row(r: &Row, computers: &Catalog) -> rusqlite::Result<Dive> {
         temp_high_c: r.get("temp_high")?,
         temp_low_c: r.get("temp_low")?,
         rating,
-        site: Site {
-            name: non_empty(r.get("site")?),
-            location: non_empty(r.get("location")?),
-            country: non_empty(r.get("country")?),
-            lat,
-            lon,
-        },
+        site: site_from_row(r)?,
         has_profile,
     })
 }
@@ -140,6 +152,8 @@ impl DiveSource for MacDive {
                     D.ZRATING AS rating,
                     D.ZCOMPUTER AS computer,
                     D.ZRAWDATA IS NOT NULL AND length(D.ZRAWDATA) > 0 AS has_raw,
+                    CASE WHEN S.Z_PK IS NULL THEN NULL
+                         ELSE COALESCE(S.ZUUID, 'pk:' || S.Z_PK) END AS site_id,
                     S.ZNAME AS site, S.ZLOCATION AS location, S.ZCOUNTRY AS country,
                     S.ZGPSLAT AS lat, S.ZGPSLON AS lon
              FROM ZDIVE D
@@ -167,6 +181,19 @@ impl DiveSource for MacDive {
             (Some(model), Some(raw)) if !raw.is_empty() => self.computers.profile(model, &raw),
             _ => Ok(Vec::new()),
         }
+    }
+
+    fn sites(&self) -> Result<Vec<Site>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT COALESCE(ZUUID, 'pk:' || Z_PK) AS site_id,
+                    ZNAME AS site, ZLOCATION AS location, ZCOUNTRY AS country,
+                    ZGPSLAT AS lat, ZGPSLON AS lon
+             FROM ZDIVESITE",
+        )?;
+        let sites = stmt
+            .query_map([], site_from_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(sites.into_iter().filter(|s| s.name.is_some()).collect())
     }
 }
 

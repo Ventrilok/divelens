@@ -27,4 +27,5 @@ tauri-plugin-single-instance = "2"
 
 [dev-dependencies]
 # Runs the plugin's pure-Lua modules under Lua 5.1, the version Lightroom embeds.
+chrono = { version = "0.4", default-features = false }
 mlua = { version = "0.12", features = ["lua51", "vendored"] }

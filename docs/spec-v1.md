@@ -29,6 +29,7 @@ La V1 apporte en plus une fonctionnalité nouvelle : la **profondeur, la tempér
 | Décalage d'horloge par appareil, avec suggestion | Calage automatique par la profondeur enregistrée par l'appareil |
 | **Plugin gratuit** : plus de licence ni de mode d'essai | Nettoyage automatique lors d'une relance |
 | | Consultation du carnet de plongée avec photos |
+| | Effacer les métadonnées DiveLens des photos sélectionnées **[Décidé, 2026-11-12]** |
 
 **libdivecomputer est intégré dès la V1 [Décidé, 2026-11-11]** : une vraie base MacDive ne contient pas de courbe lisible, seulement une copie chiffrée propre à MacDive et le téléchargement brut de l'ordinateur de plongée. libdivecomputer (la bibliothèque de Subsurface) décode ce téléchargement. La courbe lisible observée au départ avait été ajoutée à la base de test par un outil externe (DiverCity).
 
@@ -212,6 +213,16 @@ Ce qui est écrit **[Décidé : comportement actuel en V1]** :
 - Données de plongée : n° de plongée, début, fin, durée, profondeur max, températures, note. Pas de données par photo, pas de collection.
 - Lieu : pays, ville, lieu, GPS (section 4).
 - Évolution envisagée : calculer les données par photo et alimenter la collection de la plongée.
+- Annulation : « Annuler » dans Lightroom défait l'écriture, **sauf le GPS**, que Lightroom ne remet pas (constaté le 2026-11-12). Accepté tel quel. **[Décidé]**
+
+Comportements **[Décidé, 2026-11-12]** :
+- Une valeur absente de la plongée choisie (température, note, profondeur) **efface** l'ancienne valeur DiveLens de la photo : les champs décrivent une seule plongée.
+- Plongée sans numéro : le champ numéro reste vide (l'ancien plugin écrivait « 0 »).
+- Site sans pays, ville ou GPS : les valeurs déjà présentes sur la photo ne sont pas touchées (protège un GPS venu d'un téléphone). Les valeurs « <No Country> » de l'ancien plugin ne sont plus écrites.
+- Tant qu'aucune plongée n'est choisie, le lieu part sur « Autre site » ; il passe au site de la plongée dès qu'une plongée est choisie.
+- Liste : un clic sur une ligne choisit la plongée ; les flèches ne font que parcourir (la fiche suit la ligne parcourue).
+- « Annuler » revient à l'écran Plongées sans rien garder.
+- Après l'écriture : bandeau avec le nombre de photos taguées et le rappel qu'« Annuler » dans Lightroom défait tout en une fois, sauf le GPS.
 
 Liste des plongées **[Décidé]** : **la même que dans F4** (mêmes colonnes, regroupement par mois, recherche et filtres), en choix unique.
 

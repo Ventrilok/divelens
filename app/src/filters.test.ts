@@ -14,15 +14,15 @@ function dive(p: Partial<Dive> & { id: string }): Dive {
     tempHighC: null,
     tempLowC: null,
     rating: null,
-    site: { name: null, location: null, country: null, lat: null, lon: null },
+    site: { id: null, name: null, location: null, country: null, lat: null, lon: null },
     hasProfile: false,
     ...p,
   };
 }
 
 const dives = [
-  dive({ id: "a", number: 1, start: "2024-06-01T09:00:00", maxDepthM: 12, rating: 3, hasProfile: true, site: { name: "Coral Garden", location: "North Reef", country: "Égypte", lat: null, lon: null } }),
-  dive({ id: "b", number: 2, start: "2025-03-10T14:00:00", maxDepthM: 30, site: { name: "Blue Hole", location: null, country: "Atlantis", lat: null, lon: null } }),
+  dive({ id: "a", number: 1, start: "2024-06-01T09:00:00", maxDepthM: 12, rating: 3, hasProfile: true, site: { id: null, name: "Coral Garden", location: "North Reef", country: "Égypte", lat: null, lon: null } }),
+  dive({ id: "b", number: 2, start: "2025-03-10T14:00:00", maxDepthM: 30, site: { id: null, name: "Blue Hole", location: null, country: "Atlantis", lat: null, lon: null } }),
   dive({ id: "c", number: 13, start: "2025-03-11T08:00:00", maxDepthM: 22, rating: 5, hasProfile: true }),
 ];
 const index = searchIndex(dives);
