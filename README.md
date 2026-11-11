@@ -24,3 +24,9 @@ The product specification (in French) is in [`docs/spec-v1.md`](docs/spec-v1.md)
 ## License
 
 DiveLens is free and open source, under the [GNU General Public License v3.0](LICENSE).
+
+It includes [libdivecomputer](https://www.libdivecomputer.org) (LGPL 2.1, in `third_party/libdivecomputer`) to decode dive-computer data.
+
+## Building
+
+Clone with `git clone --recursive`, or run `git submodule update --init` after cloning.

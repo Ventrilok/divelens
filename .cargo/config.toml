@@ -1,0 +1,4 @@
+[env]
+# Oldest macOS supported, also used when compiling libdivecomputer's C code
+# (otherwise it targets the build machine's version).
+MACOSX_DEPLOYMENT_TARGET = "11.0"

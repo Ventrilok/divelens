@@ -6,7 +6,7 @@ use chrono::NaiveDate;
 use tempfile::TempDir;
 
 const SCHEMA: &str = "
-CREATE TABLE ZDIVE ( Z_PK INTEGER PRIMARY KEY, Z_ENT INTEGER, Z_OPT INTEGER, ZDECOMPRESSION INTEGER, ZDIVENUMBER INTEGER, ZHASAIR INTEGER, ZHASNDT INTEGER, ZHASPPO2 INTEGER, ZHASTEMP INTEGER, ZPARSERVERSION INTEGER, ZREPETITIVEDIVENUMBER INTEGER, ZRGBMPERCENT INTEGER, ZSYNCPHOTOS INTEGER, ZRELATIONSHIPCERTIFICATION INTEGER, ZRELATIONSHIPDIVESITE INTEGER, ZRELATIONSHIPDIVER INTEGER, ZAIRTEMP FLOAT, ZAVERAGEDEPTH FLOAT, ZCNS FLOAT, ZDATEADDED TIMESTAMP, ZMAXDEPTH FLOAT, ZMODIFIED TIMESTAMP, ZRATING FLOAT, ZRAWDATE TIMESTAMP, ZSAMPLEINTERVAL FLOAT, ZSETPOINTHIGH FLOAT, ZSETPOINTLOW FLOAT, ZSURFACEINTERVAL FLOAT, ZTEMPHIGH FLOAT, ZTEMPLOW FLOAT, ZTOTALDURATION FLOAT, ZALTITUDEMODE VARCHAR, ZBOATCAPTAIN VARCHAR, ZBOATNAME VARCHAR, ZCOMPUTER VARCHAR, ZCOMPUTERSERIAL VARCHAR, ZCURRENT VARCHAR, ZDATASOURCE VARCHAR, ZDECOMODEL VARCHAR, ZDIVEMASTER VARCHAR, ZDIVEOPERATOR VARCHAR, ZDIVELOGUUID VARCHAR, ZENTRYTYPE VARCHAR, ZGASMODEL VARCHAR, ZIDENTIFIER VARCHAR, ZNOTES VARCHAR, ZPARSERTYPE VARCHAR, ZPERSONALMODE VARCHAR, ZSCRUBBERTIMEAFTER VARCHAR, ZSCRUBBERTIMEBEFORE VARCHAR, ZSCRUBBERTYPE VARCHAR, ZSIGNATURE VARCHAR, ZSURFACECONDITIONS VARCHAR, ZUUID VARCHAR, ZVISIBILITY VARCHAR, ZWEATHER VARCHAR, ZWEIGHT VARCHAR, ZRAWDATA BLOB, ZSAMPLES BLOB, ZTIMEZONE BLOB , ZSAMPLES_JSON TEXT);
+CREATE TABLE ZDIVE ( Z_PK INTEGER PRIMARY KEY, Z_ENT INTEGER, Z_OPT INTEGER, ZDECOMPRESSION INTEGER, ZDIVENUMBER INTEGER, ZHASAIR INTEGER, ZHASNDT INTEGER, ZHASPPO2 INTEGER, ZHASTEMP INTEGER, ZPARSERVERSION INTEGER, ZREPETITIVEDIVENUMBER INTEGER, ZRGBMPERCENT INTEGER, ZSYNCPHOTOS INTEGER, ZRELATIONSHIPCERTIFICATION INTEGER, ZRELATIONSHIPDIVESITE INTEGER, ZRELATIONSHIPDIVER INTEGER, ZAIRTEMP FLOAT, ZAVERAGEDEPTH FLOAT, ZCNS FLOAT, ZDATEADDED TIMESTAMP, ZMAXDEPTH FLOAT, ZMODIFIED TIMESTAMP, ZRATING FLOAT, ZRAWDATE TIMESTAMP, ZSAMPLEINTERVAL FLOAT, ZSETPOINTHIGH FLOAT, ZSETPOINTLOW FLOAT, ZSURFACEINTERVAL FLOAT, ZTEMPHIGH FLOAT, ZTEMPLOW FLOAT, ZTOTALDURATION FLOAT, ZALTITUDEMODE VARCHAR, ZBOATCAPTAIN VARCHAR, ZBOATNAME VARCHAR, ZCOMPUTER VARCHAR, ZCOMPUTERSERIAL VARCHAR, ZCURRENT VARCHAR, ZDATASOURCE VARCHAR, ZDECOMODEL VARCHAR, ZDIVEMASTER VARCHAR, ZDIVEOPERATOR VARCHAR, ZDIVELOGUUID VARCHAR, ZENTRYTYPE VARCHAR, ZGASMODEL VARCHAR, ZIDENTIFIER VARCHAR, ZNOTES VARCHAR, ZPARSERTYPE VARCHAR, ZPERSONALMODE VARCHAR, ZSCRUBBERTIMEAFTER VARCHAR, ZSCRUBBERTIMEBEFORE VARCHAR, ZSCRUBBERTYPE VARCHAR, ZSIGNATURE VARCHAR, ZSURFACECONDITIONS VARCHAR, ZUUID VARCHAR, ZVISIBILITY VARCHAR, ZWEATHER VARCHAR, ZWEIGHT VARCHAR, ZRAWDATA BLOB, ZSAMPLES BLOB, ZTIMEZONE BLOB );
 CREATE TABLE ZDIVESITE ( Z_PK INTEGER PRIMARY KEY, Z_ENT INTEGER, Z_OPT INTEGER, ZALTITUDE FLOAT, ZGPSLAT FLOAT, ZGPSLON FLOAT, ZMODIFIED TIMESTAMP, ZBODYOFWATER VARCHAR, ZCOUNTRY VARCHAR, ZDIFFICULTY VARCHAR, ZDIVELOGUUID VARCHAR, ZFLAG VARCHAR, ZIMAGE VARCHAR, ZLASTDIVELOGIMAGEHASH VARCHAR, ZLOCATION VARCHAR, ZNAME VARCHAR, ZNOTES VARCHAR, ZUUID VARCHAR, ZWATERTYPE VARCHAR, ZZOOM VARCHAR );
 ";
 
@@ -17,23 +17,22 @@ INSERT INTO ZDIVESITE (Z_PK, ZNAME, ZLOCATION, ZCOUNTRY, ZGPSLAT, ZGPSLON)
          (2, 'Glacier Wall', NULL, 'Égypte', 0, 0),
          (3, '  ', '', NULL, NULL, NULL);
 
--- 1: full dive with profile, rated 4, GPS.
-INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH, ZTEMPHIGH, ZTEMPLOW, ZRATING, ZRELATIONSHIPDIVESITE, ZSAMPLES_JSON)
-  VALUES (1, 'UUID-A', 12, 771586200, 2130.0, 18.4, 26.0, 24.0, 4.0, 1,
-  '[{"t":0,"d":1.40,"T":26.0,"air":3200.0,"ppo2":0.23},{"t":10,"d":3.20,"T":25.0},{"t":20,"d":5.00}]');
+-- 1: full dive with raw data from a known computer, rated 4, GPS.
+INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH, ZTEMPHIGH, ZTEMPLOW, ZRATING, ZRELATIONSHIPDIVESITE, ZCOMPUTER, ZRAWDATA)
+  VALUES (1, 'UUID-A', 12, 771586200, 2130.0, 18.4, 26.0, 24.0, 4.0, 1, 'Mares Genius', x'00112233');
 
--- 2: cold dive, negative temperature, GPS 0/0 = missing, unrated.
-INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH, ZTEMPHIGH, ZTEMPLOW, ZRATING, ZRELATIONSHIPDIVESITE, ZSAMPLES_JSON)
-  VALUES (2, 'UUID-B', 13, 771602700, 600.0, 9.0, 0.0, -1.5, 0.0, 2,
-  '[{"t":10,"d":4.0,"T":-1.0},{"t":0,"d":0.5,"T":0.0}]');
+-- 2: cold dive, negative temperature, GPS 0/0 = missing, unrated,
+--    raw data from a computer libdivecomputer does not know.
+INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH, ZTEMPHIGH, ZTEMPLOW, ZRATING, ZRELATIONSHIPDIVESITE, ZCOMPUTER, ZRAWDATA)
+  VALUES (2, 'UUID-B', 13, 771602700, 600.0, 9.0, 0.0, -1.5, 0.0, 2, 'Acme Wonder 3000', x'00112233');
 
 -- 3: manual dive, no profile, no temperature, no site, no number, no UUID.
-INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH, ZTEMPHIGH, ZTEMPLOW, ZRATING, ZRELATIONSHIPDIVESITE, ZSAMPLES_JSON)
-  VALUES (3, NULL, NULL, 757381200, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH, ZTEMPHIGH, ZTEMPLOW, ZRATING, ZRELATIONSHIPDIVESITE, ZCOMPUTER, ZRAWDATA)
+  VALUES (3, NULL, NULL, 757381200, NULL, NULL, NULL, NULL, NULL, NULL, 'No Computer', NULL);
 
--- 4: blank site fields are treated as missing.
-INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZRELATIONSHIPDIVESITE)
-  VALUES (4, 'UUID-D', 14, 757381200, 60.0, 3);
+-- 4: blank site fields are treated as missing; known computer, no raw data.
+INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZRELATIONSHIPDIVESITE, ZCOMPUTER)
+  VALUES (4, 'UUID-D', 14, 757381200, 60.0, 3, 'Shearwater Perdix 2');
 "#;
 
 fn fixture() -> (TempDir, MacDive) {
@@ -75,7 +74,7 @@ fn reads_a_full_dive() {
     assert_eq!(d.site.location.as_deref(), Some("North Reef"));
     assert_eq!(d.site.country.as_deref(), Some("Atlantis"));
     assert_eq!((d.site.lat, d.site.lon), (Some(12.5), Some(-45.25)));
-    assert!(d.has_profile);
+    assert!(d.has_profile, "raw data from a known computer");
 }
 
 #[test]
@@ -87,6 +86,8 @@ fn keeps_zero_and_negative_temperatures_and_drops_gps_zero() {
     assert_eq!(d.rating, None);
     assert_eq!((d.site.lat, d.site.lon), (None, None));
     assert_eq!(d.site.location, None);
+    assert!(!d.has_profile, "unknown computer");
+    assert!(md.profile("UUID-B").unwrap().is_empty());
 }
 
 #[test]
@@ -108,33 +109,15 @@ fn manual_dive_without_anything() {
 fn blank_site_fields_are_missing() {
     let (_dir, md) = fixture();
     let dives = md.dives().unwrap();
-    assert_eq!(by_id(&dives, "UUID-D").site, Site::default());
+    let d = by_id(&dives, "UUID-D");
+    assert_eq!(d.site, Site::default());
+    assert!(!d.has_profile, "no raw data");
 }
 
 #[test]
-fn reads_profiles_sorted_with_optional_temperature() {
+fn undecodable_raw_data_is_an_error() {
     let (_dir, md) = fixture();
-    let p = md.profile("UUID-A").unwrap();
-    assert_eq!(p.len(), 3);
-    assert_eq!(
-        p[0],
-        Sample {
-            time_s: 0,
-            depth_m: 1.4,
-            temp_c: Some(26.0)
-        }
-    );
-    assert_eq!(
-        p[2],
-        Sample {
-            time_s: 20,
-            depth_m: 5.0,
-            temp_c: None
-        }
-    );
-    let p = md.profile("UUID-B").unwrap();
-    assert_eq!(p[0].time_s, 0);
-    assert_eq!(p[1].temp_c, Some(-1.0));
+    assert!(matches!(md.profile("UUID-A"), Err(Error::Decoder(_))));
 }
 
 #[test]
@@ -159,36 +142,4 @@ fn missing_file_and_wrong_file_are_reported() {
     let text = dir.path().join("notes.txt");
     std::fs::write(&text, "hello").unwrap();
     assert!(matches!(MacDive::open(&text), Err(Error::NotADiveLog(_))));
-}
-
-/// Real MacDive databases have no readable profile column.
-#[test]
-fn real_macdive_schema_without_readable_profile() {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("MacDive.sqlite");
-    let conn = Connection::open(&path).unwrap();
-    conn.execute_batch(&SCHEMA.replace(" , ZSAMPLES_JSON TEXT", ""))
-        .unwrap();
-    conn.execute_batch(
-        "INSERT INTO ZDIVESITE (Z_PK, ZNAME) VALUES (1, 'Coral Garden');
-         INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZRELATIONSHIPDIVESITE)
-           VALUES (1, 'UUID-A', 1, 771586200, 600.0, 1);",
-    )
-    .unwrap();
-    drop(conn);
-    let md = MacDive::open(&path).unwrap();
-    assert!(!md.has_json_profile);
-    let dives = md.dives().unwrap();
-    assert_eq!(dives.len(), 1);
-    assert!(!dives[0].has_profile);
-    assert!(md.profile("UUID-A").unwrap().is_empty());
-    assert!(matches!(md.profile("nope"), Err(Error::UnknownDive(_))));
-}
-
-#[test]
-fn bad_profile_json_is_an_error() {
-    assert!(matches!(
-        parse_profile("not json"),
-        Err(Error::BadProfile(_))
-    ));
 }

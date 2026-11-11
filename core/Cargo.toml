@@ -8,6 +8,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+libdivecomputer-sys = { path = "../libdivecomputer-sys" }
 chrono = { version = "0.4.45", default-features = false, features = ["serde", "std"] }
 rusqlite = { version = "0.42.0", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }

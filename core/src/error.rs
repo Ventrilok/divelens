@@ -18,6 +18,8 @@ pub enum Error {
     UnknownDive(String),
     /// A dive profile could not be decoded.
     BadProfile(String),
+    /// libdivecomputer could not decode the dive computer's data.
+    Decoder(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -30,6 +32,7 @@ impl fmt::Display for Error {
             Error::Database(m) => write!(f, "database error: {m}"),
             Error::UnknownDive(id) => write!(f, "unknown dive {id}"),
             Error::BadProfile(m) => write!(f, "unreadable dive profile: {m}"),
+            Error::Decoder(m) => write!(f, "dive computer data: {m}"),
         }
     }
 }

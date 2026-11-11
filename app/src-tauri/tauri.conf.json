@@ -37,6 +37,9 @@
     "publisher": "Pierre-Benoît Querton",
     "copyright": "GPL-3.0-or-later",
     "category": "Photography",
-    "shortDescription": "Links underwater photos in Lightroom Classic with your dive log"
+    "shortDescription": "Links underwater photos in Lightroom Classic with your dive log",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
   }
 }
