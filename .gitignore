@@ -1,0 +1,31 @@
+# Secrets — never commit keys, certificates or credentials
+*.key
+*.key.pub.local
+*.pem
+*.p12
+*.p8
+*.pfx
+.env
+.env.*
+secret*
+secrets/
+
+# Personal dive data — use only fictional or anonymized fixtures
+*.sqlite
+!tests/fixtures/**/*.sqlite
+*.ssrf
+!tests/fixtures/**/*.ssrf
+
+# Build output
+target/
+build/
+dist/
+node_modules/
+*.lrplugin/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.code-workspace
+.claude/settings.local.json
