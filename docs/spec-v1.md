@@ -30,7 +30,7 @@ La V1 apporte en plus une fonctionnalité nouvelle : la **profondeur, la tempér
 | **Plugin gratuit** : plus de licence ni de mode d'essai | Nettoyage automatique lors d'une relance |
 | | Consultation du carnet de plongée avec photos |
 
-libdivecomputer **n'est pas nécessaire en V1** : la base MacDive contient déjà une courbe de plongée lisible. Il arrive avec les sources qui ne stockent que les données brutes de l'ordinateur.
+**libdivecomputer est intégré dès la V1 [Décidé, 2026-11-11]** : une vraie base MacDive ne contient pas de courbe lisible, seulement une copie chiffrée propre à MacDive et le téléchargement brut de l'ordinateur de plongée. libdivecomputer (la bibliothèque de Subsurface) décode ce téléchargement. La courbe lisible observée au départ avait été ajoutée à la base de test par un outil externe (DiverCity).
 
 ## 3. Architecture
 
@@ -120,7 +120,7 @@ Critères d'acceptation :
 
 - Code source public ; lien « Code source » dans Réglages › À propos. **[Décidé]**
 - Lien **« Soutenir DiveLens »** (don) dans Réglages › À propos et sur le site de documentation. **[Décidé]**
-- Licence open source du code : **GPL v3**. **[Décidé]** Compatible avec libdivecomputer (LGPL), livrée comme bibliothèque séparée.
+- Licence open source du code : **GPL v3**. **[Décidé]** libdivecomputer (LGPL 2.1) est compilée dans l'application, ce que sa licence permet pour un programme GPL dont le code est publié.
 - **Dépôt [Décidé]** : la V2 démarre dans un dépôt entièrement nouveau, sans l'historique de la version 0.x. Les données de test sont fictives ou anonymisées (pas de nom de plongeur ni de numéro de série réels).
 - Plateforme de dons : **Ko-fi**, mise en place dans un second temps. **[Décidé]**
 
@@ -313,8 +313,9 @@ Contenu du format commun pour une plongée :
 ### MacDive (V1)
 
 - Base SQLite lue **en lecture seule**, à l'emplacement donné par l'utilisateur. La base peut se trouver dans iCloud.
-- La courbe vient de la version lisible stockée par MacDive : un point toutes les 10 secondes. Les autres versions (chiffrée, données brutes) ne sont pas utilisées.
-- Constat sur la base de test : 600 plongées sur 707 ont une courbe ; les autres sont des plongées saisies à la main.
+- La courbe vient du **téléchargement brut de l'ordinateur** que MacDive conserve, décodé par libdivecomputer d'après le nom de l'ordinateur noté par MacDive (ex. « Shearwater Perdix 2 »). Les données Shearwater sont d'abord décompressées. La copie chiffrée propre à MacDive n'est pas utilisée (format non documenté).
+- Une plongée **sans téléchargement brut** n'a pas de courbe : plongée saisie à la main, ou ordinateur ancien importé avant que MacDive ne conserve ce téléchargement (constaté sur d'autres bases : jusqu'à 424 plongées sur 530).
+- Vérifié sur la base du propriétaire : 649 plongées sur 756 ont une courbe, toutes décodées (Shearwater Perdix 2, Mares Genius) ; les 107 autres sont saisies à la main. Les courbes sont identiques à celles que produit MacDive, à un détail près : pour Shearwater, libdivecomputer place le premier point à 10 s au lieu de 0 s. DiveLens suit libdivecomputer, donc le même calage que Subsurface.
 
 ### Subsurface (V1) **[Décidé]**
 
@@ -332,7 +333,7 @@ BlueDive et Submersion, après examen de leur stockage.
 
 ## 9. Points techniques à vérifier avant développement
 
-- **Version minimale de MacDive** qui stocke la courbe lisible : vérifier, et définir le message affiché si elle est absente.
+- **Ordinateurs anciens sans téléchargement brut** dans MacDive : message à afficher (« pas de courbe disponible pour cet ordinateur »), à distinguer d'une plongée saisie à la main.
 - **Ajout de champs** : vérifier si Lightroom exige d'incrémenter la version du schéma des champs (actuellement 1), et que les données existantes sont conservées.
 - **Écriture de l'altitude** par un plugin : à confirmer dans le kit Lightroom.
 - **Filtrer par profondeur** : les champs de plugin sont du texte. Un filtre « photos sous 30 m » n'est probablement pas possible dans Lightroom ; seuls la recherche et la navigation par valeur le sont. À vérifier avant de promettre quoi que ce soit.

@@ -2,19 +2,19 @@
 //!
 //! - Dates are Core Data timestamps: seconds since 2001-01-01, holding the
 //!   dive computer's wall-clock time.
-//! - Profile: real MacDive databases store it only in encoded form
-//!   (`ZSAMPLES`, proprietary) and as the dive computer's raw download
-//!   (`ZRAWDATA`). Decoding is not implemented yet. Some prepared test
-//!   databases carry an extra readable `ZSAMPLES_JSON` column (added by an
-//!   external tool, not by MacDive); it is used when present.
+//! - Profile: decoded from the dive computer's raw download (`ZRAWDATA`) with
+//!   libdivecomputer, using the computer name MacDive records (`ZCOMPUTER`).
+//!   MacDive's own encoded copy (`ZSAMPLES`) is proprietary and not used, so
+//!   dives without a raw download (manual entries, some very old computers)
+//!   have no profile.
 //! - Missing values: NULL temperature, rating 0, GPS 0/0.
 
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, NaiveDateTime};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Row};
-use serde::Deserialize;
 
+use crate::divecomputer::Catalog;
 use crate::model::{Capabilities, Dive, DiveSource, Site};
 use crate::profile::Sample;
 use crate::{Error, Result};
@@ -27,8 +27,7 @@ pub const DEFAULT_RELATIVE_PATH: &str = "Library/Application Support/MacDive/Mac
 
 pub struct MacDive {
     conn: Connection,
-    /// The database has the extra readable profile column (see module doc).
-    has_json_profile: bool,
+    computers: Catalog,
 }
 
 impl MacDive {
@@ -51,16 +50,9 @@ impl MacDive {
         if !is_macdive {
             return Err(Error::NotADiveLog(path.to_path_buf()));
         }
-        let has_json_profile: bool = conn
-            .query_row(
-                "SELECT count(*) > 0 FROM pragma_table_info('ZDIVE') WHERE name = 'ZSAMPLES_JSON'",
-                [],
-                |r| r.get(0),
-            )
-            .map_err(Error::from)?;
         Ok(Self {
             conn,
-            has_json_profile,
+            computers: Catalog::new()?,
         })
     }
 
@@ -81,7 +73,7 @@ fn non_empty(s: Option<String>) -> Option<String> {
     s.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
 }
 
-fn dive_from_row(r: &Row) -> rusqlite::Result<Dive> {
+fn dive_from_row(r: &Row, computers: &Catalog) -> rusqlite::Result<Dive> {
     let start_raw: f64 = r.get("start")?;
     let duration_s = r
         .get::<_, Option<f64>>("duration")?
@@ -100,6 +92,9 @@ fn dive_from_row(r: &Row) -> rusqlite::Result<Dive> {
         .map(|v| v.round() as i64)
         .filter(|v| (1..=5).contains(v))
         .map(|v| v as u8);
+    let has_raw: bool = r.get("has_raw")?;
+    let computer: Option<String> = r.get("computer")?;
+    let has_profile = has_raw && computer.is_some_and(|c| computers.find(&c).is_some());
     Ok(Dive {
         id: r.get("id")?,
         number: r
@@ -119,35 +114,8 @@ fn dive_from_row(r: &Row) -> rusqlite::Result<Dive> {
             lat,
             lon,
         },
-        has_profile: r.get("has_profile")?,
+        has_profile,
     })
-}
-
-#[derive(Deserialize)]
-struct RawSample {
-    t: f64,
-    d: Option<f64>,
-    #[serde(rename = "T")]
-    temp: Option<f64>,
-}
-
-/// Decodes MacDive's readable profile (`ZSAMPLES_JSON`).
-pub fn parse_profile(json: &str) -> Result<Vec<Sample>> {
-    let raw: Vec<RawSample> =
-        serde_json::from_str(json).map_err(|e| Error::BadProfile(e.to_string()))?;
-    let mut samples: Vec<Sample> = raw
-        .into_iter()
-        .filter(|s| s.t >= 0.0)
-        .filter_map(|s| {
-            Some(Sample {
-                time_s: s.t.round() as u32,
-                depth_m: s.d?,
-                temp_c: s.temp,
-            })
-        })
-        .collect();
-    samples.sort_by_key(|s| s.time_s);
-    Ok(samples)
 }
 
 impl DiveSource for MacDive {
@@ -161,12 +129,7 @@ impl DiveSource for MacDive {
     }
 
     fn dives(&self) -> Result<Vec<Dive>> {
-        let has_profile = if self.has_json_profile {
-            "D.ZSAMPLES_JSON IS NOT NULL AND length(D.ZSAMPLES_JSON) > 2"
-        } else {
-            "0"
-        };
-        let mut stmt = self.conn.prepare(&format!(
+        let mut stmt = self.conn.prepare(
             "SELECT COALESCE(D.ZUUID, 'pk:' || D.Z_PK) AS id,
                     D.ZDIVENUMBER AS number,
                     D.ZRAWDATE AS start,
@@ -175,45 +138,34 @@ impl DiveSource for MacDive {
                     D.ZTEMPHIGH AS temp_high,
                     D.ZTEMPLOW AS temp_low,
                     D.ZRATING AS rating,
+                    D.ZCOMPUTER AS computer,
+                    D.ZRAWDATA IS NOT NULL AND length(D.ZRAWDATA) > 0 AS has_raw,
                     S.ZNAME AS site, S.ZLOCATION AS location, S.ZCOUNTRY AS country,
-                    S.ZGPSLAT AS lat, S.ZGPSLON AS lon,
-                    {has_profile} AS has_profile
+                    S.ZGPSLAT AS lat, S.ZGPSLON AS lon
              FROM ZDIVE D
              LEFT JOIN ZDIVESITE S ON D.ZRELATIONSHIPDIVESITE = S.Z_PK
-             WHERE D.ZRAWDATE IS NOT NULL"
-        ))?;
+             WHERE D.ZRAWDATE IS NOT NULL",
+        )?;
         let dives = stmt
-            .query_map([], dive_from_row)?
+            .query_map([], |r| dive_from_row(r, &self.computers))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
         Ok(dives)
     }
 
     fn profile(&self, dive_id: &str) -> Result<Vec<Sample>> {
-        if !self.has_json_profile {
-            let exists: bool = self.conn.query_row(
-                "SELECT count(*) > 0 FROM ZDIVE WHERE COALESCE(ZUUID, 'pk:' || Z_PK) = ?1",
-                [dive_id],
-                |r| r.get(0),
-            )?;
-            return if exists {
-                Ok(Vec::new())
-            } else {
-                Err(Error::UnknownDive(dive_id.to_string()))
-            };
-        }
-        let json: Option<Option<String>> = self
+        let row: Option<(Option<String>, Option<Vec<u8>>)> = self
             .conn
             .query_row(
-                "SELECT ZSAMPLES_JSON FROM ZDIVE
+                "SELECT ZCOMPUTER, ZRAWDATA FROM ZDIVE
                  WHERE COALESCE(ZUUID, 'pk:' || Z_PK) = ?1",
                 [dive_id],
-                |r| r.get(0),
+                |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .optional()?;
-        match json {
-            None => Err(Error::UnknownDive(dive_id.to_string())),
-            Some(None) => Ok(Vec::new()),
-            Some(Some(j)) => parse_profile(&j),
+        let (computer, raw) = row.ok_or_else(|| Error::UnknownDive(dive_id.to_string()))?;
+        match (computer.and_then(|c| self.computers.find(&c)), raw) {
+            (Some(model), Some(raw)) if !raw.is_empty() => self.computers.profile(model, &raw),
+            _ => Ok(Vec::new()),
         }
     }
 }
