@@ -259,7 +259,8 @@ Diffusion **[Décidé]** : un seul texte source, publié à deux endroits :
 
 - Une mise à jour remplace **tout le paquet** : l'application et la partie Lightroom. **[Proposé]**
 - Vérification au lancement, au plus une fois par jour, avec un réglage pour la désactiver et un bouton « Vérifier maintenant ». **[Proposé]**
-- Rien ne s'installe sans l'accord de l'utilisateur : « Version 1.1 disponible — nouveautés — Installer ». **[Proposé]**
+- **Numérotation [Décidé]** : la première version publique est la **2.0.0**, pour marquer la rupture avec le plugin 0.x. Versions de développement en 0.x d'ici là.
+- Rien ne s'installe sans l'accord de l'utilisateur : « Version 2.1 disponible — nouveautés — Installer ». **[Proposé]**
 - Après installation, un message demande de redémarrer Lightroom, car Lightroom ne recharge sa partie DiveLens qu'au redémarrage. **[Proposé]**
 - Paquets signés avec la clé de mise à jour DiveLens, pour qu'une mise à jour falsifiée soit refusée. Signature Apple et Windows : plus tard (section 9). **[Décidé]**
 - Fichiers de mise à jour hébergés sur **GitHub Releases**. **[Décidé]** querton.com garde la présentation, la documentation et le lien de don.
