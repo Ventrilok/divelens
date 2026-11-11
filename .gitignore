@@ -12,15 +12,19 @@ secrets/
 
 # Personal dive data — use only fictional or anonymized fixtures
 *.sqlite
-!tests/fixtures/**/*.sqlite
+!**/tests/fixtures/**/*.sqlite
 *.ssrf
-!tests/fixtures/**/*.ssrf
+!**/tests/fixtures/**/*.ssrf
 
 # Build output
 target/
 build/
 dist/
 node_modules/
+*.local
+*.log
+# Tauri-generated capability schemas
+app/src-tauri/gen/
 *.lrplugin/
 
 # OS / editor

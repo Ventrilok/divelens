@@ -1,0 +1,11 @@
+[package]
+name = "divelens-core"
+description = "DiveLens core: common dive format and dive-log readers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }

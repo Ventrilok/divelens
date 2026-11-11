@@ -1,0 +1,18 @@
+[workspace]
+resolver = "3"
+members = ["core", "app/src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/Ventrilok/divelens"
+authors = ["Pierre-Benoît Querton"]
+
+# Release profile lives at the workspace root (member profiles are ignored).
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

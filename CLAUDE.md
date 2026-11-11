@@ -17,6 +17,22 @@ The product specification is `docs/spec-v1.md` (French). It is the source of tru
 
 V1 sources: MacDive (SQLite, macOS) and Subsurface (XML file and git-based storage, macOS and Windows). Dive logs are always opened read-only.
 
+## Repository layout
+
+- `core/`: Rust library crate `divelens-core` (common dive format, readers, per-photo computations). No Tauri dependency; tested on macOS and Windows in CI.
+- `app/`: Tauri 2 app (React + TypeScript front end in `app/src`, Rust side in `app/src-tauri`, crate `divelens`).
+- `plugin/` (to come): the Lua Lightroom plugin. Never port `LicenseHelper.lua`, compiled bytecode or the `luac5.1` binary from the legacy repo.
+- Cargo workspace at the root: one `target/` and one `Cargo.lock` for both crates.
+
+App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where app settings live). Version is set once in `app/package.json`.
+
+## Commands
+
+- Core tests: `cargo test -p divelens-core`
+- Lint: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`
+- App build (from `app/`): `npm ci`, then `npm run tauri build -- --bundles app` (macOS, skips the DMG) or `-- --no-bundle`
+- Dev window (from `app/`): `npm run tauri dev` (opens a window and keeps running)
+
 ## Compatibility contract (do not change)
 
 - Plugin identifier: `com.querton.divelens`.
