@@ -29,6 +29,7 @@ La V1 apporte en plus une fonctionnalité nouvelle : la **profondeur, la tempér
 | Décalage d'horloge par appareil, avec suggestion | Calage automatique par la profondeur enregistrée par l'appareil |
 | **Plugin gratuit** : plus de licence ni de mode d'essai | Nettoyage automatique lors d'une relance |
 | | Consultation du carnet de plongée avec photos |
+| | Effacer les métadonnées DiveLens des photos sélectionnées **[Décidé, 2026-11-12]** |
 
 **libdivecomputer est intégré dès la V1 [Décidé, 2026-11-11]** : une vraie base MacDive ne contient pas de courbe lisible, seulement une copie chiffrée propre à MacDive et le téléchargement brut de l'ordinateur de plongée. libdivecomputer (la bibliothèque de Subsurface) décode ce téléchargement. La courbe lisible observée au départ avait été ajoutée à la base de test par un outil externe (DiverCity).
 
@@ -212,6 +213,7 @@ Ce qui est écrit **[Décidé : comportement actuel en V1]** :
 - Données de plongée : n° de plongée, début, fin, durée, profondeur max, températures, note. Pas de données par photo, pas de collection.
 - Lieu : pays, ville, lieu, GPS (section 4).
 - Évolution envisagée : calculer les données par photo et alimenter la collection de la plongée.
+- Annulation : « Annuler » dans Lightroom défait l'écriture, **sauf le GPS**, que Lightroom ne remet pas (constaté le 2026-11-12). Accepté tel quel. **[Décidé]**
 
 Liste des plongées **[Décidé]** : **la même que dans F4** (mêmes colonnes, regroupement par mois, recherche et filtres), en choix unique.
 
