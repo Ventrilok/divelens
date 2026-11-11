@@ -40,5 +40,7 @@ return {
         },
     },
 
-    VERSION = { major = 0, minor = 1, revision = 0 },
+    -- `display` is what the Plug-in Manager shows; without it Lightroom adds a
+    -- fourth number (0.1.0.0), which does not match the app's version.
+    VERSION = { major = 0, minor = 1, revision = 0, display = "0.1.0" },
 }

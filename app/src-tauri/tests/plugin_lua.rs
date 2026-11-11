@@ -147,7 +147,9 @@ fn plugin_version_matches_app_version() {
         .load(
             r#"
             local v = require "Info".VERSION
-            return string.format("%d.%d.%d", v.major, v.minor, v.revision)
+            local numbers = string.format("%d.%d.%d", v.major, v.minor, v.revision)
+            assert(v.display == numbers, "display " .. tostring(v.display) .. " vs " .. numbers)
+            return numbers
             "#,
         )
         .eval()
