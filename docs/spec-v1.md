@@ -146,12 +146,12 @@ C'est l'usage principal, issu de « Create Collection » actuel.
 
 Parcours :
 1. L'utilisateur sélectionne une ou plusieurs plongées à la main, comme aujourd'hui. **Pas de notion de voyage.** **[Décidé]**
-   - Les plongées se choisissent sur l'écran Plongées (sélection multiple), puis « Créer les collections ». **[Décidé, 2026-11-12]**
+   - Les plongées se choisissent sur l'écran Plongées (sélection multiple), puis « Créer les collections ». « Modifier les plongées » y revient en gardant la sélection. Ouvert depuis le menu Lightroom sans plongée choisie, l'écran est vide, avec un bouton « Choisir les plongées » vers l'écran Plongées. **[Décidé, 2026-11-12]**
 2. L'application repère les appareils photo présents parmi les photos de la période couverte. Les photos sont cherchées **dans tout le catalogue**, sur la période des plongées choisies, élargie de la marge et des décalages. **[Décidé, 2026-11-12]** Un appareil est identifié par son modèle **et son numéro de série** quand la photo le contient, sinon par le modèle seul. Deux boîtiers du même modèle ont donc chacun leur décalage. **[Décidé, 2026-11-12]**
 3. **Pour chaque appareil**, l'utilisateur règle **un seul décalage d'horloge**, qui remplace les deux curseurs début et fin actuels. **[Décidé]**
    - Plage : ±24 h, au pas de la minute (comme aujourd'hui).
    - **Décalage mémorisé [Décidé, 2026-11-12]** : l'application retient le dernier décalage appliqué à chaque appareil et le pré-remplit la fois suivante. Il sert aussi au repère « Couvre la sélection » de F8.
-   - Bouton **« Suggérer »** : propose le décalage qui fait tomber le plus de photos dans les plongées choisies. Il teste les écarts au pas de 15 minutes entre −14 h et +14 h, ce qui couvre tous les fuseaux horaires. Si l'appareil enregistre son fuseau horaire dans les photos, ce fuseau est utilisé directement (mise en œuvre : voir section 10). L'utilisateur accepte ou non. **[Décidé, 2026-11-12]**
+   - Bouton **« Suggérer »** : propose le décalage qui fait tomber le plus de photos dans les plongées choisies. Il teste les écarts au pas de 15 minutes entre −14 h et +14 h, ce qui couvre tous les fuseaux horaires. L'utilisateur accepte ou non. **[Décidé, 2026-11-12]** Le fuseau horaire enregistré dans les photos n'est **pas utilisé en V1** : il ne donne le décalage que si l'on connaît aussi le fuseau de la plongée, que Subsurface n'enregistre pas et que MacDive garde de façon peu fiable (souvent le fuseau du Mac ou « GMT »). **[Décidé, 2026-11-12]**
    - **Affichage des appareils [Proposé, maquette]** : une carte compacte par appareil, sur deux colonnes, **classées par nom d'appareil** [Décidé] ; les appareils à vérifier (0 photo dans les plongées) sont signalés en orange. Chaque carte : modèle et fin du numéro de série, nombre de photos, décalage avec boutons −1 h / −1 min / +1 min / +1 h, « Suggérer », jauge des photos dans les plongées.
    - **Ignorer un appareil [Décidé]** : case par appareil (ex. téléphone resté sur le bateau) ; ses photos ne sont ni comptées ni taguées.
    - **« Suggérer pour tous » [Décidé]** : calcule le décalage de chaque appareil d'un coup, sans toucher aux appareils ignorés ni aux décalages réglés à la main.
@@ -365,10 +365,11 @@ BlueDive et Submersion, après examen de leur stockage.
 
 ## 10. À trancher
 
-- **Fuseau horaire de la photo dans « Suggérer » (F5)** : connaître le fuseau de l'appareil ne donne le décalage que si l'on connaît aussi celui de la plongée. Or Subsurface n'enregistre pas de fuseau par plongée, et celui que garde MacDive n'est pas fiable (constaté sur la base du propriétaire : souvent le fuseau du Mac ou « GMT », sans rapport avec le lieu de plongée).
+Aucune question ouverte à ce stade.
 
 ### Tranché
 
+- Fuseau horaire des photos : non utilisé par « Suggérer » en V1 (F5).
 - Documentation : un seul texte, embarqué dans l'application et publié sur querton.com (F12).
 
 - Unités : réglage métrique / impérial (F2) ; profondeurs écrites avec leur unité (F6).
