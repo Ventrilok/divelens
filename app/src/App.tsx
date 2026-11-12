@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { initialScreen, lightroomStatus, loadDives, onLightroomStatus, onShowScreen } from "./api";
 import { isReadyScreen, Sidebar, type Screen } from "./components/Sidebar";
 import { t } from "./i18n";
+import { CollectionsScreen } from "./screens/CollectionsScreen";
 import { DivesScreen } from "./screens/DivesScreen";
 import { TagScreen } from "./screens/TagScreen";
 import { SourceError } from "./screens/SourceError";
@@ -17,12 +18,16 @@ const offline: LightroomStatus = {
   selectionVersion: 0,
   selectionFrom: null,
   selectionTo: null,
+  coverFrom: null,
+  coverTo: null,
 };
 
 type State = { status: "loading" } | { status: "ok"; log: DiveLog } | { status: "error"; failure: LoadError };
 
 function App() {
   const [screen, setScreen] = useState<Screen>("dives");
+  // Dives chosen on the Dives screen, kept when going to Create Collections and back.
+  const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [state, setState] = useState<State>({ status: "loading" });
 
   const load = useCallback(() => {
@@ -53,7 +58,18 @@ function App() {
         </main>
       )}
       {state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
-      {state.status === "ok" && screen === "dives" && <DivesScreen log={state.log} />}
+      {state.status === "ok" && screen === "dives" && (
+        <DivesScreen log={state.log} selected={chosen} onSelect={setChosen} onCreate={() => setScreen("collections")} />
+      )}
+      {state.status === "ok" && screen === "collections" && (
+        <CollectionsScreen
+          log={state.log}
+          lr={lr}
+          chosen={chosen}
+          onChooseDives={() => setScreen("dives")}
+          onRetryDives={(ids) => setChosen(new Set(ids))}
+        />
+      )}
       {state.status === "ok" && screen === "tag" && <TagScreen log={state.log} lr={lr} onCancel={() => setScreen("dives")} />}
     </div>
   );

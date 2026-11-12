@@ -5,6 +5,7 @@
 //! This crate has no UI or Tauri dependency so it can be tested on every
 //! platform in CI.
 
+pub mod collections;
 pub mod divecomputer;
 pub mod error;
 pub mod macdive;

@@ -34,7 +34,7 @@ local Json = require "Json"
 local Log = require "Log"
 local Tagging = require "Tagging"
 
-local PROTOCOL = 1
+local PROTOCOL = 2
 local APP_ID = "com.querton.divelens.desktop" -- the app's bundle identifier
 local LINK_FILE = "lightroom-link.json"
 local TICK = 0.1           -- seconds between two passes of the link task
@@ -148,23 +148,46 @@ local function selection()
     return photos, signature
 end
 
--- Earliest and latest capture times, as wall-clock "YYYY-MM-DDTHH:MM:SS"
--- (Lightroom's local time, as it shows them), or nil.
+-- Photos as the app knows them: id, wall-clock original capture time (the
+-- adjusted one when there is none), camera model and serial number.
+local function describePhotos(photos)
+    local catalog = LrApplication.activeCatalog()
+    local raw = catalog:batchGetRawMetadata(photos, { "dateTimeOriginalISO8601", "dateTimeISO8601" })
+    local formatted = catalog:batchGetFormattedMetadata(photos, { "cameraMake", "cameraModel", "cameraSerialNumber" })
+    local list = {}
+    for i, photo in ipairs(photos) do
+        local r, f = raw[photo] or {}, formatted[photo] or {}
+        list[i] = Tagging.describePhoto(photo.localIdentifier,
+            r.dateTimeOriginalISO8601 or r.dateTimeISO8601,
+            f.cameraMake, f.cameraModel, f.cameraSerialNumber)
+    end
+    return list
+end
+
+-- Earliest and latest capture times of the selection, wall-clock
+-- "YYYY-MM-DDTHH:MM:SS" (or nil), overall and per camera (the app applies
+-- each camera's remembered clock offset).
 local function timeRange(photos)
     if #photos == 0 then return nil end
-    local raw = LrApplication.activeCatalog():batchGetRawMetadata(photos, { "dateTimeOriginal", "dateTime" })
     local first, last
-    for _, photo in ipairs(photos) do
-        local m = raw[photo]
-        local t = m and (m.dateTimeOriginal or m.dateTime)
+    local cameras, order = {}, {}
+    for _, p in ipairs(describePhotos(photos)) do
+        local t = p.time
         if t then
             if not first or t < first then first = t end
             if not last or t > last then last = t end
+            local key = (p.model or "") .. "|" .. (p.serial or "")
+            local c = cameras[key]
+            if not c then
+                c = { model = p.model, serial = p.serial, from = t, to = t }
+                cameras[key] = c
+                order[#order + 1] = c
+            end
+            if t < c.from then c.from = t end
+            if t > c.to then c.to = t end
         end
     end
-    if not first then return nil end
-    local function wallClock(t) return LrDate.timeToUserFormat(t, "%Y-%m-%dT%H:%M:%S") end
-    return wallClock(first), wallClock(last)
+    return first, last, order
 end
 
 -- Asks Lightroom for the first thumbnails. Callbacks only queue the result;
@@ -200,8 +223,11 @@ local function pushSelection(s, force)
     if not force and signature == s.selectionSignature then return end
     s.selectionVersion = s.selectionVersion + 1
     s.thumbnailOutbox = {}
-    local from, to = timeRange(photos)
-    if send(s, { type = "selection", count = #photos, version = s.selectionVersion, from = from, to = to }) then
+    local from, to, cameras = timeRange(photos)
+    if send(s, {
+        type = "selection", count = #photos, version = s.selectionVersion, from = from, to = to,
+        cameras = (cameras and #cameras > 0) and cameras or Json.emptyArray,
+    }) then
         s.selectionSignature = signature
         requestThumbnails(s, photos, s.selectionVersion)
     end
@@ -261,6 +287,131 @@ local function applyTags(s, message)
     send(s, { type = "applied", id = id, count = total })
 end
 
+-- Create Collections ----------------------------------------------------------
+
+local PHOTOS_PER_MESSAGE = 200
+local COLLECTION_SET = "Dive Lens" -- compatibility contract: never translated
+
+-- Every photo captured between two days (inclusive, "YYYY-MM-DD"), whole
+-- catalog. Lightroom searches by day only and on the adjusted capture time;
+-- the app keeps what fits on the original time. The photos are kept for the
+-- following "apply", which names them by id.
+local function findPhotos(s, message)
+    local id = message.id
+    if type(message.from) ~= "string" or type(message.to) ~= "string" then
+        return send(s, { type = "applyFailed", id = id, reason = "badRequest" })
+    end
+    local catalog = LrApplication.activeCatalog()
+    local photos = catalog:findPhotos {
+        sort = "captureTime",
+        ascending = true,
+        searchDesc = {
+            { criteria = "captureTime", operation = "in", value = message.from, value2 = message.to },
+            combine = "intersect",
+        },
+    }
+    local byId = {}
+    for _, photo in ipairs(photos) do byId[tostring(photo.localIdentifier)] = photo end
+    s.search = { id = id, photos = byId }
+    local list = describePhotos(photos)
+    local undated = 0
+    for _, p in ipairs(list) do
+        if not p.time then undated = undated + 1 end
+    end
+    Log.info("found %d photos from %s to %s (%d without capture time)", #list, message.from, message.to, undated)
+    local i = 1
+    repeat
+        local chunk = {}
+        for j = i, math.min(i + PHOTOS_PER_MESSAGE - 1, #list) do chunk[#chunk + 1] = list[j] end
+        i = i + PHOTOS_PER_MESSAGE
+        local done = i > #list
+        send(s, { type = "photos", id = id, photos = #chunk > 0 and chunk or Json.emptyArray, done = done })
+        if not done then LrTasks.yield() end
+    until done
+    s.lastHeard = LrDate.currentTime()
+end
+
+local function findChild(list, name)
+    for _, item in ipairs(list) do
+        if item:getName() == name then return item end
+    end
+end
+
+-- Writes a "Create Collections" request in one catalog step: each dive's
+-- collection in "Dive Lens" (created if needed), its data and location on
+-- its photos, and each photo's own values. Always answers the app.
+local function applyCollections(s, message)
+    local id = message.id
+    local function fail(reason, detail)
+        Log.warn("collections refused: %s %s", reason, detail or "")
+        send(s, { type = "applyFailed", id = id, reason = reason, detail = detail })
+    end
+    local groups, why = Tagging.planCollections(message, formatDate)
+    if not groups then return fail("badRequest", why) end
+    if not (s.search and s.search.id == message.search) then return fail("staleSearch") end
+    local catalog = LrApplication.activeCatalog()
+
+    -- The set is created on its own the very first time: a set created inside
+    -- a write cannot be used before that write ends.
+    local set = findChild(catalog:getChildCollectionSets(), COLLECTION_SET)
+    if not set then
+        local ok, status = LrTasks.pcall(function()
+            return catalog:withWriteAccessDo(COLLECTION_SET, function()
+                catalog:createCollectionSet(COLLECTION_SET, nil, true)
+            end, { timeout = WRITE_TIMEOUT })
+        end)
+        if not ok then return fail("error", tostring(status)) end
+        if status ~= "executed" then return fail("busy") end
+        set = findChild(catalog:getChildCollectionSets(), COLLECTION_SET)
+        if not set then return fail("error", "collection set not created") end
+    end
+    local existing = {}
+    for _, c in ipairs(set:getChildCollections()) do existing[c:getName()] = true end
+
+    local total = 0
+    for _, g in ipairs(groups) do total = total + #g.photos end
+    local results = {}
+    local ok, status = LrTasks.pcall(function()
+        return catalog:withWriteAccessDo(LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (DiveLens)", function()
+            local done = 0
+            for gi, g in ipairs(groups) do
+                local photos = {}
+                for _, p in ipairs(g.photos) do
+                    local photo = s.search.photos[p.id]
+                    if photo then
+                        for _, change in ipairs(g.common) do
+                            if change.kind == "plugin" then
+                                photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
+                            else
+                                photo:setRawMetadata(change.field, change.value)
+                            end
+                        end
+                        for _, change in ipairs(p.changes) do
+                            photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
+                        end
+                        photos[#photos + 1] = photo
+                    end
+                    done = done + 1
+                    if done % PROGRESS_EVERY == 0 and done < total then
+                        send(s, { type = "progress", id = id, done = done, total = total })
+                        LrTasks.yield()
+                    end
+                end
+                if #photos > 0 then
+                    local collection = catalog:createCollection(g.collection, set, true)
+                    collection:addPhotos(photos)
+                end
+                results[gi] = { collection = g.collection, count = #photos, created = not existing[g.collection] }
+            end
+        end, { timeout = WRITE_TIMEOUT })
+    end)
+    s.lastHeard = LrDate.currentTime()
+    if not ok then return fail("error", tostring(status)) end
+    if status ~= "executed" then return fail("busy") end
+    Log.info("collections written: %d groups, %d photos", #results, total)
+    send(s, { type = "collectionsApplied", id = id, groups = results })
+end
+
 -- Receiving -------------------------------------------------------------------
 
 local function isWholeMessage(text)
@@ -301,6 +452,15 @@ local function handle(s, text)
         send(s, { type = "pong" })
     elseif message.type == "apply" then
         applyTags(s, message)
+    elseif message.type == "findPhotos" or message.type == "applyCollections" then
+        -- The app waits for an answer: an error still gets one.
+        local handler = message.type == "findPhotos" and findPhotos or applyCollections
+        local ok, err = LrTasks.pcall(handler, s, message)
+        if not ok then
+            Log.error("%s failed: %s", message.type, err)
+            s.lastHeard = LrDate.currentTime()
+            send(s, { type = "applyFailed", id = message.id, reason = "error", detail = tostring(err) })
+        end
     else
         Log.debug("ignored message type %s", tostring(message.type))
     end
@@ -330,6 +490,7 @@ local function closeSockets(s)
     s.receiverConnected = false
     s.authed = false
     s.selectionSignature = nil
+    s.search = nil -- photo ids belong to one app session
     s.thumbnailRequests = {}
     s.thumbnailOutbox = {}
     s.framing = Framing.new()

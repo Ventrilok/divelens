@@ -29,7 +29,9 @@ function Framing.push(state, chunk, isWhole)
         start = nl + 1
     end
     local rest = buffer:sub(start):gsub("\r$", "")
-    if rest:find("%S") and isWhole and isWhole(rest) then
+    -- A whole message ends with "}": checking only then keeps a large
+    -- message split in many chunks from being decoded again at each chunk.
+    if rest:find("}%s*$") and isWhole and isWhole(rest) then
         messages[#messages + 1] = rest
         rest = ""
     end

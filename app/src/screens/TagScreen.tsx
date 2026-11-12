@@ -10,7 +10,7 @@ import { DiveDetail } from "../components/DiveDetail";
 import { DiveList } from "../components/DiveList";
 import { FilterBar } from "../components/FilterBar";
 import { NO_PICK, pickAround, SitePicker, type SitePick } from "../components/SitePicker";
-import { DEFAULT_UNITS, formatGps, formatPhotoSpan } from "../format";
+import { formatGps, formatPhotoSpan } from "../format";
 import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters } from "../filters";
 import { t, tn } from "../i18n";
 import { gpsInput } from "../sites";
@@ -47,7 +47,7 @@ function failure(e: ApplyOutcome | TagError): string {
 }
 
 export function TagScreen({ log, lr, onCancel }: { log: DiveLog; lr: LightroomStatus; onCancel: () => void }) {
-  const units = DEFAULT_UNITS;
+  const units = log.units;
   const { dives, sites, capabilities } = log;
 
   const [withDive, setWithDive] = useState(true);
@@ -90,8 +90,8 @@ export function TagScreen({ log, lr, onCancel }: { log: DiveLog; lr: LightroomSt
   // The dive covering the selection is pointed out and shown in the detail
   // card, never chosen for the user.
   const covering = useMemo(
-    () => coveringDive(dives, lr.selectionFrom, lr.selectionTo),
-    [dives, lr.selectionFrom, lr.selectionTo],
+    () => coveringDive(dives, lr.coverFrom, lr.coverTo),
+    [dives, lr.coverFrom, lr.coverTo],
   );
   useEffect(() => {
     if (covering) setFocusedId(covering.id);

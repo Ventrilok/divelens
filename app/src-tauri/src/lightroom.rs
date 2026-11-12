@@ -6,7 +6,8 @@
 //! the catalog name and the live photo selection. Messages are one JSON object
 //! per line. The app pings every few seconds; silence means the link is lost.
 //!
-//! "Apply" requests go to the plugin through a channel of [`Command`]s; each
+//! Requests (tag the selection, find the photos of a period, write the
+//! collections) go to the plugin through a channel of [`Command`]s; each
 //! carries its own reply channel. A request made while the link is down, or
 //! cut by a lost link, gets no reply: its channel is dropped, which the caller
 //! sees as "link lost". Requests are never retried.
@@ -21,13 +22,13 @@ use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
-use divelens_core::tags::TagRequest;
+use divelens_core::tags::{CollectionsRequest, TagRequest};
 use serde::{Deserialize, Serialize};
 
 /// Name of the link file, written by the plugin in the app's settings folder.
 pub const LINK_FILE: &str = "lightroom-link.json";
 /// Version of the message set; both sides must agree.
-pub const PROTOCOL: u32 = 1;
+pub const PROTOCOL: u32 = 2;
 
 /// Content of the link file.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -69,6 +70,58 @@ pub struct Status {
     /// `YYYY-MM-DDTHH:MM:SS` as Lightroom shows them.
     pub selection_from: Option<String>,
     pub selection_to: Option<String>,
+    /// Same, per camera of the selection (the remembered clock offsets apply
+    /// to these).
+    pub selection_cameras: Vec<CameraRange>,
+    /// The selection's range moved by each camera's remembered clock offset
+    /// (Tag Selection's "covers the selection" hint); filled by the app.
+    pub cover_from: Option<String>,
+    pub cover_to: Option<String>,
+}
+
+/// Capture times of the selected photos of one camera.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CameraRange {
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub serial: Option<String>,
+    pub from: String,
+    pub to: String,
+}
+
+/// One photo of a period, as the plugin describes it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FoundPhoto {
+    /// Lightroom's identifier, valid for this link session.
+    pub id: String,
+    /// Original capture time, wall-clock `YYYY-MM-DDTHH:MM:SS`.
+    #[serde(default)]
+    pub time: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub serial: Option<String>,
+}
+
+/// Photos of a period; `search` identifies the search for the write that
+/// follows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PhotoSearch {
+    pub search: u64,
+    pub photos: Vec<FoundPhoto>,
+}
+
+/// One collection written by "Create Collections".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WrittenCollection {
+    pub collection: String,
+    pub count: usize,
+    /// The collection did not exist before.
+    pub created: bool,
 }
 
 /// Something the UI must react to.
@@ -94,9 +147,39 @@ pub enum Event {
 pub enum Command {
     /// Tag the photos selected in Lightroom at the time the plugin gets it.
     Apply {
-        request: TagRequest,
+        request: Box<TagRequest>,
         reply: Sender<ApplyOutcome>,
     },
+    /// Every photo of the catalog captured between two days (`YYYY-MM-DD`,
+    /// inclusive).
+    FindPhotos {
+        from: String,
+        to: String,
+        reply: Sender<Result<PhotoSearch, ApplyOutcome>>,
+    },
+    /// Write collections, dive data and per-photo values in one step.
+    ApplyCollections {
+        request: CollectionsRequest,
+        reply: Sender<Result<Vec<WrittenCollection>, ApplyOutcome>>,
+    },
+}
+
+/// A request waiting for the plugin's answer.
+enum Pending {
+    Apply(Sender<ApplyOutcome>),
+    Find(Sender<Result<PhotoSearch, ApplyOutcome>>, Vec<FoundPhoto>),
+    Collections(Sender<Result<Vec<WrittenCollection>, ApplyOutcome>>),
+}
+
+impl Pending {
+    fn fail(self, outcome: ApplyOutcome) {
+        // A caller that stopped waiting is no longer interested.
+        match self {
+            Pending::Apply(reply) => drop(reply.send(outcome)),
+            Pending::Find(reply, _) => drop(reply.send(Err(outcome))),
+            Pending::Collections(reply) => drop(reply.send(Err(outcome))),
+        }
+    }
 }
 
 /// How an "Apply" ended in Lightroom.
@@ -106,7 +189,8 @@ pub enum ApplyOutcome {
     /// Written in one catalog step on `count` photos.
     Applied { count: usize },
     /// Nothing written. `reason`: `noSelection`, `busy` (Lightroom kept the
-    /// catalog busy), `badRequest` or `error`.
+    /// catalog busy), `badRequest`, `staleSearch` (the photos were found in
+    /// an earlier link session) or `error`.
     Failed {
         reason: String,
         detail: Option<String>,
@@ -130,6 +214,8 @@ enum FromPlugin {
         from: Option<String>,
         #[serde(default)]
         to: Option<String>,
+        #[serde(default)]
+        cameras: Vec<CameraRange>,
     },
     Thumbnail {
         version: u64,
@@ -158,6 +244,15 @@ enum FromPlugin {
         #[serde(default)]
         detail: Option<String>,
     },
+    Photos {
+        id: u64,
+        photos: Vec<FoundPhoto>,
+        done: bool,
+    },
+    CollectionsApplied {
+        id: u64,
+        groups: Vec<WrittenCollection>,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -175,6 +270,16 @@ enum ToPlugin<'a> {
         id: u64,
         #[serde(flatten)]
         request: &'a TagRequest,
+    },
+    FindPhotos {
+        id: u64,
+        from: &'a str,
+        to: &'a str,
+    },
+    ApplyCollections {
+        id: u64,
+        #[serde(flatten)]
+        request: &'a CollectionsRequest,
     },
 }
 
@@ -293,7 +398,7 @@ fn session(
     let mut refusal = None;
     let mut reader = BufReader::new(incoming);
     let mut line = Vec::new();
-    let mut pending: HashMap<u64, Sender<ApplyOutcome>> = HashMap::new();
+    let mut pending: HashMap<u64, Pending> = HashMap::new();
     let mut next_id = 1;
     loop {
         match reader.read_until(b'\n', &mut line) {
@@ -329,11 +434,13 @@ fn session(
                         version,
                         from,
                         to,
+                        cameras,
                     } if status.connected => {
                         status.selected = count;
                         status.selection_version = version;
                         status.selection_from = from;
                         status.selection_to = to;
+                        status.selection_cameras = cameras;
                         on_event(Event::Status(status.clone()));
                     }
                     FromPlugin::Thumbnail {
@@ -353,14 +460,35 @@ fn session(
                     FromPlugin::Progress { done, total } => {
                         on_event(Event::Progress { done, total });
                     }
-                    FromPlugin::Applied { id, count } => {
-                        if let Some(reply) = pending.remove(&id) {
+                    FromPlugin::Applied { id, count } => match pending.remove(&id) {
+                        Some(Pending::Apply(reply)) => {
                             let _ = reply.send(ApplyOutcome::Applied { count });
                         }
-                    }
+                        Some(other) => other.fail(ApplyOutcome::Failed {
+                            reason: "error".into(),
+                            detail: Some("unexpected answer".into()),
+                        }),
+                        None => {}
+                    },
                     FromPlugin::ApplyFailed { id, reason, detail } => {
-                        if let Some(reply) = pending.remove(&id) {
-                            let _ = reply.send(ApplyOutcome::Failed { reason, detail });
+                        if let Some(p) = pending.remove(&id) {
+                            p.fail(ApplyOutcome::Failed { reason, detail });
+                        }
+                    }
+                    FromPlugin::Photos { id, photos, done } => {
+                        if let Some(Pending::Find(_, found)) = pending.get_mut(&id) {
+                            found.extend(photos);
+                        }
+                        if done && let Some(Pending::Find(reply, found)) = pending.remove(&id) {
+                            let _ = reply.send(Ok(PhotoSearch {
+                                search: id,
+                                photos: found,
+                            }));
+                        }
+                    }
+                    FromPlugin::CollectionsApplied { id, groups } => {
+                        if let Some(Pending::Collections(reply)) = pending.remove(&id) {
+                            let _ = reply.send(Ok(groups));
                         }
                     }
                     FromPlugin::Bye => return End::Bye,
@@ -383,24 +511,31 @@ fn session(
         if last_heard.elapsed() > silence {
             return End::Lost;
         }
-        while let Ok(Command::Apply { request, reply }) = commands.try_recv() {
+        while let Ok(command) = commands.try_recv() {
             if !status.connected {
                 continue; // dropped: the caller learns the link is not up
             }
             let id = next_id;
             next_id += 1;
-            if send_line(
-                outgoing,
-                &ToPlugin::Apply {
+            let message = match &command {
+                Command::Apply { request, .. } => ToPlugin::Apply {
                     id,
-                    request: &request,
+                    request: request.as_ref(),
                 },
-            )
-            .is_err()
-            {
+                Command::FindPhotos { from, to, .. } => ToPlugin::FindPhotos { id, from, to },
+                Command::ApplyCollections { request, .. } => {
+                    ToPlugin::ApplyCollections { id, request }
+                }
+            };
+            if send_line(outgoing, &message).is_err() {
                 return End::Lost;
             }
-            pending.insert(id, reply);
+            let waiting = match command {
+                Command::Apply { reply, .. } => Pending::Apply(reply),
+                Command::FindPhotos { reply, .. } => Pending::Find(reply, Vec::new()),
+                Command::ApplyCollections { reply, .. } => Pending::Collections(reply),
+            };
+            pending.insert(id, waiting);
         }
         if status.connected && last_ping.elapsed() >= timing.ping_every {
             last_ping = Instant::now();
@@ -462,7 +597,7 @@ mod tests {
         stream.write_all(text.as_bytes()).unwrap();
     }
 
-    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":1,"type":"hello"}"#;
+    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":2,"type":"hello"}"#;
 
     #[test]
     fn reads_link_file() {
@@ -488,7 +623,7 @@ mod tests {
             let hello: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
             assert_eq!(hello["type"], "hello");
             assert_eq!(hello["token"], "secret");
-            assert_eq!(hello["protocol"], 1);
+            assert_eq!(hello["protocol"], PROTOCOL);
             // Lightroom may add CR, blank lines, or split a line in two.
             write(to_app, &format!("{HELLO}\r\n\n"));
             write(
@@ -612,7 +747,7 @@ mod tests {
         let (reply, outcome) = std::sync::mpsc::channel();
         commands
             .send(Command::Apply {
-                request: request(),
+                request: Box::new(request()),
                 reply,
             })
             .unwrap();
@@ -712,7 +847,7 @@ mod tests {
         let (reply, outcome) = std::sync::mpsc::channel();
         commands
             .send(Command::Apply {
-                request: request(),
+                request: Box::new(request()),
                 reply,
             })
             .unwrap();
@@ -730,6 +865,96 @@ mod tests {
         assert_eq!(end, End::Bye);
         assert!(outcome.recv().is_err());
         drop(commands);
+    }
+
+    #[test]
+    fn finds_photos_in_chunks_then_writes_collections() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (result_tx, result_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin(move |lines, to_app| {
+            lines.next().unwrap();
+            write(to_app, &format!("{HELLO}\n"));
+            lines.next().unwrap(); // first ping: the app is connected
+            let (reply, found) = std::sync::mpsc::channel();
+            commands
+                .send(Command::FindPhotos {
+                    from: "2025-12-29".into(),
+                    to: "2026-01-02".into(),
+                    reply,
+                })
+                .unwrap();
+            let find = next_request(lines);
+            assert_eq!(find["type"], "findPhotos");
+            assert_eq!(
+                (find["from"].as_str(), find["to"].as_str()),
+                (Some("2025-12-29"), Some("2026-01-02"))
+            );
+            let id = find["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"photos\",\"id\":{id},\"done\":false,\"photos\":[{{\"id\":\"11\",\"time\":\"2025-12-30T05:02:00\",\"model\":\"TG-7\",\"serial\":\"A1\"}}]}}\n"
+                ),
+            );
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"photos\",\"id\":{id},\"done\":true,\"photos\":[{{\"id\":\"12\"}}]}}\n"
+                ),
+            );
+            let search = found.recv().unwrap().unwrap();
+            let (reply, written) = std::sync::mpsc::channel();
+            commands
+                .send(Command::ApplyCollections {
+                    request: CollectionsRequest {
+                        search: search.search,
+                        groups: Vec::new(),
+                    },
+                    reply,
+                })
+                .unwrap();
+            let apply = next_request(lines);
+            assert_eq!(apply["type"], "applyCollections");
+            assert_eq!(apply["search"].as_u64(), Some(search.search));
+            let id = apply["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"collectionsApplied\",\"id\":{id},\"groups\":[{{\"collection\":\"700 - Coral Garden\",\"count\":1,\"created\":true}}]}}\n"
+                ),
+            );
+            result_tx.send((search, written.recv().unwrap())).unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {});
+        plugin.join().unwrap();
+        assert_eq!(end, End::Bye);
+        let (search, written) = result_rx.recv().unwrap();
+        assert_eq!(
+            search.photos,
+            vec![
+                FoundPhoto {
+                    id: "11".into(),
+                    time: Some("2025-12-30T05:02:00".into()),
+                    model: Some("TG-7".into()),
+                    serial: Some("A1".into()),
+                },
+                FoundPhoto {
+                    id: "12".into(),
+                    time: None,
+                    model: None,
+                    serial: None,
+                },
+            ]
+        );
+        assert_eq!(
+            written,
+            Ok(vec![WrittenCollection {
+                collection: "700 - Coral Garden".into(),
+                count: 1,
+                created: true,
+            }])
+        );
     }
 
     #[test]
@@ -755,7 +980,7 @@ mod tests {
     #[test]
     fn other_protocol_is_refused() {
         let link = LinkFile {
-            protocol: 2,
+            protocol: 1,
             receive_port: 1,
             send_port: 1,
             token: "x".into(),
@@ -763,7 +988,7 @@ mod tests {
         };
         assert_eq!(
             run_session(&link, "0.1.0", fast(), &idle(), &mut |_| {}),
-            End::Protocol(2)
+            End::Protocol(1)
         );
     }
 }

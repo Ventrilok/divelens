@@ -1,6 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { ApplyOutcome, DiveLog, LightroomStatus, Sample, SelectionPreview, TagChoice } from "./types";
+import type {
+  ApplyOutcome,
+  CollectionChoices,
+  CollectionsPreview,
+  CollectionsResult,
+  DiveLog,
+  LightroomStatus,
+  Period,
+  Sample,
+  SelectionPreview,
+  TagChoice,
+} from "./types";
 
 export const loadDives = () => invoke<DiveLog>("load_dives");
 export const diveProfile = (id: string) => invoke<Sample[]>("dive_profile", { id });
@@ -29,3 +40,13 @@ export const selectionPreview = () => invoke<SelectionPreview>("selection_previe
 /** Calls `handler` each time a thumbnail of the selection arrives. */
 export const onSelectionPreview = (handler: (p: SelectionPreview) => void): Promise<UnlistenFn> =>
   listen<SelectionPreview>("selection-preview", (e) => handler(e.payload));
+
+/** Finds in Lightroom the photos of the chosen dives' period; rejects with a CollectionsError. */
+export const findCollectionPhotos = (diveIds: string[]) => invoke<Period>("find_collection_photos", { diveIds });
+export const collectionsPreview = (choices: CollectionChoices) =>
+  invoke<CollectionsPreview>("collections_preview", { choices });
+/** Suggested offset (minutes) per camera key; null when no offset fits. */
+export const suggestOffsets = (cameras: string[]) =>
+  invoke<Record<string, number | null>>("suggest_offsets", { cameras });
+export const applyCollections = (choices: CollectionChoices) =>
+  invoke<CollectionsResult>("apply_collections", { choices });

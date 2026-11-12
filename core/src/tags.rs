@@ -12,6 +12,7 @@ use chrono::NaiveDateTime;
 use serde::Serialize;
 
 use crate::model::{Dive, Site};
+use crate::profile::PhotoPoint;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum DepthUnit {
@@ -74,6 +75,41 @@ pub struct TagRequest {
     pub location: Option<LocationTags>,
 }
 
+/// Per-photo fields (spec F6, section 7). `None` clears the field: a photo
+/// at the surface, or in a dive without a profile, has no depth.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PhotoTags {
+    /// Lightroom's photo identifier, as the plugin sent it.
+    pub id: String,
+    pub photo_depth: Option<String>,
+    pub photo_temp: Option<String>,
+    pub photo_elapsed: Option<String>,
+    /// `±HH:MM`, always written.
+    pub clock_offset: String,
+}
+
+/// One dive of a "Create Collections" write: its collection, its data and
+/// location, and its photos.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionGroup {
+    /// Collection name inside the "Dive Lens" set.
+    pub collection: String,
+    pub dive: DiveTags,
+    pub location: LocationTags,
+    pub photos: Vec<PhotoTags>,
+}
+
+/// Everything one "Create Collections › Apply" writes, in one catalog step.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionsRequest {
+    /// The photo search these photo identifiers come from.
+    pub search: u64,
+    pub groups: Vec<CollectionGroup>,
+}
+
 fn wall_clock(t: NaiveDateTime) -> String {
     t.format("%Y-%m-%dT%H:%M:%S").to_string()
 }
@@ -100,6 +136,13 @@ pub fn temperature(c: f64, unit: TempUnit) -> String {
     }
 }
 
+/// Clock offset as `+04:01`, `-00:30`, `+00:00`.
+pub fn clock_offset(minutes: i32) -> String {
+    let sign = if minutes < 0 { '-' } else { '+' };
+    let m = minutes.unsigned_abs();
+    format!("{sign}{:02}:{:02}", m / 60, m % 60)
+}
+
 /// One star per point; `None` when unrated.
 pub fn rating(stars: Option<u8>) -> Option<String> {
     stars.filter(|n| *n > 0).map(|n| "★".repeat(n.into()))
@@ -116,6 +159,20 @@ impl DiveTags {
             temp_high: dive.temp_high_c.map(|c| temperature(c, units.temp)),
             temp_low: dive.temp_low_c.map(|c| temperature(c, units.temp)),
             rating: rating(dive.rating),
+        }
+    }
+}
+
+impl PhotoTags {
+    pub fn new(id: String, point: Option<PhotoPoint>, offset_min: i32, units: Units) -> Self {
+        Self {
+            id,
+            photo_depth: point.map(|p| depth(p.depth_m, units.depth)),
+            photo_temp: point
+                .and_then(|p| p.temp_c)
+                .map(|c| temperature(c, units.temp)),
+            photo_elapsed: point.map(|p| duration(p.elapsed_s)),
+            clock_offset: clock_offset(offset_min),
         }
     }
 }
