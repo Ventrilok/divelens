@@ -185,7 +185,7 @@ Règles :
 
 Critères d'acceptation :
 - Le compteur se met à jour pendant que le décalage ou la marge change, sans clic supplémentaire.
-- Un « Annuler » dans Lightroom défait l'intégralité d'une application, sauf le GPS, comme pour F8 (constaté le 2026-11-12).
+- Un « Annuler » dans Lightroom défait l'intégralité d'une application, sauf le GPS, comme pour F8, et sauf l'altitude quand la profondeur y est copiée (F7) (constaté le 2026-11-12).
 - Avec des photos prises à l'heure de France et des plongées aux Maldives (+4 h), « Suggérer » propose +4 h.
 
 ### F6 — Données par photo
@@ -210,7 +210,7 @@ Critères d'acceptation :
   - seul « Créer les collections » écrit l'altitude : « Tagger la sélection » n'écrit pas de profondeur par photo ;
   - une photo sans profondeur (prise dans la marge, plongée sans courbe) garde l'altitude qu'elle a déjà ;
   - désactiver l'option plus tard n'efface pas les altitudes déjà copiées ;
-  - « Annuler » dans Lightroom ne défait probablement pas l'altitude, comme pour le GPS : à vérifier.
+  - « Annuler » dans Lightroom **ne défait pas l'altitude**, comme pour le GPS (constaté le 2026-11-12). Accepté ; l'explication de l'option et le rappel après écriture le disent.
 - L'option est accompagnée d'une explication, qui dit trois choses :
   - le champ DiveLens n'existe que dans Lightroom ;
   - l'altitude suit la photo exportée et se voit dans les autres logiciels ;
@@ -375,7 +375,7 @@ BlueDive et Submersion, après examen de leur stockage.
 
 - **Ordinateurs anciens sans téléchargement brut** dans MacDive : message à afficher (« pas de courbe disponible pour cet ordinateur »), à distinguer d'une plongée saisie à la main.
 - **Ajout de champs** — vérifié dans le kit Lightroom 16 (2026-11-12) : ajouter des champs ne demande aucune migration ; les valeurs existantes sont conservées tant que la définition des 8 champs existants ne change pas. Le numéro de version par champ ne sert qu'à un changement incompatible. La version globale du schéma passe de 1 à 2, comme le kit le recommande à chaque évolution, sans routine de mise à jour. Preuve finale : test dans Lightroom (anciennes valeurs toujours visibles après rechargement).
-- **Écriture de l'altitude** — vérifié (2026-11-12) : un plugin peut écrire l'altitude GPS (nombre, en mètres). Le retour par « Annuler » n'est pas vérifié ; probablement comme le GPS (non annulé). Sans effet tant que l'option est désactivée.
+- **Écriture de l'altitude** — vérifié (2026-11-12) : un plugin peut écrire l'altitude GPS (nombre, en mètres). « Annuler » ne la remet pas, comme le GPS (constaté le 2026-11-12). Sans effet tant que l'option est désactivée.
 - **Recherche des photos par date** — constaté (2026-11-12) : la recherche du catalogue par date de prise de vue ne fonctionne qu'au jour près, et sur l'heure de prise de vue modifiée dans Lightroom, pas l'heure d'origine. Le plugin cherche donc par jours élargis, puis l'application filtre sur l'heure d'origine.
 - **Filtrer par profondeur** : les champs de plugin sont du texte. Un filtre « photos sous 30 m » n'est probablement pas possible dans Lightroom ; seuls la recherche et la navigation par valeur le sont. À vérifier avant de promettre quoi que ce soit.
 - **Températures nulles ou négatives** : le plugin actuel ne les écrit pas (plongée sous glace). **[Proposé : corrigé en V1]**
