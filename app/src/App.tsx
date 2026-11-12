@@ -1,12 +1,24 @@
-import { useCallback, useEffect, useState } from "react";
-import { initialScreen, lightroomStatus, loadDives, onLightroomStatus, onShowScreen } from "./api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  appInfo,
+  initialScreen,
+  lightroomStatus,
+  loadDives,
+  onLightroomStatus,
+  onSettingsChanged,
+  onShowScreen,
+  setSourcePath,
+  updateSettings,
+} from "./api";
+import { unitsInUse } from "./collectionPlace";
 import { isReadyScreen, Sidebar, type Screen } from "./components/Sidebar";
-import { t } from "./i18n";
+import { lang, setLanguage, t } from "./i18n";
 import { CollectionsScreen } from "./screens/CollectionsScreen";
 import { DivesScreen } from "./screens/DivesScreen";
 import { TagScreen } from "./screens/TagScreen";
+import { SettingsScreen, type LogState } from "./screens/SettingsScreen";
 import { SourceError } from "./screens/SourceError";
-import type { DiveLog, LightroomStatus, LoadError } from "./types";
+import type { AppInfo, LightroomStatus, Settings, Sort } from "./types";
 import "./App.css";
 
 const offline: LightroomStatus = {
@@ -22,22 +34,51 @@ const offline: LightroomStatus = {
   coverTo: null,
 };
 
-type State = { status: "loading" } | { status: "ok"; log: DiveLog } | { status: "error"; failure: LoadError };
-
-function App() {
+function App({ initialSettings }: { initialSettings: Settings }) {
   const [screen, setScreen] = useState<Screen>("dives");
   // Dives chosen on the Dives screen, kept when going to Create Collections and back.
   const [chosen, setChosen] = useState<Set<string>>(new Set());
-  const [state, setState] = useState<State>({ status: "loading" });
+  const [state, setState] = useState<LogState>({ status: "loading" });
+  const [settings, setSettings] = useState<Settings>(initialSettings);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [info, setInfo] = useState<AppInfo | null>(null);
 
   const load = useCallback(() => {
     setState({ status: "loading" });
     loadDives()
       .then((log) => setState({ status: "ok", log }))
-      .catch((failure: LoadError) => setState({ status: "error", failure }));
+      .catch((failure) => setState({ status: "error", failure }));
   }, []);
 
-  useEffect(load, [load]);
+  // The dive log is read again whenever its location changes (here, or when
+  // the previous plugin's settings were taken over).
+  const sourceKey = JSON.stringify(settings.source);
+  useEffect(load, [load, sourceKey]);
+
+  // Settings changed elsewhere (back end) reach this window too.
+  useEffect(() => {
+    appInfo().then(setInfo);
+    const stop = onSettingsChanged(setSettings);
+    return () => {
+      stop.then((f) => f());
+    };
+  }, []);
+
+  // The language changes at once: every string and format follows.
+  setLanguage(settings.language);
+
+  const change = useCallback((patch: Partial<Settings>) => {
+    setSettings((s) => ({ ...s, ...patch }));
+    updateSettings(patch)
+      .then((s) => {
+        setSettings(s);
+        setSaveError(null);
+      })
+      .catch((e: unknown) => setSaveError(String(e)));
+  }, []);
+
+  const sort: Sort = settings.diveSort ?? "recent";
+  const onSort = useCallback((s: Sort) => change({ diveSort: s }), [change]);
 
   // Lightroom link: current state, then live updates; menus choose the screen.
   const [lr, setLr] = useState<LightroomStatus>(offline);
@@ -49,28 +90,59 @@ function App() {
     return () => stops.forEach((p) => p.then((stop) => stop()));
   }, []);
 
+  // Units in use: the dive application's unless forced in Settings.
+  const okLog = state.status === "ok" ? state.log : null;
+  const log = useMemo(
+    () => okLog && { ...okLog, units: unitsInUse(settings.units, okLog.sourceUnits) },
+    [okLog, settings.units],
+  );
+
   return (
-    <div className="app">
-      <Sidebar current={screen} onGo={setScreen} log={state.status === "ok" ? state.log : null} lr={lr} />
-      {state.status === "loading" && (
+    <div className="app" key={lang}>
+      <Sidebar current={screen} onGo={setScreen} log={log} lr={lr} />
+      {screen === "settings" && (
+        <SettingsScreen
+          settings={settings}
+          logState={state}
+          lr={lr}
+          info={info}
+          error={saveError}
+          onChange={(patch) => {
+            if (patch.source) {
+              // Through its own command: the dive log is read again afterwards.
+              setSourcePath(patch.source.path).then(setSettings, (e: unknown) => setSaveError(String(e)));
+            } else change(patch);
+          }}
+        />
+      )}
+      {screen !== "settings" && state.status === "loading" && (
         <main className="screen screen-center">
           <p className="muted">{t("dives.loading")}</p>
         </main>
       )}
-      {state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
-      {state.status === "ok" && screen === "dives" && (
-        <DivesScreen log={state.log} selected={chosen} onSelect={setChosen} onCreate={() => setScreen("collections")} />
+      {screen !== "settings" && state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
+      {log && screen === "dives" && (
+        <DivesScreen
+          log={log}
+          selected={chosen}
+          onSelect={setChosen}
+          sort={sort}
+          onSort={onSort}
+          onCreate={() => setScreen("collections")}
+        />
       )}
-      {state.status === "ok" && screen === "collections" && (
+      {log && screen === "collections" && (
         <CollectionsScreen
-          log={state.log}
+          log={log}
           lr={lr}
+          settings={settings}
           chosen={chosen}
           onChooseDives={() => setScreen("dives")}
           onRetryDives={(ids) => setChosen(new Set(ids))}
+          onOpenSettings={() => setScreen("settings")}
         />
       )}
-      {state.status === "ok" && screen === "tag" && <TagScreen log={state.log} lr={lr} onCancel={() => setScreen("dives")} />}
+      {log && screen === "tag" && <TagScreen log={log} lr={lr} sort={sort} onCancel={() => setScreen("dives")} />}
     </div>
   );
 }

@@ -357,7 +357,7 @@ local function applyCollections(s, message)
     -- "holder" lists what is already there; "container" is what Lightroom's
     -- create functions take (nil for the catalog's root).
     local holder = Tagging.findSet(catalog, place.parent)
-    if not holder then return fail("parentNotFound", table.concat(place.parent, " > ")) end
+    if not holder then return fail("parentNotFound", table.concat(place.parent, " › ")) end
     local container = #place.parent > 0 and holder or nil
 
     -- The group set is created on its own the first time: a set created

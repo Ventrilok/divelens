@@ -1,7 +1,7 @@
 // Dive list filters and sorting (pure functions, no UI).
 
 import { fold } from "./format";
-import type { Dive } from "./types";
+import type { Dive, Sort } from "./types";
 
 export interface Filters {
   query: string;
@@ -28,7 +28,7 @@ export const NO_FILTERS: Filters = {
   withProfile: false,
 };
 
-export type Sort = "recent" | "oldest" | "depth";
+export type { Sort } from "./types";
 
 export function hasFilters(f: Filters): boolean {
   return (

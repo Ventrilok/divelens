@@ -1,7 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  AppInfo,
   ApplyOutcome,
+  CollectionSet,
   CollectionChoices,
   CollectionsPreview,
   CollectionsResult,
@@ -10,13 +12,24 @@ import type {
   Period,
   Sample,
   SelectionPreview,
+  Settings,
   TagChoice,
 } from "./types";
 
 export const loadDives = () => invoke<DiveLog>("load_dives");
 export const diveProfile = (id: string) => invoke<Sample[]>("dive_profile", { id });
-export const setSourcePath = (path: string) => invoke<void>("set_source_path", { path });
-export const versions = () => invoke<[string, string]>("versions");
+/** Points DiveLens at another dive log; null: the application's standard location. */
+export const setSourcePath = (path: string | null) => invoke<Settings>("set_source_path", { path });
+export const appInfo = () => invoke<AppInfo>("app_info");
+
+export const getSettings = () => invoke<Settings>("get_settings");
+/** Changes the settings named in `patch`; resolves with all of them. */
+export const updateSettings = (patch: Partial<Settings>) => invoke<Settings>("update_settings", { patch });
+/** Calls `handler` whenever the settings change (here or in the app's back end). */
+export const onSettingsChanged = (handler: (s: Settings) => void): Promise<UnlistenFn> =>
+  listen<Settings>("settings-changed", (e) => handler(e.payload));
+/** The catalog's collection sets; rejects with a CollectionsError. */
+export const collectionSets = () => invoke<CollectionSet[]>("collection_sets");
 export const lightroomStatus = () => invoke<LightroomStatus>("lightroom_status");
 export const initialScreen = () => invoke<string | null>("initial_screen");
 

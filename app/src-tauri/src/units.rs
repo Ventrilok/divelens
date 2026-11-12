@@ -1,7 +1,7 @@
-//! Display and writing units, until the Settings screen exists: taken from
-//! the preferences of the chosen dive application (spec F2). Dive logs always
-//! store metric values; only the application's preferences say what the
-//! diver reads. Preferences are only read, never written.
+//! Units of the chosen dive application, from its preferences: what
+//! Settings › units "as the dive application" means (spec F2). Dive logs
+//! always store metric values; only the application's preferences say what
+//! the diver reads. Preferences are only read, never written.
 //!
 //! - MacDive: global preference `units` of `com.mintsoftware.MacDive2`:
 //!   0 = m and °C, 1 = ft and °F, 2 (Canadian) = ft and °C, anything else =

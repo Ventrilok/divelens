@@ -2,7 +2,7 @@
 // "other site" picker of Tag Selection. Missing country or location form
 // their own group, listed last.
 
-import { locale } from "./i18n";
+import { localized } from "./i18n";
 import type { Site } from "./types";
 
 export interface LocationGroup {
@@ -17,7 +17,7 @@ export interface CountryGroup {
   locations: LocationGroup[];
 }
 
-const collator = new Intl.Collator(locale, { sensitivity: "base", numeric: true });
+const collator = localized((l) => new Intl.Collator(l, { sensitivity: "base", numeric: true }));
 
 function byName(a: string | null, b: string | null): number {
   if (a === null) return b === null ? 0 : 1;

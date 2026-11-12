@@ -1,14 +1,14 @@
 // How dive data is shown. One function per kind of value, used everywhere,
 // so the same data looks the same on every screen (spec: consistency rule).
 
-import { locale } from "./i18n";
+import { localized } from "./i18n";
 import type { Units } from "./types";
 
 const FT_PER_M = 3.28084;
 
-const oneDecimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
-const upToOneDecimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
-const integer = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 });
+const oneDecimal = localized((l) => new Intl.NumberFormat(l, { maximumFractionDigits: 1, minimumFractionDigits: 1 }));
+const upToOneDecimal = localized((l) => new Intl.NumberFormat(l, { maximumFractionDigits: 1 }));
+const integer = localized((l) => new Intl.NumberFormat(l, { maximumFractionDigits: 0 }));
 const gps = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4, useGrouping: false });
 
 export const DASH = "—";
@@ -78,7 +78,7 @@ export function parseWallClock(s: string): Date {
   return new Date(Date.UTC(y, mo - 1, day, h, mi, sec || 0));
 }
 
-const fmt = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(locale, { timeZone: "UTC", ...o });
+const fmt = (o: Intl.DateTimeFormatOptions) => localized((l) => new Intl.DateTimeFormat(l, { timeZone: "UTC", ...o }));
 const fTime = fmt({ hour: "2-digit", minute: "2-digit" });
 const fDayMonth = fmt({ day: "2-digit", month: "short" });
 const fFullDate = fmt({ weekday: "short", day: "numeric", month: "short", year: "numeric" });

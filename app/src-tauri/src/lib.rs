@@ -24,13 +24,25 @@ use lightroom::{
 use offsets::Offsets;
 use settings::{Settings, SourceKind};
 
-/// Versions of the app and of the core library, shown in Settings › About.
+/// Where the app writes its log (`None`: no home folder).
+struct LogFile(Option<PathBuf>);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppInfo {
+    version: &'static str,
+    os: &'static str,
+    log_path: Option<PathBuf>,
+}
+
+/// Version, system and log file, for Settings.
 #[tauri::command]
-fn versions() -> (String, String) {
-    (
-        env!("CARGO_PKG_VERSION").to_string(),
-        divelens_core::VERSION.to_string(),
-    )
+fn app_info(log: State<LogFile>) -> AppInfo {
+    AppInfo {
+        version: env!("CARGO_PKG_VERSION"),
+        os: std::env::consts::OS,
+        log_path: log.0.clone(),
+    }
 }
 
 /// Current settings.
@@ -85,8 +97,6 @@ struct DiveLog {
     dives: Vec<Dive>,
     /// Every named site of the log (Tag Selection › other site).
     sites: Vec<Site>,
-    /// Units in use when the log was loaded.
-    units: units::UiUnits,
     /// Units of the dive application's preferences (the settings may force
     /// others).
     source_units: units::UiUnits,
@@ -167,7 +177,6 @@ async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
         }
         match result {
             Ok((capabilities, dives, sites)) => Ok(DiveLog {
-                units: units_in_use(&app, &source).into(),
                 source_units: source_units(&app, &source).into(),
                 source,
                 capabilities,
@@ -710,7 +719,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            versions,
+            app_info,
             get_settings,
             update_settings,
             load_dives,
@@ -728,7 +737,7 @@ pub fn run() {
         ])
         .setup(|app| {
             let settings = Settings::load(&config_dir(app.handle()));
-            if let Ok(home) = app.path().home_dir() {
+            let log_path = app.path().home_dir().ok().map(|home| {
                 let path = applog::start(applog::folder(&home), settings.log_level);
                 log::info!(
                     "DiveLens {} on {}, log {}",
@@ -736,7 +745,9 @@ pub fn run() {
                     std::env::consts::OS,
                     path.display()
                 );
-            }
+                path
+            });
+            app.manage(LogFile(log_path));
             let (commands, inbox) = mpsc::channel();
             app.manage(Lightroom {
                 status: Mutex::new(Status::default()),
