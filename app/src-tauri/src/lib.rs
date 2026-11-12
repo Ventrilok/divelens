@@ -444,7 +444,6 @@ async fn apply_collections(
         if request.groups.is_empty() {
             return Err(CollectionsError::NothingToWrite);
         }
-        let photos = request.groups.iter().map(|g| g.photos.len()).sum();
         let with_depth = request
             .groups
             .iter()
@@ -467,8 +466,8 @@ async fn apply_collections(
             eprintln!("clock offsets not saved: {e}");
         }
         Ok(CollectionsResult {
+            photos: written.iter().map(|c| c.count).sum(),
             collections: written,
-            photos,
             with_depth,
             empty_dives,
         })

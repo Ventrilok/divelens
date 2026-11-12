@@ -413,3 +413,47 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
         ]
     );
 }
+
+#[test]
+fn large_collections_request_is_framed_quickly() {
+    use divelens_core::tags::{
+        CollectionGroup, CollectionsRequest, DiveTags, LocationTags, PhotoTags, Units,
+    };
+    let dive = sample_dive();
+    let photos = (0..2000)
+        .map(|i| PhotoTags::new(i.to_string(), None, 240, Units::default()))
+        .collect();
+    let request = CollectionsRequest {
+        search: 1,
+        groups: vec![CollectionGroup {
+            collection: "700 - Coral Garden".into(),
+            dive: DiveTags::new(&dive, Units::default()),
+            location: LocationTags::new(&dive.site, None, None),
+            photos,
+        }],
+    };
+    let line = serde_json::to_string(&request).unwrap() + "\n";
+    assert!(line.len() > 150_000, "{}", line.len());
+    let lua = lua();
+    lua.globals().set("input", line).unwrap();
+    let started = std::time::Instant::now();
+    run(
+        &lua,
+        r#"
+        local Framing = require "Framing"
+        local Json = require "Json"
+        local state, got = Framing.new(), {}
+        local function whole(text) return (pcall(Json.decode, text)) end
+        for i = 1, #input, 4096 do
+            for _, m in ipairs(Framing.push(state, input:sub(i, i + 4095), whole)) do got[#got + 1] = m end
+        end
+        assert(#got == 1, #got)
+        assert(#Json.decode(got[1]).groups[1].photos == 2000)
+        "#,
+    );
+    assert!(
+        started.elapsed().as_secs_f64() < 2.0,
+        "{:?}",
+        started.elapsed()
+    );
+}

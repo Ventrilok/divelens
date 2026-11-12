@@ -62,6 +62,11 @@ function failure(e: CollectionsError): string {
   }
 }
 
+/** The entries of `o` whose key is in `keys`. */
+function pick(o: Record<string, number>, keys: Set<string>): Record<string, number> {
+  return Object.fromEntries(Object.entries(o).filter(([k]) => keys.has(k)));
+}
+
 function diveName(d: Dive): string {
   return [d.number !== null ? String(d.number) : null, d.site.name].filter(Boolean).join(" ");
 }
@@ -271,6 +276,7 @@ export function CollectionsScreen({
   const [margin, setMargin] = useState(0);
   const [preview, setPreview] = useState<CollectionsPreview | null>(null);
   const [run, setRun] = useState<Run>({ state: "idle" });
+  const searchedFor = useRef<string | null>(null);
 
   // Photos of the period, found again when the dives change or Lightroom
   // comes back (its photo ids only hold for one link session).
@@ -285,10 +291,15 @@ export function CollectionsScreen({
     findCollectionPhotos(diveKey.split(","))
       .then((period) => {
         if (!live) return;
-        setOffsets(initialOffsets(period.cameras));
-        setIgnored(new Set());
-        setTouched(new Set());
-        setNotes({});
+        // Same dives found again (link restarted): the user's settings stay.
+        const keep = searchedFor.current === diveKey;
+        searchedFor.current = diveKey;
+        const keys = new Set(period.cameras.map((c) => c.key));
+        const kept = <T,>(set: Set<T>) => new Set([...set].filter((k) => keys.has(k as string)));
+        setOffsets((o) => (keep ? { ...initialOffsets(period.cameras), ...pick(o, keys) } : initialOffsets(period.cameras)));
+        setIgnored((s) => (keep ? kept(s) : new Set()));
+        setTouched((s) => (keep ? kept(s) : new Set()));
+        if (!keep) setNotes({});
         setSearch({ state: "ready", period });
       })
       .catch((e: CollectionsError) => live && setSearch({ state: "failed", message: failure(e) }));

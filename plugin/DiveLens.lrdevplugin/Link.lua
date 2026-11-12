@@ -314,7 +314,11 @@ local function findPhotos(s, message)
     for _, photo in ipairs(photos) do byId[tostring(photo.localIdentifier)] = photo end
     s.search = { id = id, photos = byId }
     local list = describePhotos(photos)
-    Log.info("found %d photos from %s to %s", #list, message.from, message.to)
+    local undated = 0
+    for _, p in ipairs(list) do
+        if not p.time then undated = undated + 1 end
+    end
+    Log.info("found %d photos from %s to %s (%d without capture time)", #list, message.from, message.to, undated)
     local i = 1
     repeat
         local chunk = {}
@@ -448,10 +452,15 @@ local function handle(s, text)
         send(s, { type = "pong" })
     elseif message.type == "apply" then
         applyTags(s, message)
-    elseif message.type == "findPhotos" then
-        findPhotos(s, message)
-    elseif message.type == "applyCollections" then
-        applyCollections(s, message)
+    elseif message.type == "findPhotos" or message.type == "applyCollections" then
+        -- The app waits for an answer: an error still gets one.
+        local handler = message.type == "findPhotos" and findPhotos or applyCollections
+        local ok, err = LrTasks.pcall(handler, s, message)
+        if not ok then
+            Log.error("%s failed: %s", message.type, err)
+            s.lastHeard = LrDate.currentTime()
+            send(s, { type = "applyFailed", id = message.id, reason = "error", detail = tostring(err) })
+        end
     else
         Log.debug("ignored message type %s", tostring(message.type))
     end

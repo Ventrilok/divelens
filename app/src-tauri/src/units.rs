@@ -125,6 +125,7 @@ pub fn read_macdive(home: &Path) -> Units {
 }
 
 /// Subsurface's units, from its preferences in `home` (Mac).
+#[cfg_attr(windows, allow(dead_code))]
 pub fn read_subsurface_mac(home: &Path) -> Units {
     let Some(prefs) = read_mac_preferences(home, SUBSURFACE_DOMAIN) else {
         return METRIC;

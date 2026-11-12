@@ -359,11 +359,17 @@ impl Session {
         })
     }
 
-    /// Offsets to remember after a successful write: every camera taken
-    /// into account.
+    /// Offsets to remember after a successful write: those of the cameras
+    /// with at least one photo written (the offset was applied to them).
     pub fn remember(&self, choices: &Choices, offsets: &mut Offsets) {
+        let mut written = vec![false; self.cameras.len()];
+        for (p, _, placement) in self.placements(choices) {
+            if placement.is_some() {
+                written[p.camera] = true;
+            }
+        }
         for (i, camera) in self.cameras.iter().enumerate() {
-            if !self.ignored(choices, i) {
+            if written[i] {
                 offsets
                     .cameras
                     .insert(camera.key.clone(), self.offset(choices, i));
@@ -558,13 +564,17 @@ mod tests {
     }
 
     #[test]
-    fn remembers_offsets_of_cameras_taken_into_account() {
+    fn remembers_offsets_of_cameras_with_photos_written() {
         let s = session(&Offsets::default());
         let mut offsets = Offsets::default();
-        s.remember(&choices(0), &mut offsets);
+        offsets.cameras.insert("Nikon|".into(), 60);
+        let mut c = choices(0);
+        c.offsets.insert("GoPro|".into(), 600); // puts no GoPro photo in a dive
+        s.remember(&c, &mut offsets);
         assert_eq!(offsets.get("TG-7|A1"), Some(240));
-        assert_eq!(offsets.get("GoPro|"), Some(0));
-        assert_eq!(offsets.get("iPhone|Z9"), None);
+        assert_eq!(offsets.get("GoPro|"), None, "nothing written");
+        assert_eq!(offsets.get("iPhone|Z9"), None, "ignored");
+        assert_eq!(offsets.get("Nikon|"), Some(60), "other cameras kept");
     }
 
     #[test]
