@@ -1,3 +1,4 @@
+mod applog;
 mod collections;
 mod lightroom;
 mod offsets;
@@ -30,6 +31,41 @@ fn versions() -> (String, String) {
     )
 }
 
+/// Current settings.
+#[tauri::command]
+fn get_settings(app: AppHandle) -> Settings {
+    Settings::load(&config_dir(&app))
+}
+
+/// Changes the settings named in `patch` and returns them all; every window
+/// hears of it through `settings-changed`.
+#[tauri::command]
+fn update_settings(app: AppHandle, patch: serde_json::Value) -> Result<Settings, String> {
+    change_settings(&app, |s| s.patch(&patch))
+}
+
+fn change_settings(
+    app: &AppHandle,
+    change: impl FnOnce(&mut Settings),
+) -> Result<Settings, String> {
+    let before = Settings::load(&config_dir(app));
+    let after = Settings::update(&config_dir(app), change).map_err(|e| {
+        log::error!("settings not saved: {e}");
+        e.to_string()
+    })?;
+    if after != before {
+        log::info!(
+            "settings changed: {}",
+            serde_json::to_string(&after).unwrap_or_default()
+        );
+        if after.log_level != before.log_level {
+            applog::set_level(after.log_level);
+        }
+        let _ = app.emit("settings-changed", after.clone());
+    }
+    Ok(after)
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SourceInfo {
@@ -46,8 +82,11 @@ struct DiveLog {
     dives: Vec<Dive>,
     /// Every named site of the log (Tag Selection › other site).
     sites: Vec<Site>,
-    /// Display and writing units, from the dive application's preferences.
+    /// Units in use when the log was loaded.
     units: units::UiUnits,
+    /// Units of the dive application's preferences (the settings may force
+    /// others).
+    source_units: units::UiUnits,
 }
 
 /// Error sent to the UI: the reader error plus the source it concerns.
@@ -83,8 +122,7 @@ fn source_info(app: &AppHandle) -> SourceInfo {
     }
 }
 
-/// Units of the dive application the log belongs to (spec F2: until the
-/// Settings screen exists).
+/// Units of the dive application the log belongs to, from its preferences.
 fn source_units(app: &AppHandle, info: &SourceInfo) -> Units {
     let Ok(home) = app.path().home_dir() else {
         return Units::default();
@@ -92,6 +130,14 @@ fn source_units(app: &AppHandle, info: &SourceInfo) -> Units {
     match info.kind {
         SourceKind::MacDive => units::read_macdive(&home),
     }
+}
+
+/// Units in use (spec F2): the dive application's, unless forced in the
+/// settings.
+fn units_in_use(app: &AppHandle, info: &SourceInfo) -> Units {
+    Settings::load(&config_dir(app))
+        .units
+        .resolve(source_units(app, info))
 }
 
 fn open(info: &SourceInfo) -> Result<MacDive, Error> {
@@ -107,9 +153,19 @@ async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
     tauri::async_runtime::spawn_blocking(move || {
         let source = source_info(&app);
         let result = open(&source).and_then(|s| Ok((s.capabilities(), s.dives()?, s.sites()?)));
+        match &result {
+            Ok((_, dives, sites)) => log::info!(
+                "dive log {}: {} dives, {} sites",
+                source.path.display(),
+                dives.len(),
+                sites.len()
+            ),
+            Err(e) => log::warn!("dive log {} not read: {e:?}", source.path.display()),
+        }
         match result {
             Ok((capabilities, dives, sites)) => Ok(DiveLog {
-                units: source_units(&app, &source).into(),
+                units: units_in_use(&app, &source).into(),
+                source_units: source_units(&app, &source).into(),
                 source,
                 capabilities,
                 dives,
@@ -132,11 +188,8 @@ async fn dive_profile(app: AppHandle, id: String) -> Result<Vec<Sample>, Error> 
 
 /// Points DiveLens at another dive-log file, chosen by the user.
 #[tauri::command]
-fn set_source_path(app: AppHandle, path: PathBuf) -> Result<(), String> {
-    let dir = config_dir(&app);
-    let mut settings = Settings::load(&dir);
-    settings.source.path = Some(path);
-    settings.save(&dir).map_err(|e| e.to_string())
+fn set_source_path(app: AppHandle, path: Option<PathBuf>) -> Result<Settings, String> {
+    change_settings(&app, |s| s.source.path = path)
 }
 
 /// Last known state of the Lightroom link, and the way to send it requests.
@@ -209,7 +262,7 @@ enum TagError {
 fn tag_request(app: &AppHandle, choice: &TagChoice) -> Result<TagRequest, TagError> {
     let info = source_info(app);
     let source = open(&info).map_err(|detail| TagError::Source { detail })?;
-    let units = source_units(app, &info);
+    let units = units_in_use(app, &info);
     let dive = match &choice.dive_id {
         Some(id) => Some(
             source
@@ -424,7 +477,7 @@ async fn apply_collections(
     tauri::async_runtime::spawn_blocking(move || {
         let info = source_info(&app);
         let source = open(&info).map_err(|detail| CollectionsError::Source { detail })?;
-        let units = source_units(&app, &info);
+        let units = units_in_use(&app, &info);
         let (request, empty_dives) = {
             let state = app.state::<CollectionsState>();
             let session = state.session.lock().expect("collections");
@@ -463,7 +516,7 @@ async fn apply_collections(
             session.remember(&choices, &mut offsets);
         }
         if let Err(e) = offsets.save(&dir) {
-            eprintln!("clock offsets not saved: {e}");
+            log::error!("clock offsets not saved: {e}");
         }
         Ok(CollectionsResult {
             photos: written.iter().map(|c| c.count).sum(),
@@ -568,7 +621,7 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
             let text = format!("{end:?}");
             if last_end.as_ref() != Some(&text) {
                 if end != End::Unreachable {
-                    eprintln!("Lightroom link ended: {text}");
+                    log::info!("Lightroom link ended: {text}");
                 }
                 last_end = Some(text);
             }
@@ -592,6 +645,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             versions,
+            get_settings,
+            update_settings,
             load_dives,
             dive_profile,
             set_source_path,
@@ -605,6 +660,16 @@ pub fn run() {
             apply_collections
         ])
         .setup(|app| {
+            let settings = Settings::load(&config_dir(app.handle()));
+            if let Ok(home) = app.path().home_dir() {
+                let path = applog::start(applog::folder(&home), settings.log_level);
+                log::info!(
+                    "DiveLens {} on {}, log {}",
+                    env!("CARGO_PKG_VERSION"),
+                    std::env::consts::OS,
+                    path.display()
+                );
+            }
             let (commands, inbox) = mpsc::channel();
             app.manage(Lightroom {
                 status: Mutex::new(Status::default()),

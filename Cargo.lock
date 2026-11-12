@@ -780,6 +780,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "divelens-core",
+ "log",
  "mlua",
  "plist",
  "serde",
