@@ -57,7 +57,7 @@ App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where a
 ## Git & GitHub
 
 - Never push, open a PR, merge, force-push or rewrite pushed history unless I ask explicitly. Never merge without green CI.
-- GitHub Actions minutes are limited (every PR push runs macOS and Windows jobs). Batch commits locally and push once, when the work is ready for review.
+- CI runs on every push to a PR and again on merge; it is free (public repository), so there is no need to batch pushes.
 - One branch per coherent change, never work on `main`. Branch names: `<type>/<short-kebab-slug>` with a commit type, e.g. `feat/tag-selection`, `fix/12-empty-profile` (issue number when there is one).
 - Commits follow Conventional Commits 1.0.0: `<type>(<scope>): <description>`, imperative, lower-case, no trailing period, at most 72 characters. Types: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `style`, `revert`. Optional scope: `core`, `macdive`, `subsurface`, `app`, `plugin`, `link`, `spec`, `deps`. PR titles use the same format (PRs are squash-merged).
 - Don't mix unrelated changes in one commit; point out unrelated changes in the working tree instead of committing them.
