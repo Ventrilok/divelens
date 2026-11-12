@@ -105,8 +105,10 @@ Au premier lancement, l'application reprend automatiquement les réglages exista
 **Écran Réglages [Décidé, 2026-11-12]** — sections, dans l'ordre : Carnet de plongée, Affichage, Écriture sur les photos, Collections, Diagnostic, À propos. Chaque modification est enregistrée immédiatement, sans bouton « Enregistrer ». Les sections « Sauvegarde des réglages » (F11) et « Mises à jour » (F13) de la maquette sont masquées tant que ces fonctions n'existent pas.
 
 - **Source de plongée** : MacDive (Mac) ou Subsurface (Mac et Windows). Emplacement pré-rempli avec l'emplacement standard de l'application choisie, modifiable via un sélecteur. Pas de recherche automatique ailleurs sur le disque. **[Décidé]**
-  - Tant que le lecteur Subsurface n'existe pas, il apparaît grisé avec la mention « bientôt ». Sur Windows, sans Subsurface, l'écran indique qu'aucune source n'est disponible sur ce système. **[Décidé, 2026-11-12]**
+  - Sur Windows, seul Subsurface est proposé : MacDive n'apparaît pas dans la liste. **[Décidé, 2026-11-12]**
   - Sous l'emplacement : état de la base (« Base valide · N plongées · N sites », ou le problème rencontré), « Choisir… » et, si l'emplacement n'est pas le standard, « Emplacement standard ». **[Décidé, 2026-11-12]**
+  - **Subsurface [Décidé, 2026-11-12]** : un carnet Subsurface est soit un fichier (`.xml` ou `.ssrf`), soit un dossier (stockage git). Deux boutons, « Choisir un fichier… » et « Choisir un dossier… » ; l'état indique le format reconnu (« Fichier XML · N plongées · N sites » ou « Stockage git · N plongées · N sites »). Emplacement pré-rempli : le fichier standard de Subsurface, `<utilisateur>.xml` dans son dossier (`~/Library/Application Support/Subsurface/` sur Mac, `%APPDATA%\Subsurface\` sur Windows). Le « fichier par défaut » réglé dans Subsurface n'est pas lu.
+  - **Un emplacement mémorisé par application [Décidé, 2026-11-12]** : passer de MacDive à Subsurface puis revenir retrouve l'emplacement MacDive choisi.
 - **Ordre d'affichage des plongées** : pas de ligne dans Réglages. La liste mémorise le dernier ordre choisi (récentes, anciennes, profondeur) et le retrouve au lancement suivant ; il vaut pour Plongées et Tagger la sélection, qui partagent la même liste. L'ancien réglage (croissant / décroissant) sert de valeur de départ. **[Décidé, 2026-11-12]**
 - **Niveau de journal** : « Normal » ou « Détaillé », et bouton « Afficher le journal » (F10). **[Décidé, 2026-11-12]**
 - **Profondeur copiée dans l'altitude** (voir F7), désactivée par défaut. **[Décidé]**
@@ -147,6 +149,7 @@ Critères d'acceptation :
 - Indique si la plongée a une courbe (donc des données par photo possibles) ou non, comme pour une plongée saisie à la main. **[Décidé]**
 - Recherche sur le numéro, le site, le lieu et le pays, comme aujourd'hui. **[Décidé : conservé]**
 - **Toutes** les plongées sont chargées, sans limite de nombre. **[Décidé]**
+- Une plongée marquée « invalide » dans Subsurface reste dans la liste, avec une pastille « Invalide » sur sa ligne et dans sa fiche, pour faire le lien avec Subsurface qui l'affiche barrée. **[Décidé, 2026-11-12]**
 
 Critères d'acceptation :
 - La liste complète de la base de test (707 plongées) s'affiche et se filtre sans attente perceptible pendant la frappe.
@@ -161,7 +164,7 @@ Parcours :
 2. L'application repère les appareils photo présents parmi les photos de la période couverte. Les photos sont cherchées **dans tout le catalogue**, sur la période des plongées choisies, élargie de la marge et des décalages. **[Décidé, 2026-11-12]** Un appareil est identifié par son modèle **et son numéro de série** quand la photo le contient, sinon par le modèle seul. Deux boîtiers du même modèle ont donc chacun leur décalage. **[Décidé, 2026-11-12]**
 3. **Pour chaque appareil**, l'utilisateur règle **un seul décalage d'horloge**, qui remplace les deux curseurs début et fin actuels. **[Décidé]**
    - Plage : ±24 h, au pas de la minute (comme aujourd'hui).
-   - **Décalage mémorisé [Décidé, 2026-11-12]** : l'application retient le dernier décalage appliqué à chaque appareil et le pré-remplit la fois suivante. Il sert aussi au repère « Couvre la sélection » de F8.
+   - **Décalage mémorisé [Décidé, 2026-11-12]** : l'application retient le dernier décalage appliqué à chaque appareil et le pré-remplit la fois suivante. Il sert aussi au repère « Couvre la sélection » de F8. Les décalages sont mémorisés **séparément pour chaque application de plongée** : un même carnet importé de l'une dans l'autre peut avoir des heures de début différentes (constaté : jusqu'à plusieurs heures entières entre MacDive et Subsurface). Après un changement d'application, aucun décalage n'est pré-rempli ; « Suggérer » le retrouve. **[Décidé, 2026-11-12]**
    - Bouton **« Suggérer »** : propose le décalage qui fait tomber le plus de photos dans les plongées choisies. Il teste les écarts au pas de 15 minutes entre −14 h et +14 h, ce qui couvre tous les fuseaux horaires. L'utilisateur accepte ou non. **[Décidé, 2026-11-12]** Le fuseau horaire enregistré dans les photos n'est **pas utilisé en V1** : il ne donne le décalage que si l'on connaît aussi le fuseau de la plongée, que Subsurface n'enregistre pas et que MacDive garde de façon peu fiable (souvent le fuseau du Mac ou « GMT »). **[Décidé, 2026-11-12]**
    - **Affichage des appareils [Proposé, maquette]** : une carte compacte par appareil, sur deux colonnes, **classées par nom d'appareil** [Décidé] ; les appareils à vérifier (0 photo dans les plongées) sont signalés en orange. Chaque carte : modèle et numéro de série complet **[Décidé, 2026-11-12]**, nombre de photos, décalage avec boutons −1 h / −1 min / +1 min / +1 h, « Suggérer », jauge des photos dans les plongées.
    - **Ignorer un appareil [Décidé]** : case par appareil (ex. téléphone resté sur le bateau) ; ses photos ne sont ni comptées ni taguées.
@@ -365,7 +368,28 @@ Contenu du format commun pour une plongée :
   - **stockage versionné** (dossier de type git), format par défaut avec le stockage en ligne de Subsurface, qui en garde une copie locale.
 - La courbe est en clair dans les deux formats.
 - Pays et ville d'un site sont facultatifs dans Subsurface : l'interface gère leur absence.
-- Données de test nécessaires : fichiers réels dans les deux formats, anonymisés pour le dépôt public.
+- Données de test : carnets **fictifs** dans les deux formats, avec les mêmes plongées, pour vérifier que les deux lectures donnent le même résultat. Le carnet du propriétaire sert seulement à une vérification locale, jamais versée au dépôt.
+
+**Règles de lecture [Décidé, 2026-11-12]** — principe général : **chaque valeur est reprise telle que l'application de plongée l'affiche**, pour éviter toute incompréhension.
+
+- **Plusieurs ordinateurs sur une plongée** : le premier ordinateur, celui que Subsurface affiche, fournit la courbe, la profondeur max, les températures et les données par photo.
+- **Plongée sans ordinateur** : « No Computer » (plongée importée de MacDive) ou « manually added dive » (saisie à la main dans Subsurface), avec ses quelques points saisis à la main : traitée comme une plongée **sans courbe** (données par photo vides, pas d'indicateur de courbe).
+- **Nom de site « Pays / Lieu / Site »** : découpé en pays, lieu et site seulement si le pays et la ville du site sont vides dans Subsurface **et** que le nom a exactement trois parties séparées par « / » ; sinon le nom entier reste le site.
+- **Durée et fin** : la durée affichée par Subsurface. Elle s'arrête à la sortie de l'eau, alors que MacDive compte aussi les minutes enregistrées en surface : constaté sur le carnet du propriétaire, 74 plongées plus courtes de 2 min 20 en médiane, jusqu'à 7 min 40.
+- **Températures** : Subsurface n'affiche qu'une température de l'eau par plongée. Min = température de l'eau, à défaut le point le plus froid de la courbe ; max = point le plus chaud de la courbe, à défaut la température de l'eau (seule exception au principe, sinon le champ resterait toujours vide). Jamais la température de l'air. Constaté : mêmes valeurs que MacDive sur 620 des 648 plongées du propriétaire qui ont une température.
+- **Note** : 1 à 5 étoiles, reprise telle quelle ; 0 ou absente = sans note.
+- **Plongée sans numéro** : champ numéro vide, collection nommée par la date (règle de F8).
+- **Plongée « invalide »** dans Subsurface : lue comme les autres, signalée par une pastille (F4).
+- **Voyages** Subsurface : les plongées rangées dans un voyage sont lues comme les autres (pas de notion de voyage en V1).
+- **Identifiants** : une plongée est identifiée par son heure de début (Subsurface n'a pas d'identifiant de plongée), avec un suffixe si deux plongées commencent à la même heure ; un site par l'identifiant que Subsurface lui donne, le même dans les deux formats. Aucun de ces identifiants n'est conservé d'une session à l'autre ni écrit sur les photos.
+- **Formats** : seul le format actuel de Subsurface est lu ; un fichier très ancien affiche « ouvrez-le et réenregistrez-le dans Subsurface ». `.ssrf` est accepté comme `.xml`.
+- **Stockage git** : DiveLens lit, comme Subsurface, le dernier enregistrement du carnet (une branche), pas les fichiers du dossier. Il prend le carnet actif du dossier, ou le seul qu'il contient ; s'il y en a plusieurs sans carnet actif, l'état affiche « Plusieurs carnets dans ce dossier ». Pas de choix du carnet en V1.
+
+**Passer de MacDive à Subsurface [Décidé, 2026-11-12]** — aucune migration :
+- les décalages mémorisés sont propres à chaque application (F5) ;
+- une relance retrouve la collection existante tant que le nom « numéro - site » est identique (742 sur 748 plongées chez le propriétaire) ; sinon une nouvelle collection est créée à côté ; rien n'est déplacé ni supprimé ;
+- les photos déjà taguées gardent leurs valeurs jusqu'à une nouvelle application, qui écrit alors les heures et la durée de Subsurface ;
+- la documentation (F12) le dit en une phrase.
 
 ### Sources suivantes **[Décidé]**
 
@@ -392,6 +416,7 @@ Aucune question ouverte à ce stade.
 
 ### Tranché
 
+- Subsurface (2026-11-12) : premier ordinateur, plongées sans ordinateur sans courbe, découpage « Pays / Lieu / Site », valeurs telles que Subsurface les affiche, choix d'un fichier ou d'un dossier, un emplacement et des décalages mémorisés par application, pastille « Invalide », pas de migration au changement d'application (F2, F4, F5, section 8).
 - Écran Réglages (2026-11-12) : unités « comme l'application de plongée » ou forcées ; Subsurface grisé « bientôt » ; journal de l'application à côté de celui du plugin ; ordre des plongées mémorisé sur la liste ; marge non mémorisée ; emplacement des collections au choix, « Dive Lens » par défaut ; export / import et mises à jour reportés (F2, F10, F11, F13).
 - Fuseau horaire des photos : non utilisé par « Suggérer » en V1 (F5).
 - Documentation : un seul texte, embarqué dans l'application et publié sur querton.com (F12).
