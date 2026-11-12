@@ -1,5 +1,6 @@
 import { tn, t } from "../i18n";
 import type { DiveLog, LightroomStatus } from "../types";
+import logo from "../../icon-source/logo-color.svg";
 import { Icon, type IconName } from "./Icon";
 
 export type Screen = "dives" | "collections" | "tag" | "settings";
@@ -69,7 +70,7 @@ export function Sidebar({
   return (
     <nav className="sidebar" aria-label="DiveLens">
       <div className="brand">
-        <Icon name="logo" size={26} className="accent" />
+        <img src={logo} alt="" className="brand-logo" />
         <span>DiveLens</span>
       </div>
       {items.map((it) => (

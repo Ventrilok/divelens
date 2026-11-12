@@ -1,12 +1,6 @@
 // Line icons (same set as the mockups).
 
 const paths = {
-  logo: (
-    <>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M5.5 13.5c1.3 0 1.3-1.6 2.6-1.6s1.3 1.6 2.6 1.6 1.3-1.6 2.6-1.6 1.3 1.6 2.6 1.6 1.3-1.6 2.6-1.6" />
-    </>
-  ),
   list: <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />,
   folder: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
   tag: (
