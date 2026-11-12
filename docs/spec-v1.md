@@ -236,7 +236,7 @@ Sélection **[Décidé]** :
 - Sans sélection, le bouton est désactivé avec le message « Sélectionnez des photos dans Lightroom ».
 
 Ce qui est écrit **[Décidé : comportement actuel en V1]** :
-- Données de plongée : n° de plongée, début, fin, durée, profondeur max, températures, note. Pas de données par photo, pas de collection.
+- Données de plongée : n° de plongée, début, fin, durée, profondeur max, températures, note, et l'application source (section 7). Pas de données par photo, pas de collection.
 - Lieu : pays, ville, lieu, GPS (section 4).
 - Évolution envisagée : calculer les données par photo et alimenter la collection de la plongée.
 - Annulation : « Annuler » dans Lightroom défait l'écriture, **sauf le GPS**, que Lightroom ne remet pas (constaté le 2026-11-12). Accepté tel quel. **[Décidé]**
@@ -338,6 +338,9 @@ Description fonctionnelle seulement. La mise en page est une décision du propri
 | PhotoTemp | température au moment de la photo | oui |
 | PhotoElapsed | temps écoulé depuis le début de la plongée | oui |
 | ClockOffset | décalage d'horloge appliqué à la photo, `±HH:MM` | oui **[Décidé]** |
+| Source | application dont viennent les données de plongée : `MacDive` ou `Subsurface` | oui **[Décidé, 2026-11-12]** |
+
+Source est écrit chaque fois que des données de plongée le sont : par « Créer les collections » sur toutes les photos rangées, et par « Tagger la sélection » quand « Données de plongée » est cochée. Un lieu posé seul ne le touche pas. Les photos déjà taguées le gardent vide jusqu'à une nouvelle application. **[Décidé, 2026-11-12]**
 
 Les champs DiveLens restent dans le catalogue Lightroom et ne sont pas écrits dans le fichier photo. D'où l'option altitude (F7).
 

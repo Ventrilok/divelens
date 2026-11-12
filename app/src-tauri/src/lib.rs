@@ -419,7 +419,7 @@ fn tag_request(app: &AppHandle, choice: &TagChoice) -> Result<TagRequest, TagErr
         return Err(TagError::NothingChosen);
     }
     Ok(TagRequest {
-        dive: dive.map(|d| DiveTags::new(&d, units)),
+        dive: dive.map(|d| DiveTags::new(&d, units, info.kind.name())),
         location,
     })
 }
@@ -603,7 +603,7 @@ async fn apply_collections(
             let session = state.session.lock().expect("collections");
             let session = session.as_ref().ok_or(CollectionsError::NoPhotos)?;
             let mut request = session
-                .request(&choices, units, |d| source.profile(&d.id))
+                .request(&choices, units, info.kind.name(), |d| source.profile(&d.id))
                 .map_err(|detail| CollectionsError::Source { detail })?;
             let settings = Settings::load(&config_dir(&app));
             request.parent = settings.collections.parent.clone();

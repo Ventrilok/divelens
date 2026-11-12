@@ -22,5 +22,6 @@
 "$$$/DiveLens/Metadata/PhotoTemp=Temp. photo"
 "$$$/DiveLens/Metadata/PhotoElapsed=Temps écoulé"
 "$$$/DiveLens/Metadata/ClockOffset=Décalage horloge"
+"$$$/DiveLens/Metadata/Source=Source"
 "$$$/DiveLens/Undo/TagSelection=Tagger la sélection (DiveLens)"
 "$$$/DiveLens/Undo/CreateCollections=Créer les collections (DiveLens)"

@@ -66,6 +66,17 @@ pub struct Source {
     pub subsurface_path: Option<PathBuf>,
 }
 
+impl SourceKind {
+    /// The application's name, as written in the photos' Source field
+    /// (never translated).
+    pub fn name(self) -> &'static str {
+        match self {
+            SourceKind::MacDive => "MacDive",
+            SourceKind::Subsurface => "Subsurface",
+        }
+    }
+}
+
 impl Source {
     /// Application in use: Subsurface on Windows, whatever the file says
     /// (settings copied from a Mac).

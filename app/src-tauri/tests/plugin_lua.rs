@@ -170,14 +170,14 @@ fn plugin_keeps_its_identifier_and_fields() {
         r#"
         assert(require "Info".LrToolkitIdentifier == "com.querton.divelens")
         local metadata = require "Metadata"
-        assert(metadata.schemaVersion == 2)
+        assert(metadata.schemaVersion == 3)
         local ids = {}
         for _, field in ipairs(metadata.metadataFieldsForPhotos) do
             assert(field.dataType == "string" and field.version == 1, field.id)
             ids[#ids + 1] = field.id
         end
         assert(table.concat(ids, ",") == "DiveId,StartDate,EndDate,Duration,MaxDepth,TempHigh,TempLow,Rating,"
-            .. "PhotoDepth,PhotoTemp,PhotoElapsed,ClockOffset",
+            .. "PhotoDepth,PhotoTemp,PhotoElapsed,ClockOffset,Source",
             table.concat(ids, ","))
         "#,
     );
@@ -249,7 +249,7 @@ fn tagging_plan_writes_dive_fields_and_clears_missing_ones() {
     use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units};
     let dive = sample_dive();
     let lines = plan(&TagRequest {
-        dive: Some(DiveTags::new(&dive, Units::default())),
+        dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
         location: Some(LocationTags::new(&dive.site, None, None)),
     })
     .unwrap();
@@ -264,6 +264,7 @@ fn tagging_plan_writes_dive_fields_and_clears_missing_ones() {
             "plugin TempHigh=28.0°C",
             "plugin TempLow=nil",
             "plugin Rating=nil",
+            "plugin Source=Subsurface",
             // No city: the photo's city is left as it is.
             "raw country=Atlantis",
             "raw location=Coral Garden",
@@ -366,7 +367,7 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
         group: Some("Dive Lens".into()),
         groups: vec![CollectionGroup {
             collection: "700 - Coral Garden".into(),
-            dive: DiveTags::new(&dive, Units::default()),
+            dive: DiveTags::new(&dive, Units::default(), "Subsurface"),
             location: LocationTags::new(&dive.site, None, None),
             photos: vec![
                 PhotoTags::new("11".into(), Some(point), 241, Units::default()),
@@ -413,7 +414,7 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
         out,
         [
             "place Trips>2026 / Dive Lens",
-            "collection 700 - Coral Garden common 11",
+            "collection 700 - Coral Garden common 12",
             "11 PhotoDepth=10.0 m",
             "11 PhotoTemp=25.0°C",
             "11 PhotoElapsed=02:40",
@@ -472,7 +473,7 @@ fn large_collections_request_is_framed_quickly() {
         group: None,
         groups: vec![CollectionGroup {
             collection: "700 - Coral Garden".into(),
-            dive: DiveTags::new(&dive, Units::default()),
+            dive: DiveTags::new(&dive, Units::default(), "Subsurface"),
             location: LocationTags::new(&dive.site, None, None),
             photos,
         }],
