@@ -1,4 +1,5 @@
 import { tn, t } from "../i18n";
+import { sourceName } from "../sourceText";
 import type { DiveLog, LightroomStatus } from "../types";
 import logo from "../../icon-source/logo-color.svg";
 import { Icon, type IconName } from "./Icon";
@@ -82,7 +83,7 @@ export function Sidebar({
           <LightroomLine lr={lr} />
           {log && (
             <div>
-              {t("source.macDive")} · {tn("source.dives", log.dives.length)}
+              {sourceName(log.source.kind)} · {tn("source.dives", log.dives.length)}
             </div>
           )}
         </div>
