@@ -106,9 +106,13 @@ Au premier lancement, l'application reprend automatiquement les réglages exista
 - Source de plongée : MacDive (Mac) ou Subsurface (Mac et Windows). Emplacement pré-rempli avec l'emplacement standard de l'application choisie, modifiable via un sélecteur. Pas de recherche automatique ailleurs sur le disque. **[Décidé]**
 - Ordre d'affichage des plongées (croissant / décroissant). **[Proposé : conservé]**
 - Niveau de journal et bouton « Afficher le journal ». **[Proposé : conservé]**
-- Profondeur copiée dans l'altitude (voir F7). **[Décidé]**
-- « Inclure les photos prises en surface » (marge), valeur par défaut : **0 min**. **[Décidé]**
+- Profondeur copiée dans l'altitude (voir F7). **[Décidé]** Désactivée tant que l'écran Réglages n'existe pas. **[Décidé, 2026-11-12]**
+- « Inclure les photos prises en surface » (marge), valeur par défaut : **0 min**. **[Décidé]** Elle se règle sur l'écran « Créer les collections » (F5). **[Décidé, 2026-11-12]**
 - **Unités** : profondeur en mètres ou en pieds, température en °C ou en °F. **[Décidé]** Elles s'appliquent à l'affichage dans l'application et aux valeurs écrites dans les champs DiveLens. L'altitude GPS (F7) reste toujours en mètres, c'est la norme du champ. Les photos déjà taguées gardent l'unité en vigueur au moment de l'application. **[Proposé]**
+  - **Tant que l'écran Réglages n'existe pas [Décidé, 2026-11-12]** : les unités sont reprises des **préférences de l'application de plongée** choisie, pas du carnet (qui stocke toujours en métrique). Lecture seule, comme le carnet. Le futur écran Réglages pourra les modifier.
+    - MacDive : préférence globale « unités » de MacDive : 0 = m et °C, 1 = ft et °F, 2 (canadien) = ft et °C ; toute autre valeur = m et °C.
+    - Subsurface : ses réglages séparés de profondeur et de température (préférences sur Mac, registre sur Windows) ; absents = valeurs par défaut de Subsurface (métrique).
+    - Préférences introuvables (application absente, carnet copié d'un autre ordinateur) : m et °C.
 - **Langue** de l'interface : anglais et français en V1, ouverte à d'autres langues. Par défaut la langue du système, modifiable dans les réglages. **[Décidé : multilingue ; Proposé : EN + FR, langue du système]**
 
 Critères d'acceptation :
@@ -142,10 +146,12 @@ C'est l'usage principal, issu de « Create Collection » actuel.
 
 Parcours :
 1. L'utilisateur sélectionne une ou plusieurs plongées à la main, comme aujourd'hui. **Pas de notion de voyage.** **[Décidé]**
-2. L'application repère les appareils photo présents parmi les photos de la période couverte. Un appareil est identifié par son modèle **et son numéro de série** quand la photo le contient, sinon par le modèle seul. Deux boîtiers du même modèle ont donc chacun leur décalage. **[Proposé]**
+   - Les plongées se choisissent sur l'écran Plongées (sélection multiple), puis « Créer les collections ». **[Décidé, 2026-11-12]**
+2. L'application repère les appareils photo présents parmi les photos de la période couverte. Les photos sont cherchées **dans tout le catalogue**, sur la période des plongées choisies, élargie de la marge et des décalages. **[Décidé, 2026-11-12]** Un appareil est identifié par son modèle **et son numéro de série** quand la photo le contient, sinon par le modèle seul. Deux boîtiers du même modèle ont donc chacun leur décalage. **[Décidé, 2026-11-12]**
 3. **Pour chaque appareil**, l'utilisateur règle **un seul décalage d'horloge**, qui remplace les deux curseurs début et fin actuels. **[Décidé]**
    - Plage : ±24 h, au pas de la minute (comme aujourd'hui).
-   - Bouton **« Suggérer »** : propose le décalage qui fait tomber le plus de photos dans les plongées choisies. Il teste les écarts au pas de 15 minutes entre −14 h et +14 h, ce qui couvre tous les fuseaux horaires. Si l'appareil enregistre son fuseau horaire dans les photos, ce fuseau est utilisé directement. L'utilisateur accepte ou non. **[Décidé : bouton ; Proposé : pas de 15 min]**
+   - **Décalage mémorisé [Décidé, 2026-11-12]** : l'application retient le dernier décalage appliqué à chaque appareil et le pré-remplit la fois suivante. Il sert aussi au repère « Couvre la sélection » de F8.
+   - Bouton **« Suggérer »** : propose le décalage qui fait tomber le plus de photos dans les plongées choisies. Il teste les écarts au pas de 15 minutes entre −14 h et +14 h, ce qui couvre tous les fuseaux horaires. Si l'appareil enregistre son fuseau horaire dans les photos, ce fuseau est utilisé directement (mise en œuvre : voir section 10). L'utilisateur accepte ou non. **[Décidé, 2026-11-12]**
    - **Affichage des appareils [Proposé, maquette]** : une carte compacte par appareil, sur deux colonnes, **classées par nom d'appareil** [Décidé] ; les appareils à vérifier (0 photo dans les plongées) sont signalés en orange. Chaque carte : modèle et fin du numéro de série, nombre de photos, décalage avec boutons −1 h / −1 min / +1 min / +1 h, « Suggérer », jauge des photos dans les plongées.
    - **Ignorer un appareil [Décidé]** : case par appareil (ex. téléphone resté sur le bateau) ; ses photos ne sont ni comptées ni taguées.
    - **« Suggérer pour tous » [Décidé]** : calcule le décalage de chaque appareil d'un coup, sans toucher aux appareils ignorés ni aux décalages réglés à la main.
@@ -155,30 +161,31 @@ Parcours :
    - chaque plongée qui a des photos obtient sa collection « numéro – site » dans « Dive Lens » (créée si besoin) ;
    - les photos reçoivent les infos de plongée et le lieu (section 4) ;
    - les photos reçoivent les données par photo (F6) et le décalage appliqué.
+7. **Écran de résultat [Décidé, 2026-11-12]** : collections créées, photos écrites, plongées sans photo.
 
 Règles :
 - L'heure de référence d'une photo est son **heure de prise de vue d'origine**, ce qui gère les photos revenues de Photoshop en TIFF, comme aujourd'hui.
 - Une photo dans la plongée (début ≤ heure corrigée ≤ fin) reçoit tout.
 - Une photo seulement dans la marge reçoit les infos de plongée et le lieu, mais **pas** les données par photo. **[Décidé]**
-- Une photo qui tomberait dans deux plongées (marges qui se chevauchent) va à la plongée dont elle est le plus proche. **[Proposé]**
+- Une photo qui tomberait dans deux plongées (marges qui se chevauchent) va à la plongée dont elle est le plus proche. **[Décidé, 2026-11-12]**
 - Une plongée sans photo ne crée pas de collection : elle est seulement signalée. **[Décidé]**
 - **Relancer** un groupe ne fait qu'ajouter : les photos mal classées lors d'un passage précédent restent où elles sont, et l'utilisateur les corrige lui-même. Les photos reprises voient leurs valeurs réécrites. **[Décidé]**
 - Si l'utilisateur change l'horloge de l'appareil ou de l'ordinateur de plongée en cours de voyage, il traite deux groupes séparés. **[Décidé]**
 
 Critères d'acceptation :
 - Le compteur se met à jour pendant que le décalage ou la marge change, sans clic supplémentaire.
-- Un « Annuler » dans Lightroom défait l'intégralité d'une application.
+- Un « Annuler » dans Lightroom défait l'intégralité d'une application, sauf le GPS, comme pour F8 (constaté le 2026-11-12).
 - Avec des photos prises à l'heure de France et des plongées aux Maldives (+4 h), « Suggérer » propose +4 h.
 
 ### F6 — Données par photo
 
 **[Décidé]** Uniquement la **profondeur**, la **température** et le **temps écoulé depuis le début de la plongée**. Pas de pression de bouteille ni de PPO2.
 
-- Calcul à partir de la courbe de plongée : heure de la photo + décalage de l'appareil, puis valeur estimée entre les deux points de mesure qui l'entourent. MacDive enregistre un point toutes les 10 secondes. **[Proposé : interpolation linéaire]**
+- Calcul à partir de la courbe de plongée : heure de la photo + décalage de l'appareil, puis valeur estimée entre les deux points de mesure qui l'entourent. MacDive enregistre un point toutes les 10 secondes. **[Décidé, 2026-11-12 : interpolation linéaire]**
 - Plongée sans courbe : les trois champs restent **vides**. **[Décidé]**
 - Photo dans la marge, hors de la plongée : champs vides. **[Décidé]**
 - Formats :
-  - profondeur **avec son unité**, selon le réglage : `18.4 m` ou `60 ft`. **[Décidé]** La profondeur max est écrite de la même façon pour rester cohérente. **[Proposé]** Les photos déjà taguées gardent leur ancienne valeur sans unité jusqu'à une nouvelle application ;
+  - profondeur **avec son unité**, selon le réglage : `18.4 m` ou `60 ft`. **[Décidé]** La profondeur max est écrite de la même façon pour rester cohérente. **[Décidé, 2026-11-12]** Les photos déjà taguées gardent leur ancienne valeur sans unité jusqu'à une nouvelle application ;
   - température comme les températures max et min ;
   - temps écoulé en `MM:SS`, comme la durée.
 
@@ -187,7 +194,7 @@ Critères d'acceptation :
 **[Décidé]**
 
 - La profondeur est **toujours** écrite dans le champ DiveLens dédié.
-- Une option permet de la **copier aussi dans le champ altitude GPS**, en valeur négative.
+- Une option permet de la **copier aussi dans le champ altitude GPS**, en valeur négative. Désactivée tant que l'écran Réglages n'existe pas. **[Décidé, 2026-11-12]**
 - L'option est accompagnée d'une explication, qui dit trois choses :
   - le champ DiveLens n'existe que dans Lightroom ;
   - l'altitude suit la photo exportée et se voit dans les autres logiciels ;
@@ -226,7 +233,7 @@ Comportements **[Décidé, 2026-11-12]** :
 
 Liste des plongées **[Décidé]** : **la même que dans F4** (mêmes colonnes, regroupement par mois, recherche et filtres), en choix unique.
 
-Suggestion **[Décidé]** : la ligne de la plongée dont les heures couvrent la sélection porte un repère « Couvre la sélection ». Le calcul applique le décalage d'horloge déjà mémorisé pour le boîtier, quand il existe. Ce n'est qu'une aide : l'utilisateur choisit.
+Suggestion **[Décidé]** : la ligne de la plongée dont les heures couvrent la sélection porte un repère « Couvre la sélection ». Le calcul applique le dernier décalage appliqué au boîtier dans « Créer les collections », quand il existe. **[Décidé, 2026-11-12]** Ce n'est qu'une aide : l'utilisateur choisit.
 
 
 ### F9 — (fusionné dans F8)
@@ -298,7 +305,7 @@ Description fonctionnelle seulement. La mise en page est une décision du propri
 
 ## 7. Champs ajoutés
 
-**[Proposé]** — noms provisoires, à confirmer au moment du développement. Ils s'ajoutent au panneau DiveLens de Lightroom après les champs existants.
+**[Décidé, 2026-11-12]** — noms définitifs, jamais renommés (section 4). Ils s'ajoutent au panneau DiveLens de Lightroom après les champs existants.
 
 | Champ | Contenu | Visible dans Lightroom |
 |---|---|---|
@@ -345,8 +352,9 @@ BlueDive et Submersion, après examen de leur stockage.
 ## 9. Points techniques à vérifier avant développement
 
 - **Ordinateurs anciens sans téléchargement brut** dans MacDive : message à afficher (« pas de courbe disponible pour cet ordinateur »), à distinguer d'une plongée saisie à la main.
-- **Ajout de champs** : vérifier si Lightroom exige d'incrémenter la version du schéma des champs (actuellement 1), et que les données existantes sont conservées.
-- **Écriture de l'altitude** par un plugin : à confirmer dans le kit Lightroom.
+- **Ajout de champs** — vérifié dans le kit Lightroom 16 (2026-11-12) : ajouter des champs ne demande aucune migration ; les valeurs existantes sont conservées tant que la définition des 8 champs existants ne change pas. Le numéro de version par champ ne sert qu'à un changement incompatible. La version globale du schéma passe de 1 à 2, comme le kit le recommande à chaque évolution, sans routine de mise à jour. Preuve finale : test dans Lightroom (anciennes valeurs toujours visibles après rechargement).
+- **Écriture de l'altitude** — vérifié (2026-11-12) : un plugin peut écrire l'altitude GPS (nombre, en mètres). Le retour par « Annuler » n'est pas vérifié ; probablement comme le GPS (non annulé). Sans effet tant que l'option est désactivée.
+- **Recherche des photos par date** — constaté (2026-11-12) : la recherche du catalogue par date de prise de vue ne fonctionne qu'au jour près, et sur l'heure de prise de vue modifiée dans Lightroom, pas l'heure d'origine. Le plugin cherche donc par jours élargis, puis l'application filtre sur l'heure d'origine.
 - **Filtrer par profondeur** : les champs de plugin sont du texte. Un filtre « photos sous 30 m » n'est probablement pas possible dans Lightroom ; seuls la recherche et la navigation par valeur le sont. À vérifier avant de promettre quoi que ce soit.
 - **Températures nulles ou négatives** : le plugin actuel ne les écrit pas (plongée sous glace). **[Proposé : corrigé en V1]**
 - **Signature** : V1 développée et testée **sans signature** **[Décidé]**. Apple (environ 99 $/an, notarisation automatique) recommandé avant la première version publique ; Windows : signature gratuite pour l'open source à viser (ex. SignPath Foundation).
@@ -357,7 +365,7 @@ BlueDive et Submersion, après examen de leur stockage.
 
 ## 10. À trancher
 
-Aucune question ouverte à ce stade.
+- **Fuseau horaire de la photo dans « Suggérer » (F5)** : connaître le fuseau de l'appareil ne donne le décalage que si l'on connaît aussi celui de la plongée. Or Subsurface n'enregistre pas de fuseau par plongée, et celui que garde MacDive n'est pas fiable (constaté sur la base du propriétaire : souvent le fuseau du Mac ou « GMT », sans rapport avec le lieu de plongée).
 
 ### Tranché
 
