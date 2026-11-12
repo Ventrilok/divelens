@@ -52,6 +52,8 @@ export interface DiveLog {
   dives: Dive[];
   /** Every named site of the log, including sites with no dive yet. */
   sites: Site[];
+  /** Display units, from the dive application's preferences. */
+  units: Units;
 }
 
 export type ReaderError =

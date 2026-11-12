@@ -1,5 +1,6 @@
 mod lightroom;
 mod settings;
+mod units;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -41,6 +42,8 @@ struct DiveLog {
     dives: Vec<Dive>,
     /// Every named site of the log (Tag Selection › other site).
     sites: Vec<Site>,
+    /// Display and writing units, from the dive application's preferences.
+    units: units::UiUnits,
 }
 
 /// Error sent to the UI: the reader error plus the source it concerns.
@@ -76,6 +79,17 @@ fn source_info(app: &AppHandle) -> SourceInfo {
     }
 }
 
+/// Units of the dive application the log belongs to (spec F2: until the
+/// Settings screen exists).
+fn source_units(app: &AppHandle, info: &SourceInfo) -> Units {
+    let Ok(home) = app.path().home_dir() else {
+        return Units::default();
+    };
+    match info.kind {
+        SourceKind::MacDive => units::read_macdive(&home),
+    }
+}
+
 fn open(info: &SourceInfo) -> Result<MacDive, Error> {
     match info.kind {
         SourceKind::MacDive => MacDive::open(&info.path),
@@ -91,6 +105,7 @@ async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
         let result = open(&source).and_then(|s| Ok((s.capabilities(), s.dives()?, s.sites()?)));
         match result {
             Ok((capabilities, dives, sites)) => Ok(DiveLog {
+                units: source_units(&app, &source).into(),
                 source,
                 capabilities,
                 dives,
@@ -188,8 +203,9 @@ enum TagError {
 }
 
 fn tag_request(app: &AppHandle, choice: &TagChoice) -> Result<TagRequest, TagError> {
-    let source = open(&source_info(app)).map_err(|detail| TagError::Source { detail })?;
-    let units = Units::default(); // the units setting comes with the Settings screen
+    let info = source_info(app);
+    let source = open(&info).map_err(|detail| TagError::Source { detail })?;
+    let units = source_units(app, &info);
     let dive = match &choice.dive_id {
         Some(id) => Some(
             source

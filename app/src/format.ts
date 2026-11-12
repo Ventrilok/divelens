@@ -4,9 +4,6 @@
 import { locale } from "./i18n";
 import type { Units } from "./types";
 
-// Units become a setting later (Settings screen); metric until then.
-export const DEFAULT_UNITS: Units = { depth: "m", temp: "c" };
-
 const FT_PER_M = 3.28084;
 
 const oneDecimal = new Intl.NumberFormat(locale, { maximumFractionDigits: 1, minimumFractionDigits: 1 });

@@ -781,6 +781,7 @@ dependencies = [
  "chrono",
  "divelens-core",
  "mlua",
+ "plist",
  "serde",
  "serde_json",
  "tauri",
@@ -788,6 +789,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "winreg",
 ]
 
 [[package]]

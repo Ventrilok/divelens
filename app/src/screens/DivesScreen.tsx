@@ -5,13 +5,13 @@ import { DiveDetail } from "../components/DiveDetail";
 import { DiveList } from "../components/DiveList";
 import { FilterBar } from "../components/FilterBar";
 import { Icon } from "../components/Icon";
-import { DEFAULT_UNITS, formatRange } from "../format";
+import { formatRange } from "../format";
 import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters, type Sort } from "../filters";
 import { formatInt, t, tn } from "../i18n";
 import type { DiveLog } from "../types";
 
 export function DivesScreen({ log }: { log: DiveLog }) {
-  const units = DEFAULT_UNITS;
+  const units = log.units;
   const { dives, capabilities } = log;
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [sort, setSort] = useState<Sort>("recent");
