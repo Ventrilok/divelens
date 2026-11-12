@@ -4,7 +4,7 @@
 // Lightroom and a result screen.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { applyCollections, collectionsPreview, findCollectionPhotos, onApplyProgress, suggestOffsets } from "../api";
+import { applyCollections, collectionSets, collectionsPreview, findCollectionPhotos, onApplyProgress, suggestOffsets } from "../api";
 import {
   clampMargin,
   clampOffset,
@@ -16,6 +16,7 @@ import {
   SLIDER_RANGE_MIN,
   SLIDER_STEP_MIN,
 } from "../cameras";
+import { placeLabel, setExists } from "../collectionPlace";
 import { Icon } from "../components/Icon";
 import { formatDay, formatRange, formatRowSpan } from "../format";
 import { formatInt, t, tn } from "../i18n";
@@ -29,6 +30,7 @@ import type {
   DiveLog,
   LightroomStatus,
   Period,
+  Settings,
 } from "../types";
 
 type Search =
@@ -58,6 +60,7 @@ function failure(e: CollectionsError): string {
     case "lightroom":
       if (e.reason === "busy") return t("coll.err.busy");
       if (e.reason === "staleSearch") return t("coll.err.noPhotos");
+      if (e.reason === "parentNotFound") return t("coll.parentMissing", { path: e.detail ?? "" });
       return t("coll.err.other", { detail: e.detail ?? e.reason });
     case "source":
       return t("coll.err.other", { detail: e.detail.detail });
@@ -210,6 +213,7 @@ function ResultView({
   dives,
   choices,
   cameras,
+  altitude,
   onBack,
   onRetry,
 }: {
@@ -217,6 +221,8 @@ function ResultView({
   dives: Dive[];
   choices: CollectionChoices;
   cameras: Camera[];
+  /** Depth was copied to GPS altitude, which Lightroom's Undo does not revert. */
+  altitude: boolean;
   onBack: () => void;
   onRetry: (ids: string[]) => void;
 }) {
@@ -274,7 +280,7 @@ function ResultView({
             <span>{t("coll.result.empty", { dive: diveName(d) })}</span>
           </div>
         ))}
-        <p className="muted small">{t("coll.undoHint")}</p>
+        <p className="muted small">{t(altitude ? "coll.undoHintAltitude" : "coll.undoHint")}</p>
         <div className="actions">
           <button type="button" className="btn btn-p" onClick={onBack}>
             {t("coll.result.back")}
@@ -293,15 +299,19 @@ function ResultView({
 export function CollectionsScreen({
   log,
   lr,
+  settings,
   chosen,
   onChooseDives,
   onRetryDives,
+  onOpenSettings,
 }: {
   log: DiveLog;
   lr: LightroomStatus;
+  settings: Settings;
   chosen: Set<string>;
   onChooseDives: () => void;
   onRetryDives: (ids: string[]) => void;
+  onOpenSettings: () => void;
 }) {
   const dives = useMemo(
     () => log.dives.filter((d) => chosen.has(d.id)).sort((a, b) => (a.start < b.start ? -1 : 1)),
@@ -319,6 +329,23 @@ export function CollectionsScreen({
   const [preview, setPreview] = useState<CollectionsPreview | null>(null);
   const [run, setRun] = useState<Run>({ state: "idle" });
   const searchedFor = useRef<string | null>(null);
+
+  // The collection set chosen in Settings must still be in the catalog
+  // (spec F2): checked when Lightroom connects, never replaced silently.
+  const parent = settings.collections.parent;
+  const parentKey = JSON.stringify(parent);
+  const [parentMissing, setParentMissing] = useState(false);
+  useEffect(() => {
+    setParentMissing(false);
+    if (!lr.connected || parent.length === 0) return;
+    let live = true;
+    collectionSets()
+      .then((sets) => live && setParentMissing(!setExists(sets, parent)))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [lr.connected, lr.catalog, parentKey]);
 
   // Photos of the period, found again when the dives change or Lightroom
   // comes back (its photo ids only hold for one link session).
@@ -429,6 +456,7 @@ export function CollectionsScreen({
         dives={dives}
         choices={run.choices}
         cameras={run.cameras}
+        altitude={settings.depthToAltitude}
         onBack={onChooseDives}
         onRetry={(ids) => {
           setRun({ state: "idle" });
@@ -469,9 +497,11 @@ export function CollectionsScreen({
   if (!lr.connected) blocker = t("coll.disconnected");
   else if (search.state === "searching") blocker = t("coll.searching");
   else if (search.state === "failed") blocker = search.message;
+  else if (parentMissing) blocker = t("coll.parentMissing", { path: parent.join(" › ") });
   else if (preview && total === 0) blocker = t("coll.err.nothingToWrite");
 
   const units = `${log.units.depth === "ft" ? "ft" : "m"}, ${log.units.temp === "f" ? "°F" : "°C"}`;
+  const place = placeLabel(settings.collections, t("settings.root"));
 
   return (
     <main className="screen screen-scroll">
@@ -662,13 +692,19 @@ export function CollectionsScreen({
           </div>
         ) : (
           <div className="selection-text">
-            <span className="small">{blocker ?? t("coll.writes")}</span>
+            <span className="small">{blocker ?? t("coll.writes", { place })}</span>
             <span className="muted small">
-              {t("coll.writesNote", { source: t("source.macDive"), units })} · {t("coll.undoShort")}
+              {t("coll.writesNote", { units, altitude: t(settings.depthToAltitude ? "coll.on" : "coll.off") })} ·{" "}
+              {t(settings.depthToAltitude ? "coll.undoShortAltitude" : "coll.undoShort")}
             </span>
           </div>
         )}
         <div className="selection-actions">
+          {parentMissing && !writing && (
+            <button type="button" className="btn btn-s" onClick={onOpenSettings}>
+              {t("coll.openSettings")}
+            </button>
+          )}
           <button type="button" className="btn btn-g" onClick={onChooseDives} disabled={writing}>
             {t("tag.cancel")}
           </button>

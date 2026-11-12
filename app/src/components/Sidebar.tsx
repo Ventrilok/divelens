@@ -29,7 +29,7 @@ function NavItem({ id, icon, label, ready, current, onGo }: (typeof items)[numbe
 
 /** Screens that exist so far; a request for another one is ignored. */
 export function isReadyScreen(id: string): id is Screen {
-  return items.some((it) => it.id === id && it.ready);
+  return id === "settings" || items.some((it) => it.id === id && it.ready);
 }
 
 function LightroomLine({ lr }: { lr: LightroomStatus }) {
@@ -77,7 +77,7 @@ export function Sidebar({
         <NavItem key={it.id} {...it} current={current} onGo={onGo} />
       ))}
       <div className="sidebar-bottom">
-        <NavItem id="settings" icon="settings" label={() => t("nav.settings")} ready={false} current={current} onGo={onGo} />
+        <NavItem id="settings" icon="settings" label={() => t("nav.settings")} ready current={current} onGo={onGo} />
         <div className="status">
           <LightroomLine lr={lr} />
           {log && (

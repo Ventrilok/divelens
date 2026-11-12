@@ -355,6 +355,8 @@ impl Session {
             .collect();
         Ok(CollectionsRequest {
             search: self.search,
+            parent: Vec::new(),
+            group: None,
             groups,
         })
     }

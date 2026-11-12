@@ -52,8 +52,10 @@ export interface DiveLog {
   dives: Dive[];
   /** Every named site of the log, including sites with no dive yet. */
   sites: Site[];
-  /** Display units, from the dive application's preferences. */
+  /** Units in use: the dive application's unless forced in Settings (set by the app). */
   units: Units;
+  /** Units of the dive application's preferences. */
+  sourceUnits: Units;
 }
 
 export type ReaderError =
@@ -175,3 +177,33 @@ export type CollectionsError =
   | { error: "nothingChosen" | "notConnected" | "linkLost" | "noPhotos" | "nothingToWrite" }
   | { error: "source"; detail: ReaderError }
   | { error: "lightroom"; reason: string; detail: string | null };
+
+// --- Settings (app/src-tauri/src/settings.rs) -------------------------------
+
+export type Sort = "recent" | "oldest" | "depth";
+
+export interface Settings {
+  version: number;
+  source: { kind: SourceKind; path: string | null };
+  units: { depth: "source" | "m" | "ft"; temp: "source" | "c" | "f" };
+  language: "system" | "en" | "fr";
+  depthToAltitude: boolean;
+  /** Where Create Collections puts the collections. */
+  collections: { parent: string[]; group: string };
+  logLevel: "normal" | "detailed";
+  diveSort: Sort | null;
+  legacyImported: boolean;
+}
+
+/** A collection set of the Lightroom catalog. */
+export interface CollectionSet {
+  name: string;
+  children: CollectionSet[];
+}
+
+export interface AppInfo {
+  version: string;
+  os: string;
+  /** The app's log file, next to the plugin's. */
+  logPath: string | null;
+}

@@ -1,5 +1,5 @@
-// Interface strings, English and French. Language follows the system for now;
-// the Settings screen will let the user override it.
+// Interface strings, English and French. The language follows the system
+// unless chosen in Settings, and changes at once (spec F2).
 
 export type Lang = "en" | "fr";
 
@@ -198,10 +198,12 @@ const en = {
   "coll.total": "{photos} in {dives} · {outside} outside the dives",
   "coll.totalIgnored": "{n} ignored",
   "coll.noCollectionHint": "no collection for a dive without photos",
-  "coll.writes": "Written in Lightroom: \"Dive Lens\" collections, dive data, location, depth · temperature · time per photo, clock offset.",
-  "coll.writesNote": "Units: those of {source} ({units}) · Depth copied to altitude: off",
+  "coll.writes": "Written in Lightroom: collections in \"{place}\", dive data, location, depth · temperature · time per photo, clock offset.",
+  "coll.writesNote": "Units: {units} · Depth copied to altitude: {altitude}",
   "coll.undoShort": "Undone in one step in Lightroom, except GPS",
   "coll.undoHint": "To undo: Edit › Undo in Lightroom, in one step (except GPS, which Lightroom does not revert).",
+  "coll.undoShortAltitude": "Undone in one step in Lightroom, except GPS and altitude",
+  "coll.undoHintAltitude": "To undo: Edit › Undo in Lightroom, in one step (except GPS and altitude, which Lightroom does not revert).",
   "coll.result.title": "Collections created",
   "coll.result.ignored": "ignored: {names}",
   "coll.result.photos": "Photos tagged",
@@ -220,6 +222,68 @@ const en = {
   "coll.err.nothingChosen": "No dive chosen.",
   "coll.err.busy": "Lightroom was busy and did not let DiveLens write. Nothing was written: try again.",
   "coll.err.other": "Nothing was written: {detail}",
+
+  "settings.title": "Settings",
+  "settings.saveError": "Setting not saved: {detail}",
+  "settings.source": "Dive log",
+  "settings.app": "Application",
+  "settings.appHint": "Where dives and sites come from.",
+  "settings.soon": "{name} — coming soon",
+  "settings.noSource": "No dive application available on this system yet: Subsurface support is coming soon.",
+  "settings.base": "MacDive database",
+  "settings.baseHint": "MacDive's standard location unless you choose another. Only read, never modified.",
+  "settings.choose": "Choose…",
+  "settings.standard": "Standard location",
+  "settings.baseOk": "Valid database · {dives} · {sites}",
+  "settings.sites_one": "{n} site",
+  "settings.sites_other": "{n} sites",
+  "settings.baseLoading": "Reading the database…",
+  "settings.display": "Display",
+  "settings.language": "Language",
+  "settings.languageHint": "The system's by default. Menus and fields in Lightroom follow Lightroom's language.",
+  "settings.languageSystem": "System ({name})",
+  "lang.en": "English",
+  "lang.fr": "Français",
+  "settings.depth": "Depth",
+  "settings.temp": "Temperature",
+  "settings.unitsHint": "In the app and in the values written on photos.",
+  "settings.asSource": "As {source} ({unit})",
+  "settings.asSourceBare": "As {source}",
+  "settings.metres": "Metres",
+  "settings.feet": "Feet",
+  "settings.writing": "Writing on photos",
+  "settings.altitude": "Copy depth to GPS altitude",
+  "settings.altitudeHint": "As a negative value, in metres, in addition to the DiveLens field. Create Collections only.",
+  "settings.altitude1": "The DiveLens depth field only exists in Lightroom: it is lost on export.",
+  "settings.altitude2": "The GPS altitude travels with exported photos and shows in other software.",
+  "settings.altitude3": "The copy replaces a GPS altitude already on the photo, and Lightroom's Undo does not bring it back. Photos without a depth keep theirs.",
+  "settings.collections": "Collections",
+  "settings.parent": "Place in",
+  "settings.parentHint": "Where Create Collections puts the collections.",
+  "settings.root": "Catalog root",
+  "settings.parentMissing": "{path} (not found)",
+  "settings.parentMissingHint": "This collection set is no longer in the catalog: choose another.",
+  "settings.parentOffline": "Connect Lightroom to choose a collection set.",
+  "settings.group": "Group in the set",
+  "settings.groupHint": "Created when needed. Leave empty to put the collections straight in the place above.",
+  "settings.preview": "Preview: {path}",
+  "settings.exampleCollection": "no. - site",
+  "settings.moveNote": "Collections already created stay where they are.",
+  "settings.diagnostic": "Diagnostics",
+  "settings.logLevel": "Log level",
+  "settings.logLevelHint": "Raise it only to report a problem. Applies to the app and to the Lightroom plug-in.",
+  "settings.logNormal": "Normal",
+  "settings.logDetailed": "Detailed",
+  "settings.showLog": "Show log",
+  "settings.about": "About",
+  "settings.free": "DiveLens is free and open source",
+  "settings.freeHint": "Its code is public: anyone can read, check and improve it.",
+  "settings.code": "Source code",
+  "settings.version": "DiveLens {version} · GPL v3",
+  "coll.on": "on",
+  "coll.off": "off",
+  "coll.parentMissing": "The collection set chosen in Settings ({path}) is no longer in the catalog. Choose another place in Settings.",
+  "coll.openSettings": "Open Settings",
 } as const;
 
 export type Key = keyof typeof en;
@@ -419,10 +483,12 @@ const fr: Record<Key, string> = {
   "coll.total": "{photos} dans {dives} · {outside} hors plongée",
   "coll.totalIgnored": "{n} ignorées",
   "coll.noCollectionHint": "pas de collection pour une plongée sans photo",
-  "coll.writes": "Écrit dans Lightroom : collections « Dive Lens », infos de plongée, lieu, profondeur · température · temps par photo, décalage.",
-  "coll.writesNote": "Unités : celles de {source} ({units}) · Profondeur copiée dans l'altitude : désactivée",
+  "coll.writes": "Écrit dans Lightroom : collections dans « {place} », infos de plongée, lieu, profondeur · température · temps par photo, décalage.",
+  "coll.writesNote": "Unités : {units} · Profondeur copiée dans l'altitude : {altitude}",
   "coll.undoShort": "Annulable en une fois dans Lightroom, sauf le GPS",
   "coll.undoHint": "Pour tout défaire : Édition › Annuler dans Lightroom, en une seule fois (sauf le GPS, que Lightroom ne remet pas).",
+  "coll.undoShortAltitude": "Annulable en une fois dans Lightroom, sauf le GPS et l'altitude",
+  "coll.undoHintAltitude": "Pour tout défaire : Édition › Annuler dans Lightroom, en une seule fois (sauf le GPS et l'altitude, que Lightroom ne remet pas).",
   "coll.result.title": "Collections créées",
   "coll.result.ignored": "ignoré : {names}",
   "coll.result.photos": "Photos taguées",
@@ -441,14 +507,109 @@ const fr: Record<Key, string> = {
   "coll.err.nothingChosen": "Aucune plongée choisie.",
   "coll.err.busy": "Lightroom était occupé et n'a pas laissé DiveLens écrire. Rien n'a été écrit : réessayez.",
   "coll.err.other": "Rien n'a été écrit : {detail}",
+
+  "settings.title": "Réglages",
+  "settings.saveError": "Réglage non enregistré : {detail}",
+  "settings.source": "Carnet de plongée",
+  "settings.app": "Application",
+  "settings.appHint": "Source des plongées et des sites.",
+  "settings.soon": "{name} — bientôt",
+  "settings.noSource": "Aucune application de plongée disponible sur ce système pour l'instant : Subsurface arrive bientôt.",
+  "settings.base": "Base MacDive",
+  "settings.baseHint": "Emplacement standard de MacDive, sauf si vous en choisissez un autre. Lue sans jamais être modifiée.",
+  "settings.choose": "Choisir…",
+  "settings.standard": "Emplacement standard",
+  "settings.baseOk": "Base valide · {dives} · {sites}",
+  "settings.sites_one": "{n} site",
+  "settings.sites_other": "{n} sites",
+  "settings.baseLoading": "Lecture de la base…",
+  "settings.display": "Affichage",
+  "settings.language": "Langue",
+  "settings.languageHint": "Par défaut, celle du système. Les menus et les champs dans Lightroom suivent la langue de Lightroom.",
+  "settings.languageSystem": "Système ({name})",
+  "lang.en": "English",
+  "lang.fr": "Français",
+  "settings.depth": "Profondeur",
+  "settings.temp": "Température",
+  "settings.unitsHint": "Affichage et valeurs écrites sur les photos.",
+  "settings.asSource": "Comme {source} ({unit})",
+  "settings.asSourceBare": "Comme {source}",
+  "settings.metres": "Mètres",
+  "settings.feet": "Pieds",
+  "settings.writing": "Écriture sur les photos",
+  "settings.altitude": "Copier la profondeur dans l'altitude GPS",
+  "settings.altitudeHint": "En valeur négative, en mètres, en plus du champ DiveLens. Pour « Créer les collections » seulement.",
+  "settings.altitude1": "Le champ Profondeur de DiveLens n'existe que dans Lightroom : il disparaît à l'export.",
+  "settings.altitude2": "L'altitude GPS suit la photo exportée et se voit dans les autres logiciels.",
+  "settings.altitude3": "La copie remplace une altitude GPS déjà présente sur la photo, et « Annuler » dans Lightroom ne la remet pas. Les photos sans profondeur gardent la leur.",
+  "settings.collections": "Collections",
+  "settings.parent": "Placer dans",
+  "settings.parentHint": "Où « Créer les collections » range les collections.",
+  "settings.root": "Racine du catalogue",
+  "settings.parentMissing": "{path} (introuvable)",
+  "settings.parentMissingHint": "Cet ensemble n'est plus dans le catalogue : choisissez-en un autre.",
+  "settings.parentOffline": "Connectez Lightroom pour choisir un ensemble de collections.",
+  "settings.group": "Regrouper dans l'ensemble",
+  "settings.groupHint": "Créé si besoin. Laissez vide pour ranger les collections directement à l'emplacement ci-dessus.",
+  "settings.preview": "Aperçu : {path}",
+  "settings.exampleCollection": "numéro - site",
+  "settings.moveNote": "Les collections déjà créées restent où elles sont.",
+  "settings.diagnostic": "Diagnostic",
+  "settings.logLevel": "Niveau du journal",
+  "settings.logLevelHint": "À augmenter seulement pour signaler un problème. S'applique à l'application et au module Lightroom.",
+  "settings.logNormal": "Normal",
+  "settings.logDetailed": "Détaillé",
+  "settings.showLog": "Afficher le journal",
+  "settings.about": "À propos",
+  "settings.free": "DiveLens est gratuit et open source",
+  "settings.freeHint": "Son code est public : chacun peut le lire, le vérifier et l'améliorer.",
+  "settings.code": "Code source",
+  "settings.version": "DiveLens {version} · GPL v3",
+  "coll.on": "activée",
+  "coll.off": "désactivée",
+  "coll.parentMissing": "L'ensemble choisi dans les réglages ({path}) n'est plus dans le catalogue. Choisissez un autre emplacement dans les réglages.",
+  "coll.openSettings": "Ouvrir les réglages",
 };
 
 const dictionaries: Record<Lang, Record<Key, string>> = { en, fr };
 
-export const lang: Lang = navigator.language.toLowerCase().startsWith("fr") ? "fr" : "en";
-export const locale = lang === "fr" ? "fr-FR" : "en-GB";
+/** The system's language, when DiveLens speaks it; English otherwise. */
+export function systemLang(): Lang {
+  return navigator.language.toLowerCase().startsWith("fr") ? "fr" : "en";
+}
 
-const plurals = new Intl.PluralRules(locale);
+const localeOf = (l: Lang) => (l === "fr" ? "fr-FR" : "en-GB");
+
+export let lang: Lang = systemLang();
+export let locale = localeOf(lang);
+
+/** Switches the interface language ("system": follow the system). */
+export function setLanguage(choice: Lang | "system"): void {
+  lang = choice === "system" ? systemLang() : choice;
+  locale = localeOf(lang);
+}
+
+/** An Intl formatter that follows the language: rebuilt when it changes. */
+export function localized<T extends object>(make: (locale: string) => T): T {
+  let madeFor = "";
+  let value: T;
+  const current = () => {
+    if (madeFor !== locale) {
+      value = make(locale);
+      madeFor = locale;
+    }
+    return value;
+  };
+  return new Proxy({} as T, {
+    get(_, key) {
+      const target = current();
+      const v = Reflect.get(target, key);
+      return typeof v === "function" ? v.bind(target) : v;
+    },
+  });
+}
+
+const plurals = localized((l) => new Intl.PluralRules(l));
 
 type Params = Record<string, string | number>;
 
@@ -470,6 +631,8 @@ export function tn(base: PluralBase<Key>, n: number, params?: Params): string {
   return t(`${base}_${form}` as Key, { n: formatInt(n), ...params });
 }
 
+const integers = localized((l) => new Intl.NumberFormat(l));
+
 export function formatInt(n: number): string {
-  return new Intl.NumberFormat(locale).format(n);
+  return integers.format(n);
 }

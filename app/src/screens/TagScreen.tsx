@@ -11,7 +11,7 @@ import { DiveList } from "../components/DiveList";
 import { FilterBar } from "../components/FilterBar";
 import { NO_PICK, pickAround, SitePicker, type SitePick } from "../components/SitePicker";
 import { formatGps, formatPhotoSpan } from "../format";
-import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters } from "../filters";
+import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters, type Sort } from "../filters";
 import { t, tn } from "../i18n";
 import { gpsInput } from "../sites";
 import type { ApplyOutcome, Dive, DiveLog, LightroomStatus, SelectionPreview, Site, TagChoice, TagError } from "../types";
@@ -46,7 +46,18 @@ function failure(e: ApplyOutcome | TagError): string {
   }
 }
 
-export function TagScreen({ log, lr, onCancel }: { log: DiveLog; lr: LightroomStatus; onCancel: () => void }) {
+export function TagScreen({
+  log,
+  lr,
+  sort,
+  onCancel,
+}: {
+  log: DiveLog;
+  lr: LightroomStatus;
+  /** Same order as the Dives screen (one list everywhere). */
+  sort: Sort;
+  onCancel: () => void;
+}) {
   const units = log.units;
   const { dives, sites, capabilities } = log;
 
@@ -61,7 +72,7 @@ export function TagScreen({ log, lr, onCancel }: { log: DiveLog; lr: LightroomSt
 
   const deferredFilters = useDeferredValue(filters);
   const index = useMemo(() => searchIndex(dives), [dives]);
-  const shown = useMemo(() => sortDives(applyFilters(dives, deferredFilters, index), "recent"), [dives, deferredFilters, index]);
+  const shown = useMemo(() => sortDives(applyFilters(dives, deferredFilters, index), sort), [dives, deferredFilters, index, sort]);
 
   useEffect(() => {
     if (!shown.some((d) => d.id === focusedId)) setFocusedId(shown[0]?.id ?? null);
@@ -208,7 +219,7 @@ export function TagScreen({ log, lr, onCancel }: { log: DiveLog; lr: LightroomSt
                   <DiveList
                     dives={shown}
                     mode="single"
-                    grouped
+                    grouped={sort !== "depth"}
                     focusedId={focusedId}
                     onFocus={setFocusedId}
                     chosenId={chosenId}

@@ -10,7 +10,9 @@ small "link file" in the app's settings folder. The app reads it, connects,
 and says hello with the token; nothing is answered before that.
 
 Each message is one JSON object on one line. The plugin pushes the current
-photo selection whenever it changes. Messages are handled in the link's own
+photo selection whenever it changes. Its hello carries the previous plugin's
+settings (same plug-in identifier, so the same preferences) for the app to
+take over once. Messages are handled in the link's own
 task, never inside socket callbacks, so they may use the catalog.
 
 When the app goes away, both sockets are opened again for the next app
@@ -25,6 +27,7 @@ local LrFileUtils = import "LrFileUtils"
 local LrFunctionContext = import "LrFunctionContext"
 local LrMD5 = import "LrMD5"
 local LrPathUtils = import "LrPathUtils"
+local LrPrefs = import "LrPrefs"
 local LrSocket = import "LrSocket"
 local LrStringUtils = import "LrStringUtils"
 local LrTasks = import "LrTasks"
@@ -34,7 +37,7 @@ local Json = require "Json"
 local Log = require "Log"
 local Tagging = require "Tagging"
 
-local PROTOCOL = 2
+local PROTOCOL = 3
 local APP_ID = "com.querton.divelens.desktop" -- the app's bundle identifier
 local LINK_FILE = "lightroom-link.json"
 local TICK = 0.1           -- seconds between two passes of the link task
@@ -290,7 +293,6 @@ end
 -- Create Collections ----------------------------------------------------------
 
 local PHOTOS_PER_MESSAGE = 200
-local COLLECTION_SET = "Dive Lens" -- compatibility contract: never translated
 
 -- Every photo captured between two days (inclusive, "YYYY-MM-DD"), whole
 -- catalog. Lightroom searches by day only and on the adjusted capture time;
@@ -338,35 +340,45 @@ local function findChild(list, name)
 end
 
 -- Writes a "Create Collections" request in one catalog step: each dive's
--- collection in "Dive Lens" (created if needed), its data and location on
--- its photos, and each photo's own values. Always answers the app.
+-- collection where the app's settings say (by default in a "Dive Lens" set
+-- at the root, created if needed), its data and location on its photos, and
+-- each photo's own values. Always answers the app.
 local function applyCollections(s, message)
     local id = message.id
     local function fail(reason, detail)
         Log.warn("collections refused: %s %s", reason, detail or "")
         send(s, { type = "applyFailed", id = id, reason = reason, detail = detail })
     end
-    local groups, why = Tagging.planCollections(message, formatDate)
-    if not groups then return fail("badRequest", why) end
+    local groups, place = Tagging.planCollections(message, formatDate)
+    if not groups then return fail("badRequest", place) end
     if not (s.search and s.search.id == message.search) then return fail("staleSearch") end
     local catalog = LrApplication.activeCatalog()
 
-    -- The set is created on its own the very first time: a set created inside
-    -- a write cannot be used before that write ends.
-    local set = findChild(catalog:getChildCollectionSets(), COLLECTION_SET)
-    if not set then
-        local ok, status = LrTasks.pcall(function()
-            return catalog:withWriteAccessDo(COLLECTION_SET, function()
-                catalog:createCollectionSet(COLLECTION_SET, nil, true)
-            end, { timeout = WRITE_TIMEOUT })
-        end)
-        if not ok then return fail("error", tostring(status)) end
-        if status ~= "executed" then return fail("busy") end
-        set = findChild(catalog:getChildCollectionSets(), COLLECTION_SET)
-        if not set then return fail("error", "collection set not created") end
+    -- "holder" lists what is already there; "container" is what Lightroom's
+    -- create functions take (nil for the catalog's root).
+    local holder = Tagging.findSet(catalog, place.parent)
+    if not holder then return fail("parentNotFound", table.concat(place.parent, " › ")) end
+    local container = #place.parent > 0 and holder or nil
+
+    -- The group set is created on its own the first time: a set created
+    -- inside a write cannot be used before that write ends.
+    if place.group then
+        local set = findChild(holder:getChildCollectionSets(), place.group)
+        if not set then
+            local ok, status = LrTasks.pcall(function()
+                return catalog:withWriteAccessDo(place.group, function()
+                    catalog:createCollectionSet(place.group, container, true)
+                end, { timeout = WRITE_TIMEOUT })
+            end)
+            if not ok then return fail("error", tostring(status)) end
+            if status ~= "executed" then return fail("busy") end
+            set = findChild(holder:getChildCollectionSets(), place.group)
+            if not set then return fail("error", "collection set not created") end
+        end
+        holder, container = set, set
     end
     local existing = {}
-    for _, c in ipairs(set:getChildCollections()) do existing[c:getName()] = true end
+    for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
 
     local total = 0
     for _, g in ipairs(groups) do total = total + #g.photos end
@@ -387,7 +399,11 @@ local function applyCollections(s, message)
                             end
                         end
                         for _, change in ipairs(p.changes) do
-                            photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
+                            if change.kind == "plugin" then
+                                photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
+                            else
+                                photo:setRawMetadata(change.field, change.value)
+                            end
                         end
                         photos[#photos + 1] = photo
                     end
@@ -398,7 +414,7 @@ local function applyCollections(s, message)
                     end
                 end
                 if #photos > 0 then
-                    local collection = catalog:createCollection(g.collection, set, true)
+                    local collection = catalog:createCollection(g.collection, container, true)
                     collection:addPhotos(photos)
                 end
                 results[gi] = { collection = g.collection, count = #photos, created = not existing[g.collection] }
@@ -410,6 +426,23 @@ local function applyCollections(s, message)
     if status ~= "executed" then return fail("busy") end
     Log.info("collections written: %d groups, %d photos", #results, total)
     send(s, { type = "collectionsApplied", id = id, groups = results })
+end
+
+-- The catalog's collection sets, for the app's settings.
+local function listSets(s, message)
+    local sets = Tagging.describeSets(LrApplication.activeCatalog(), Json.emptyArray)
+    send(s, { type = "sets", id = message.id, sets = sets })
+end
+
+-- Settings of the previous plugin, which had the same identifier (so the
+-- same preferences), for the app to take over once; nil when there are none.
+local function legacySettings()
+    local prefs = LrPrefs.prefsForPlugin()
+    local path, order = prefs.MacDivePath, prefs.DisplayLogOrder
+    if type(path) ~= "string" then path = nil end
+    if type(order) ~= "string" then order = nil end
+    if not (path or order) then return nil end
+    return { macDivePath = path, displayLogOrder = order }
 end
 
 -- Receiving -------------------------------------------------------------------
@@ -438,6 +471,7 @@ local function handle(s, text)
             plugin = pluginVersion(),
             lightroom = LrApplication.versionString(),
             catalog = catalogName(),
+            legacy = legacySettings(),
         })
         pushSelection(s, true)
         local pending = s.pendingScreen
@@ -450,11 +484,14 @@ local function handle(s, text)
     if not s.authed then return end
     if message.type == "ping" then
         send(s, { type = "pong" })
+    elseif message.type == "logLevel" then
+        if Log.setLevel(message.level) then Log.info("log level: %s", tostring(message.level)) end
     elseif message.type == "apply" then
         applyTags(s, message)
-    elseif message.type == "findPhotos" or message.type == "applyCollections" then
+    elseif message.type == "findPhotos" or message.type == "applyCollections" or message.type == "listSets" then
         -- The app waits for an answer: an error still gets one.
-        local handler = message.type == "findPhotos" and findPhotos or applyCollections
+        local handlers = { findPhotos = findPhotos, applyCollections = applyCollections, listSets = listSets }
+        local handler = handlers[message.type]
         local ok, err = LrTasks.pcall(handler, s, message)
         if not ok then
             Log.error("%s failed: %s", message.type, err)

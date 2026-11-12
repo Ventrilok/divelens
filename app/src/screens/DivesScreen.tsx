@@ -14,17 +14,21 @@ export function DivesScreen({
   log,
   selected,
   onSelect: setSelected,
+  sort,
+  onSort: setSort,
   onCreate,
 }: {
   log: DiveLog;
   selected: Set<string>;
   onSelect: (s: Set<string>) => void;
+  /** Remembered between launches (Settings). */
+  sort: Sort;
+  onSort: (s: Sort) => void;
   onCreate: () => void;
 }) {
   const units = log.units;
   const { dives, capabilities } = log;
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
-  const [sort, setSort] = useState<Sort>("recent");
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
   // Typing stays fluid: the list catches up with the filters just after.

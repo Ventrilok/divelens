@@ -87,6 +87,12 @@ pub struct PhotoTags {
     pub photo_elapsed: Option<String>,
     /// `±HH:MM`, always written.
     pub clock_offset: String,
+    /// GPS altitude to write, in metres (spec F7: the depth, negative);
+    /// `None` leaves the photo's altitude untouched.
+    pub gps_altitude: Option<f64>,
+    /// Depth at the photo, in metres (for the altitude copy).
+    #[serde(skip)]
+    pub depth_m: Option<f64>,
 }
 
 /// One dive of a "Create Collections" write: its collection, its data and
@@ -94,7 +100,7 @@ pub struct PhotoTags {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionGroup {
-    /// Collection name inside the "Dive Lens" set.
+    /// Collection name, inside the request's collection set.
     pub collection: String,
     pub dive: DiveTags,
     pub location: LocationTags,
@@ -107,7 +113,29 @@ pub struct CollectionGroup {
 pub struct CollectionsRequest {
     /// The photo search these photo identifiers come from.
     pub search: u64,
+    /// Names of the existing collection sets leading to where the
+    /// collections go, from the catalog's root; empty for the root.
+    pub parent: Vec<String>,
+    /// Collection set inside `parent` grouping the collections, created when
+    /// needed; `None`: straight into `parent`.
+    pub group: Option<String>,
     pub groups: Vec<CollectionGroup>,
+}
+
+impl CollectionsRequest {
+    /// Copies each photo's depth to its GPS altitude, negative (spec F7).
+    /// Photos without a depth keep their altitude.
+    pub fn copy_depth_to_altitude(&mut self) {
+        for photo in self.groups.iter_mut().flat_map(|g| &mut g.photos) {
+            photo.gps_altitude = photo.depth_m.map(altitude);
+        }
+    }
+}
+
+/// Altitude for a depth: negative, to the decimetre (never `-0`).
+pub fn altitude(depth_m: f64) -> f64 {
+    let a = -(depth_m * 10.0).round() / 10.0;
+    if a == 0.0 { 0.0 } else { a }
 }
 
 fn wall_clock(t: NaiveDateTime) -> String {
@@ -173,6 +201,8 @@ impl PhotoTags {
                 .map(|c| temperature(c, units.temp)),
             photo_elapsed: point.map(|p| duration(p.elapsed_s)),
             clock_offset: clock_offset(offset_min),
+            gps_altitude: None,
+            depth_m: point.map(|p| p.depth_m),
         }
     }
 }
@@ -314,6 +344,44 @@ mod tests {
         assert_eq!(json["dive"], serde_json::Value::Null);
         assert_eq!(json["location"]["city"], "North Reef");
         assert_eq!(json["location"]["lat"], 12.5);
+    }
+
+    #[test]
+    fn depth_copied_to_altitude_only_when_known() {
+        let point = PhotoPoint {
+            elapsed_s: 60,
+            depth_m: 18.44,
+            temp_c: None,
+        };
+        let mut request = CollectionsRequest {
+            search: 1,
+            parent: Vec::new(),
+            group: None,
+            groups: vec![CollectionGroup {
+                collection: "700 - Coral Garden".into(),
+                dive: DiveTags::new(&dive(), Units::default()),
+                location: LocationTags::new(&dive().site, None, None),
+                photos: vec![
+                    PhotoTags::new("1".into(), Some(point), 0, Units::default()),
+                    PhotoTags::new("2".into(), None, 0, Units::default()),
+                ],
+            }],
+        };
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(
+            json["groups"][0]["photos"][0]["gpsAltitude"],
+            serde_json::Value::Null
+        );
+        assert!(json["groups"][0]["photos"][0].get("depthM").is_none());
+        request.copy_depth_to_altitude();
+        let photos = &request.groups[0].photos;
+        assert_eq!(photos[0].gps_altitude, Some(-18.4));
+        assert_eq!(
+            photos[1].gps_altitude, None,
+            "surface photo keeps its altitude"
+        );
+        assert_eq!(altitude(0.02), 0.0);
+        assert!(altitude(0.02).is_sign_positive());
     }
 
     #[test]

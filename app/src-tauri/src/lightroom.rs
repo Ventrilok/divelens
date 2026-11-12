@@ -6,8 +6,8 @@
 //! the catalog name and the live photo selection. Messages are one JSON object
 //! per line. The app pings every few seconds; silence means the link is lost.
 //!
-//! Requests (tag the selection, find the photos of a period, write the
-//! collections) go to the plugin through a channel of [`Command`]s; each
+//! Requests (tag the selection, find the photos of a period, list the
+//! collection sets, write the collections, set the log level) go to the plugin through a channel of [`Command`]s; each
 //! carries its own reply channel. A request made while the link is down, or
 //! cut by a lost link, gets no reply: its channel is dropped, which the caller
 //! sees as "link lost". Requests are never retried.
@@ -25,10 +25,12 @@ use std::time::{Duration, Instant};
 use divelens_core::tags::{CollectionsRequest, TagRequest};
 use serde::{Deserialize, Serialize};
 
+use crate::settings::{Legacy, LogLevel};
+
 /// Name of the link file, written by the plugin in the app's settings folder.
 pub const LINK_FILE: &str = "lightroom-link.json";
 /// Version of the message set; both sides must agree.
-pub const PROTOCOL: u32 = 2;
+pub const PROTOCOL: u32 = 3;
 
 /// Content of the link file.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -124,10 +126,22 @@ pub struct WrittenCollection {
     pub created: bool,
 }
 
+/// A collection set of the catalog and the sets inside it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionSet {
+    pub name: String,
+    #[serde(default)]
+    pub children: Vec<CollectionSet>,
+}
+
 /// Something the UI must react to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     Status(Status),
+    /// The previous plugin's settings, sent once per connection when
+    /// Lightroom still has them.
+    Legacy(Legacy),
     /// A Lightroom menu asks for this screen.
     Show(String),
     /// Progress of the catalog write in course.
@@ -162,6 +176,12 @@ pub enum Command {
         request: CollectionsRequest,
         reply: Sender<Result<Vec<WrittenCollection>, ApplyOutcome>>,
     },
+    /// The catalog's collection sets, as a tree.
+    ListSets {
+        reply: Sender<Result<Vec<CollectionSet>, ApplyOutcome>>,
+    },
+    /// What the plugin writes in its log from now on; no answer.
+    SetLogLevel(LogLevel),
 }
 
 /// A request waiting for the plugin's answer.
@@ -169,6 +189,7 @@ enum Pending {
     Apply(Sender<ApplyOutcome>),
     Find(Sender<Result<PhotoSearch, ApplyOutcome>>, Vec<FoundPhoto>),
     Collections(Sender<Result<Vec<WrittenCollection>, ApplyOutcome>>),
+    Sets(Sender<Result<Vec<CollectionSet>, ApplyOutcome>>),
 }
 
 impl Pending {
@@ -178,6 +199,7 @@ impl Pending {
             Pending::Apply(reply) => drop(reply.send(outcome)),
             Pending::Find(reply, _) => drop(reply.send(Err(outcome))),
             Pending::Collections(reply) => drop(reply.send(Err(outcome))),
+            Pending::Sets(reply) => drop(reply.send(Err(outcome))),
         }
     }
 }
@@ -190,7 +212,8 @@ pub enum ApplyOutcome {
     Applied { count: usize },
     /// Nothing written. `reason`: `noSelection`, `busy` (Lightroom kept the
     /// catalog busy), `badRequest`, `staleSearch` (the photos were found in
-    /// an earlier link session) or `error`.
+    /// an earlier link session), `parentNotFound` (the collection set chosen
+    /// in the settings is not in the catalog) or `error`.
     Failed {
         reason: String,
         detail: Option<String>,
@@ -205,6 +228,8 @@ enum FromPlugin {
         plugin: String,
         lightroom: String,
         catalog: String,
+        #[serde(default)]
+        legacy: Option<Legacy>,
     },
     Selection {
         count: usize,
@@ -253,6 +278,10 @@ enum FromPlugin {
         id: u64,
         groups: Vec<WrittenCollection>,
     },
+    Sets {
+        id: u64,
+        sets: Vec<CollectionSet>,
+    },
     #[serde(other)]
     Unknown,
 }
@@ -280,6 +309,12 @@ enum ToPlugin<'a> {
         id: u64,
         #[serde(flatten)]
         request: &'a CollectionsRequest,
+    },
+    ListSets {
+        id: u64,
+    },
+    LogLevel {
+        level: LogLevel,
     },
 }
 
@@ -419,6 +454,7 @@ fn session(
                         plugin,
                         lightroom,
                         catalog,
+                        legacy,
                     } => {
                         if protocol != PROTOCOL {
                             return End::Protocol(protocol);
@@ -428,6 +464,9 @@ fn session(
                         status.lightroom_version = Some(lightroom);
                         status.plugin_version = Some(plugin);
                         on_event(Event::Status(status.clone()));
+                        if let Some(legacy) = legacy {
+                            on_event(Event::Legacy(legacy));
+                        }
                     }
                     FromPlugin::Selection {
                         count,
@@ -491,6 +530,11 @@ fn session(
                             let _ = reply.send(Ok(groups));
                         }
                     }
+                    FromPlugin::Sets { id, sets } => {
+                        if let Some(Pending::Sets(reply)) = pending.remove(&id) {
+                            let _ = reply.send(Ok(sets));
+                        }
+                    }
                     FromPlugin::Bye => return End::Bye,
                     FromPlugin::Error { reason } => refusal = Some(reason),
                     _ => {}
@@ -526,6 +570,8 @@ fn session(
                 Command::ApplyCollections { request, .. } => {
                     ToPlugin::ApplyCollections { id, request }
                 }
+                Command::ListSets { .. } => ToPlugin::ListSets { id },
+                Command::SetLogLevel(level) => ToPlugin::LogLevel { level: *level },
             };
             if send_line(outgoing, &message).is_err() {
                 return End::Lost;
@@ -534,6 +580,8 @@ fn session(
                 Command::Apply { reply, .. } => Pending::Apply(reply),
                 Command::FindPhotos { reply, .. } => Pending::Find(reply, Vec::new()),
                 Command::ApplyCollections { reply, .. } => Pending::Collections(reply),
+                Command::ListSets { reply } => Pending::Sets(reply),
+                Command::SetLogLevel(_) => continue,
             };
             pending.insert(id, waiting);
         }
@@ -597,7 +645,7 @@ mod tests {
         stream.write_all(text.as_bytes()).unwrap();
     }
 
-    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":2,"type":"hello"}"#;
+    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":3,"type":"hello"}"#;
 
     #[test]
     fn reads_link_file() {
@@ -908,6 +956,8 @@ mod tests {
                 .send(Command::ApplyCollections {
                     request: CollectionsRequest {
                         search: search.search,
+                        parent: Vec::new(),
+                        group: None,
                         groups: Vec::new(),
                     },
                     reply,
@@ -953,6 +1003,63 @@ mod tests {
                 collection: "700 - Coral Garden".into(),
                 count: 1,
                 created: true,
+            }])
+        );
+    }
+
+    #[test]
+    fn passes_legacy_settings_log_level_and_collection_sets() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (result_tx, result_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin(move |lines, to_app| {
+            lines.next().unwrap();
+            write(
+                to_app,
+                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":3,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
+            );
+            write(to_app, "\n");
+            lines.next().unwrap(); // first ping: the app is connected
+            commands
+                .send(Command::SetLogLevel(LogLevel::Detailed))
+                .unwrap();
+            let level = next_request(lines);
+            assert_eq!(
+                level,
+                serde_json::json!({"type": "logLevel", "level": "detailed"})
+            );
+            let (reply, sets) = std::sync::mpsc::channel();
+            commands.send(Command::ListSets { reply }).unwrap();
+            let list = next_request(lines);
+            assert_eq!(list["type"], "listSets");
+            let id = list["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"sets\",\"id\":{id},\"sets\":[{{\"name\":\"Trips\",\"children\":[{{\"name\":\"2026\",\"children\":[]}}]}}]}}\n"
+                ),
+            );
+            result_tx.send(sets.recv().unwrap()).unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        let mut events = Vec::new();
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |e| events.push(e));
+        plugin.join().unwrap();
+        assert_eq!(end, End::Bye);
+        assert_eq!(
+            events[1],
+            Event::Legacy(Legacy {
+                mac_dive_path: Some("~/MacDive.sqlite".into()),
+                display_log_order: Some("asc".into()),
+            })
+        );
+        assert_eq!(
+            result_rx.recv().unwrap(),
+            Ok(vec![CollectionSet {
+                name: "Trips".into(),
+                children: vec![CollectionSet {
+                    name: "2026".into(),
+                    children: Vec::new(),
+                }],
             }])
         );
     }

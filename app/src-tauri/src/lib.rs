@@ -1,3 +1,4 @@
+mod applog;
 mod collections;
 mod lightroom;
 mod offsets;
@@ -17,17 +18,67 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use collections::{Choices, Period, Preview, Session};
-use lightroom::{ApplyOutcome, Command, End, Event, LinkFile, Status, Timing, WrittenCollection};
+use lightroom::{
+    ApplyOutcome, CollectionSet, Command, End, Event, LinkFile, Status, Timing, WrittenCollection,
+};
 use offsets::Offsets;
 use settings::{Settings, SourceKind};
 
-/// Versions of the app and of the core library, shown in Settings › About.
+/// Where the app writes its log (`None`: no home folder).
+struct LogFile(Option<PathBuf>);
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppInfo {
+    version: &'static str,
+    os: &'static str,
+    log_path: Option<PathBuf>,
+}
+
+/// Version, system and log file, for Settings.
 #[tauri::command]
-fn versions() -> (String, String) {
-    (
-        env!("CARGO_PKG_VERSION").to_string(),
-        divelens_core::VERSION.to_string(),
-    )
+fn app_info(log: State<LogFile>) -> AppInfo {
+    AppInfo {
+        version: env!("CARGO_PKG_VERSION"),
+        os: std::env::consts::OS,
+        log_path: log.0.clone(),
+    }
+}
+
+/// Current settings.
+#[tauri::command]
+fn get_settings(app: AppHandle) -> Settings {
+    Settings::load(&config_dir(&app))
+}
+
+/// Changes the settings named in `patch` and returns them all; every window
+/// hears of it through `settings-changed`.
+#[tauri::command]
+fn update_settings(app: AppHandle, patch: serde_json::Value) -> Result<Settings, String> {
+    change_settings(&app, |s| s.patch(&patch))
+}
+
+fn change_settings(
+    app: &AppHandle,
+    change: impl FnOnce(&mut Settings),
+) -> Result<Settings, String> {
+    let before = Settings::load(&config_dir(app));
+    let after = Settings::update(&config_dir(app), change).map_err(|e| {
+        log::error!("settings not saved: {e}");
+        e.to_string()
+    })?;
+    if after != before {
+        log::info!(
+            "settings changed: {}",
+            serde_json::to_string(&after).unwrap_or_default()
+        );
+        if after.log_level != before.log_level {
+            applog::set_level(after.log_level);
+            send_log_level(app, after.log_level);
+        }
+        let _ = app.emit("settings-changed", after.clone());
+    }
+    Ok(after)
 }
 
 #[derive(Serialize)]
@@ -46,8 +97,9 @@ struct DiveLog {
     dives: Vec<Dive>,
     /// Every named site of the log (Tag Selection › other site).
     sites: Vec<Site>,
-    /// Display and writing units, from the dive application's preferences.
-    units: units::UiUnits,
+    /// Units of the dive application's preferences (the settings may force
+    /// others).
+    source_units: units::UiUnits,
 }
 
 /// Error sent to the UI: the reader error plus the source it concerns.
@@ -83,8 +135,7 @@ fn source_info(app: &AppHandle) -> SourceInfo {
     }
 }
 
-/// Units of the dive application the log belongs to (spec F2: until the
-/// Settings screen exists).
+/// Units of the dive application the log belongs to, from its preferences.
 fn source_units(app: &AppHandle, info: &SourceInfo) -> Units {
     let Ok(home) = app.path().home_dir() else {
         return Units::default();
@@ -92,6 +143,14 @@ fn source_units(app: &AppHandle, info: &SourceInfo) -> Units {
     match info.kind {
         SourceKind::MacDive => units::read_macdive(&home),
     }
+}
+
+/// Units in use (spec F2): the dive application's, unless forced in the
+/// settings.
+fn units_in_use(app: &AppHandle, info: &SourceInfo) -> Units {
+    Settings::load(&config_dir(app))
+        .units
+        .resolve(source_units(app, info))
 }
 
 fn open(info: &SourceInfo) -> Result<MacDive, Error> {
@@ -107,9 +166,18 @@ async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
     tauri::async_runtime::spawn_blocking(move || {
         let source = source_info(&app);
         let result = open(&source).and_then(|s| Ok((s.capabilities(), s.dives()?, s.sites()?)));
+        match &result {
+            Ok((_, dives, sites)) => log::info!(
+                "dive log {}: {} dives, {} sites",
+                source.path.display(),
+                dives.len(),
+                sites.len()
+            ),
+            Err(e) => log::warn!("dive log {} not read: {e:?}", source.path.display()),
+        }
         match result {
             Ok((capabilities, dives, sites)) => Ok(DiveLog {
-                units: source_units(&app, &source).into(),
+                source_units: source_units(&app, &source).into(),
                 source,
                 capabilities,
                 dives,
@@ -132,11 +200,20 @@ async fn dive_profile(app: AppHandle, id: String) -> Result<Vec<Sample>, Error> 
 
 /// Points DiveLens at another dive-log file, chosen by the user.
 #[tauri::command]
-fn set_source_path(app: AppHandle, path: PathBuf) -> Result<(), String> {
-    let dir = config_dir(&app);
-    let mut settings = Settings::load(&dir);
-    settings.source.path = Some(path);
-    settings.save(&dir).map_err(|e| e.to_string())
+fn set_source_path(app: AppHandle, path: Option<PathBuf>) -> Result<Settings, String> {
+    change_settings(&app, |s| s.source.path = path)
+}
+
+/// Tells the plugin what to write in its log (dropped when not connected:
+/// the level is sent again on connection).
+fn send_log_level(app: &AppHandle, level: settings::LogLevel) {
+    if let Some(state) = app.try_state::<Lightroom>() {
+        let _ = state
+            .commands
+            .lock()
+            .expect("lightroom commands")
+            .send(Command::SetLogLevel(level));
+    }
 }
 
 /// Last known state of the Lightroom link, and the way to send it requests.
@@ -209,7 +286,7 @@ enum TagError {
 fn tag_request(app: &AppHandle, choice: &TagChoice) -> Result<TagRequest, TagError> {
     let info = source_info(app);
     let source = open(&info).map_err(|detail| TagError::Source { detail })?;
-    let units = source_units(app, &info);
+    let units = units_in_use(app, &info);
     let dive = match &choice.dive_id {
         Some(id) => Some(
             source
@@ -424,14 +501,20 @@ async fn apply_collections(
     tauri::async_runtime::spawn_blocking(move || {
         let info = source_info(&app);
         let source = open(&info).map_err(|detail| CollectionsError::Source { detail })?;
-        let units = source_units(&app, &info);
+        let units = units_in_use(&app, &info);
         let (request, empty_dives) = {
             let state = app.state::<CollectionsState>();
             let session = state.session.lock().expect("collections");
             let session = session.as_ref().ok_or(CollectionsError::NoPhotos)?;
-            let request = session
+            let mut request = session
                 .request(&choices, units, |d| source.profile(&d.id))
                 .map_err(|detail| CollectionsError::Source { detail })?;
+            let settings = Settings::load(&config_dir(&app));
+            request.parent = settings.collections.parent.clone();
+            request.group = settings.collections.group_name();
+            if settings.depth_to_altitude {
+                request.copy_depth_to_altitude();
+            }
             let preview = session.preview(&choices);
             let empty: Vec<String> = preview
                 .dives
@@ -450,7 +533,17 @@ async fn apply_collections(
             .flat_map(|g| &g.photos)
             .filter(|p| p.photo_depth.is_some())
             .count();
-        let written = ask(&app, |reply| Command::ApplyCollections { request, reply })??;
+        let written = ask(&app, |reply| Command::ApplyCollections { request, reply })
+            .inspect_err(|e| log::warn!("collections not written: {e:?}"))?
+            .map_err(|outcome| {
+                log::warn!("collections refused by Lightroom: {outcome:?}");
+                CollectionsError::from(outcome)
+            })?;
+        log::info!(
+            "collections written: {} collections, {} photos ({with_depth} with depth)",
+            written.len(),
+            written.iter().map(|c| c.count).sum::<usize>()
+        );
         let dir = config_dir(&app);
         let mut offsets = Offsets::load(&dir);
         if let Some(session) = app
@@ -463,7 +556,7 @@ async fn apply_collections(
             session.remember(&choices, &mut offsets);
         }
         if let Err(e) = offsets.save(&dir) {
-            eprintln!("clock offsets not saved: {e}");
+            log::error!("clock offsets not saved: {e}");
         }
         Ok(CollectionsResult {
             photos: written.iter().map(|c| c.count).sum(),
@@ -474,6 +567,16 @@ async fn apply_collections(
     })
     .await
     .expect("collections task failed")
+}
+
+/// The catalog's collection sets (Settings › Collections).
+#[tauri::command]
+async fn collection_sets(app: AppHandle) -> Result<Vec<CollectionSet>, CollectionsError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(ask(&app, |reply| Command::ListSets { reply })??)
+    })
+    .await
+    .expect("collection sets task failed")
 }
 
 /// Screen asked for on the command line (`--screen tag`), when Lightroom
@@ -521,6 +624,21 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                 &commands,
                 &mut |event| match event {
                     Event::Status(mut status) => {
+                        let was_connected = app
+                            .state::<Lightroom>()
+                            .status
+                            .lock()
+                            .expect("lightroom state")
+                            .connected;
+                        if status.connected && !was_connected {
+                            log::info!(
+                                "Lightroom {} connected, plugin {}, catalog {}",
+                                status.lightroom_version.as_deref().unwrap_or("?"),
+                                status.plugin_version.as_deref().unwrap_or("?"),
+                                status.catalog.as_deref().unwrap_or("?")
+                            );
+                            send_log_level(&app, Settings::load(&dir).log_level);
+                        }
                         let ranges: Vec<_> = status
                             .selection_cameras
                             .iter()
@@ -539,6 +657,16 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                         let _ = app.emit("lightroom-status", status);
                     }
                     Event::Show(screen) => show_screen(&app, screen),
+                    Event::Legacy(legacy) => {
+                        if let Ok(home) = app.path().home_dir() {
+                            let standard = MacDive::default_path(&home);
+                            let taken =
+                                change_settings(&app, |s| s.take_over(&legacy, &home, &standard));
+                            if let Err(e) = taken {
+                                log::error!("previous plugin's settings not taken over: {e}");
+                            }
+                        }
+                    }
                     Event::Progress { done, total } => {
                         let _ = app.emit("apply-progress", (done, total));
                     }
@@ -568,7 +696,7 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
             let text = format!("{end:?}");
             if last_end.as_ref() != Some(&text) {
                 if end != End::Unreachable {
-                    eprintln!("Lightroom link ended: {text}");
+                    log::info!("Lightroom link ended: {text}");
                 }
                 last_end = Some(text);
             }
@@ -591,7 +719,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            versions,
+            app_info,
+            get_settings,
+            update_settings,
             load_dives,
             dive_profile,
             set_source_path,
@@ -602,9 +732,22 @@ pub fn run() {
             find_collection_photos,
             collections_preview,
             suggest_offsets,
-            apply_collections
+            apply_collections,
+            collection_sets
         ])
         .setup(|app| {
+            let settings = Settings::load(&config_dir(app.handle()));
+            let log_path = app.path().home_dir().ok().map(|home| {
+                let path = applog::start(applog::folder(&home), settings.log_level);
+                log::info!(
+                    "DiveLens {} on {}, log {}",
+                    env!("CARGO_PKG_VERSION"),
+                    std::env::consts::OS,
+                    path.display()
+                );
+                path
+            });
+            app.manage(LogFile(log_path));
             let (commands, inbox) = mpsc::channel();
             app.manage(Lightroom {
                 status: Mutex::new(Status::default()),

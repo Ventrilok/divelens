@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { countryCounts, type Filters } from "../filters";
 import { depthToMetres, depthUnit, depthValue, parseWallClock } from "../format";
-import { formatInt, locale, t } from "../i18n";
+import { formatInt, localized, t } from "../i18n";
 import type { Capabilities, Dive, Units } from "../types";
 import { Icon } from "./Icon";
 
@@ -55,7 +55,7 @@ function Chip({ label, active, onClear, children }: ChipProps) {
   );
 }
 
-const shortDate = new Intl.DateTimeFormat(locale, { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" });
+const shortDate = localized((l) => new Intl.DateTimeFormat(l, { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }));
 const fmtDay = (d: string) => shortDate.format(parseWallClock(d));
 
 function periodLabel(f: Filters): string {
