@@ -2,7 +2,9 @@
 //!
 //! Spec: depth, temperature and elapsed time at the moment a photo was taken,
 //! linearly interpolated between two profile samples. Empty when the dive has
-//! no profile or the photo falls outside the recorded profile.
+//! no profile. Between the dive's start and the first sample (Shearwater
+//! records its first one at 10 s), or after the last one, the nearest sample
+//! is used: the caller only asks for times inside the dive.
 
 use serde::{Deserialize, Serialize};
 
@@ -26,14 +28,18 @@ pub struct PhotoPoint {
 }
 
 /// Values at `elapsed_s` seconds into the dive, or `None` when the profile is
-/// empty or the time lies outside it. `samples` must be sorted by time.
+/// empty. Before the first sample or after the last, that sample's values.
+/// `samples` must be sorted by time.
 pub fn at(samples: &[Sample], elapsed_s: u32) -> Option<PhotoPoint> {
-    let first = samples.first()?;
     let last = samples.last()?;
-    if elapsed_s < first.time_s || elapsed_s > last.time_s {
-        return None;
+    if elapsed_s >= last.time_s {
+        return Some(PhotoPoint {
+            elapsed_s,
+            depth_m: last.depth_m,
+            temp_c: last.temp_c,
+        });
     }
-    // Index of the first sample at or after `elapsed_s`.
+    // Index of the first sample at or after `elapsed_s` (exists: before last).
     let i = samples.partition_point(|s| s.time_s < elapsed_s);
     let b = samples[i];
     if b.time_s == elapsed_s || i == 0 {
@@ -90,9 +96,15 @@ mod tests {
     }
 
     #[test]
-    fn outside_profile_or_empty_is_none() {
-        let p = [s(0, 0.0, None), s(10, 10.0, None)];
-        assert_eq!(at(&p, 11), None);
+    fn outside_profile_uses_nearest_sample_and_empty_is_none() {
+        let p = [s(10, 3.0, Some(25.0)), s(20, 10.0, None)];
+        let before = at(&p, 4).unwrap();
+        assert_eq!(
+            (before.elapsed_s, before.depth_m, before.temp_c),
+            (4, 3.0, Some(25.0))
+        );
+        let after = at(&p, 25).unwrap();
+        assert_eq!((after.elapsed_s, after.depth_m), (25, 10.0));
         assert_eq!(at(&[], 0), None);
     }
 
