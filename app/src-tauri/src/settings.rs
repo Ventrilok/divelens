@@ -267,8 +267,8 @@ impl Settings {
         }
     }
     /// Takes over the previous plugin's settings, once: its dive-log location
-    /// (when it is not the standard one) and its dive order. Never replaces a
-    /// setting already chosen in the app.
+    /// (when it is not the standard one and the file is still there) and its
+    /// dive order. Never replaces a setting already chosen in the app.
     pub fn take_over(&mut self, legacy: &Legacy, home: &Path, standard_path: &Path) {
         if self.legacy_imported {
             return;
@@ -282,7 +282,7 @@ impl Settings {
                 Some(rest) => home.join(rest),
                 None => PathBuf::from(path),
             };
-            if path != standard_path {
+            if path != standard_path && path.is_file() {
                 self.source.path = Some(path);
             }
         }
@@ -453,15 +453,18 @@ mod tests {
 
     #[test]
     fn takes_over_the_previous_plugin_once() {
+        let home = dir("legacy-home");
+        std::fs::create_dir_all(home.join("Dropbox")).unwrap();
+        std::fs::write(home.join("Dropbox/MacDive.sqlite"), b"").unwrap();
         let mut s = Settings::default();
         s.take_over(
             &legacy(Some("~/Dropbox/MacDive.sqlite"), Some("asc")),
-            Path::new(HOME),
+            &home,
             Path::new(STANDARD),
         );
         assert_eq!(
             s.source.path.as_deref(),
-            Some(Path::new("/Users/diver/Dropbox/MacDive.sqlite"))
+            Some(home.join("Dropbox/MacDive.sqlite").as_path())
         );
         assert_eq!(s.dive_sort, Some(DiveSort::Oldest));
         assert!(s.legacy_imported);
@@ -474,6 +477,7 @@ mod tests {
         );
         assert_eq!(s.source.path, None);
         assert_eq!(s.dive_sort, Some(DiveSort::Oldest));
+        std::fs::remove_dir_all(home).unwrap();
     }
 
     #[test]
@@ -504,6 +508,7 @@ mod tests {
             ),
             (Some(STANDARD), Some("sideways")),
             (Some("  "), None),
+            (Some("/Gone/MacDive.sqlite"), None),
             (None, None),
         ] {
             let mut s = Settings::default();
