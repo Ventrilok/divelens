@@ -31,6 +31,7 @@ use crate::model::{Capabilities, Dive, DiveSource, Site};
 use crate::profile::Sample;
 use crate::{Error, Result};
 
+mod git;
 mod xml;
 
 /// Subsurface's standard folder, relative to the home folder (macOS).
@@ -120,7 +121,8 @@ impl Subsurface {
     /// Nothing is ever written.
     pub fn open(path: &Path) -> Result<Self> {
         if path.is_dir() {
-            Err(Error::NotADiveLog(path.to_path_buf()))
+            let (branch, raw) = git::read(path)?;
+            Ok(Self::build(Storage::Git { branch }, raw))
         } else if path.is_file() {
             Ok(Self::build(Storage::Xml, xml::read(path)?))
         } else {

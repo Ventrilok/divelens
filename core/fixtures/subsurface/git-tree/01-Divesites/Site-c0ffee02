@@ -1,0 +1,4 @@
+name "Glacier Wall"
+gps -64.125000 -60.500000
+geo cat 2 origin 0 "Atlantis"
+geo cat 6 origin 0 "Frostville"

@@ -265,3 +265,164 @@ fn default_path_is_the_login_name() {
         Path::new("/Users/diver/Library/Application Support/Subsurface/diver.xml")
     );
 }
+
+// ---------------------------------------------------------------------------
+// Git storage. Repositories are built with the git command from
+// `fixtures/subsurface/git-tree`, the fictional log in Subsurface's git
+// layout.
+
+fn git(dir: &Path, args: &[&str]) {
+    let out = std::process::Command::new("git")
+        .args([
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+        ])
+        .args([
+            "-c",
+            "init.defaultBranch=master",
+            "-c",
+            "core.autocrlf=false",
+        ])
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("git must be installed to run these tests");
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap() {
+        let e = e.unwrap();
+        let target = to.join(e.file_name());
+        if e.file_type().unwrap().is_dir() {
+            copy_tree(&e.path(), &target);
+        } else {
+            std::fs::copy(e.path(), target).unwrap();
+        }
+    }
+}
+
+/// A repository holding the fictional log on `branch`, the current branch.
+fn git_log(dir: &TempDir, branch: &str) -> PathBuf {
+    let work = dir.path().join("log");
+    copy_tree(&fixture("git-tree"), &work);
+    git(&work, &["init", "-q"]);
+    git(&work, &["checkout", "-q", "-b", branch]);
+    git(&work, &["add", "-A"]);
+    git(&work, &["commit", "-q", "-m", "Subsurface log"]);
+    work
+}
+
+#[test]
+fn reads_the_fictional_git_log() {
+    let dir = TempDir::new().unwrap();
+    let path = git_log(&dir, "main");
+    let log = Subsurface::open(&path).unwrap();
+    assert_eq!(
+        log.storage(),
+        &Storage::Git {
+            branch: "main".into()
+        }
+    );
+    check_fictional(&log);
+}
+
+#[test]
+fn git_and_xml_give_the_same_log() {
+    let dir = TempDir::new().unwrap();
+    let git = Subsurface::open(&git_log(&dir, "main")).unwrap();
+    let xml = Subsurface::open(&fixture("fictional.xml")).unwrap();
+    assert_eq!(git.dives().unwrap(), xml.dives().unwrap());
+    let mut a = git.sites().unwrap();
+    let mut b = xml.sites().unwrap();
+    a.sort_by(|x, y| x.id.cmp(&y.id));
+    b.sort_by(|x, y| x.id.cmp(&y.id));
+    assert_eq!(a, b);
+    for d in xml.dives().unwrap() {
+        assert_eq!(git.profile(&d.id).unwrap(), xml.profile(&d.id).unwrap());
+    }
+}
+
+#[test]
+fn reads_the_commit_not_the_files() {
+    let dir = TempDir::new().unwrap();
+    let work = git_log(&dir, "main");
+    // Packed objects, and no files at all: a bare copy.
+    git(&work, &["gc", "-q"]);
+    git(dir.path(), &["clone", "-q", "--bare", "log", "bare"]);
+    check_fictional(&Subsurface::open(&dir.path().join("bare")).unwrap());
+    // Files deleted from the folder, commit untouched.
+    std::fs::remove_dir_all(work.join("2025")).unwrap();
+    check_fictional(&Subsurface::open(&work).unwrap());
+}
+
+#[test]
+fn picks_the_only_log_when_head_has_none() {
+    let dir = TempDir::new().unwrap();
+    let work = git_log(&dir, "diver@example.invalid");
+    // As after Subsurface's "Save as" into a new repository: the current
+    // branch has no commit, the log is on another branch.
+    git(&work, &["symbolic-ref", "HEAD", "refs/heads/master"]);
+    let log = Subsurface::open(&work).unwrap();
+    assert_eq!(
+        log.storage(),
+        &Storage::Git {
+            branch: "diver@example.invalid".into()
+        }
+    );
+    assert_eq!(log.dives().unwrap().len(), 7);
+}
+
+#[test]
+fn several_logs_without_a_current_one() {
+    let dir = TempDir::new().unwrap();
+    let work = git_log(&dir, "first");
+    git(&work, &["branch", "second"]);
+    // The current branch holds a log: it wins.
+    assert_eq!(
+        Subsurface::open(&work).unwrap().storage(),
+        &Storage::Git {
+            branch: "first".into()
+        }
+    );
+    git(&work, &["symbolic-ref", "HEAD", "refs/heads/none"]);
+    assert!(matches!(
+        Subsurface::open(&work),
+        Err(Error::SeveralLogs(_))
+    ));
+}
+
+#[test]
+fn folders_that_are_not_subsurface_logs() {
+    let dir = TempDir::new().unwrap();
+    let plain = dir.path().join("plain");
+    std::fs::create_dir(&plain).unwrap();
+    assert!(matches!(
+        Subsurface::open(&plain),
+        Err(Error::NotADiveLog(_))
+    ));
+    git(&plain, &["init", "-q"]);
+    assert!(
+        matches!(Subsurface::open(&plain), Err(Error::NotADiveLog(_))),
+        "empty repository"
+    );
+    std::fs::write(plain.join("README"), "not a dive log").unwrap();
+    git(&plain, &["add", "-A"]);
+    git(&plain, &["commit", "-q", "-m", "other"]);
+    assert!(matches!(
+        Subsurface::open(&plain),
+        Err(Error::NotADiveLog(_))
+    ));
+
+    let old = git_log(&dir, "main");
+    std::fs::write(old.join("00-Subsurface"), "version 2\n").unwrap();
+    git(&old, &["commit", "-q", "-am", "old"]);
+    assert!(matches!(Subsurface::open(&old), Err(Error::OldFormat(_))));
+}
