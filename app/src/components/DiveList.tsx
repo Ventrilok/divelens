@@ -22,12 +22,14 @@ interface Props {
   onToggleAll?: () => void;
   /** Single mode: the chosen dive. */
   chosenId?: string | null;
+  /** A dive to point out with a badge (e.g. it covers the Lightroom selection). */
+  mark?: { id: string; label: string } | null;
   onChoose?: (id: string) => void;
   capabilities: Capabilities;
   units: Units;
 }
 
-export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, onToggle, onToggleAll, chosenId, onChoose, capabilities, units }: Props) {
+export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, onToggle, onToggleAll, chosenId, onChoose, mark, capabilities, units }: Props) {
   const multi = mode === "multi";
   const bodyRef = useRef<HTMLTableSectionElement>(null);
 
@@ -141,6 +143,7 @@ export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, o
                   <td className="site-cell">
                     <span className="site-name">{d.site.name ?? t("detail.unknownSite")}</span>
                     {d.site.location && <span className="muted"> · {d.site.location}</span>}
+                    {mark?.id === d.id && <span className="badge">{mark.label}</span>}
                   </td>
                   <td>{d.site.country ?? ""}</td>
                   <td className="num">{formatDuration(d.durationS)}</td>

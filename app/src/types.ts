@@ -79,6 +79,17 @@ export interface LightroomStatus {
   pluginVersion: string | null;
   /** Photos selected in Lightroom; 0 when nothing is selected. */
   selected: number;
+  /** Changes with each new selection; thumbnails carry it. */
+  selectionVersion: number;
+  /** Earliest and latest capture times, wall-clock "YYYY-MM-DDTHH:MM:SS". */
+  selectionFrom: string | null;
+  selectionTo: string | null;
+}
+
+/** Thumbnails of the selection received so far (data URLs, by position). */
+export interface SelectionPreview {
+  version: number;
+  thumbnails: (string | null)[];
 }
 
 /** What Tag Selection writes (app/src-tauri/src/lib.rs, TagChoice). */

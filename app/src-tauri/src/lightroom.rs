@@ -63,6 +63,12 @@ pub struct Status {
     pub plugin_version: Option<String>,
     /// Number of photos selected in Lightroom (0 when nothing is selected).
     pub selected: usize,
+    /// Changes with every new selection; thumbnails carry it.
+    pub selection_version: u64,
+    /// Earliest and latest capture times of the selection, wall-clock
+    /// `YYYY-MM-DDTHH:MM:SS` as Lightroom shows them.
+    pub selection_from: Option<String>,
+    pub selection_to: Option<String>,
 }
 
 /// Something the UI must react to.
@@ -75,6 +81,12 @@ pub enum Event {
     Progress {
         done: usize,
         total: usize,
+    },
+    /// One thumbnail of the selection (base64 JPEG), `index` from 1.
+    Thumbnail {
+        version: u64,
+        index: usize,
+        jpeg: String,
     },
 }
 
@@ -112,6 +124,17 @@ enum FromPlugin {
     },
     Selection {
         count: usize,
+        #[serde(default)]
+        version: u64,
+        #[serde(default)]
+        from: Option<String>,
+        #[serde(default)]
+        to: Option<String>,
+    },
+    Thumbnail {
+        version: u64,
+        index: usize,
+        jpeg: String,
     },
     Show {
         screen: String,
@@ -301,9 +324,28 @@ fn session(
                         status.plugin_version = Some(plugin);
                         on_event(Event::Status(status.clone()));
                     }
-                    FromPlugin::Selection { count } if status.connected => {
+                    FromPlugin::Selection {
+                        count,
+                        version,
+                        from,
+                        to,
+                    } if status.connected => {
                         status.selected = count;
+                        status.selection_version = version;
+                        status.selection_from = from;
+                        status.selection_to = to;
                         on_event(Event::Status(status.clone()));
+                    }
+                    FromPlugin::Thumbnail {
+                        version,
+                        index,
+                        jpeg,
+                    } if status.connected => {
+                        on_event(Event::Thumbnail {
+                            version,
+                            index,
+                            jpeg,
+                        });
                     }
                     FromPlugin::Show { screen } if status.connected => {
                         on_event(Event::Show(screen));
@@ -449,8 +491,15 @@ mod tests {
             assert_eq!(hello["protocol"], 1);
             // Lightroom may add CR, blank lines, or split a line in two.
             write(to_app, &format!("{HELLO}\r\n\n"));
-            write(to_app, r#"{"type":"selection","count":3,"photos":[1,2,3]}"#);
+            write(
+                to_app,
+                r#"{"type":"selection","count":3,"version":4,"from":"2025-12-30T07:31:12","to":"2025-12-30T08:12:40"}"#,
+            );
             write(to_app, "\n");
+            write(
+                to_app,
+                "{\"type\":\"thumbnail\",\"version\":4,\"index\":1,\"jpeg\":\"/9j/\"}\n",
+            );
             write(
                 to_app,
                 "{\"type\":\"show\",\"screen\":\"tag\"}\n{\"type\":\"future\"}\n",
@@ -468,7 +517,7 @@ mod tests {
             catalog: Some("Dives 2026".into()),
             lightroom_version: Some("16.0".into()),
             plugin_version: Some("0.1.0".into()),
-            selected: 0,
+            ..Status::default()
         };
         assert_eq!(
             events,
@@ -476,8 +525,16 @@ mod tests {
                 Event::Status(connected.clone()),
                 Event::Status(Status {
                     selected: 3,
+                    selection_version: 4,
+                    selection_from: Some("2025-12-30T07:31:12".into()),
+                    selection_to: Some("2025-12-30T08:12:40".into()),
                     ..connected
                 }),
+                Event::Thumbnail {
+                    version: 4,
+                    index: 1,
+                    jpeg: "/9j/".into()
+                },
                 Event::Show("tag".into()),
                 Event::Status(Status::default()),
             ]
