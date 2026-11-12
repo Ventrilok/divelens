@@ -27,12 +27,6 @@ export function clampMargin(min: number): number {
   return Math.max(0, Math.min(MAX_MARGIN_MIN, min));
 }
 
-/** End of the serial number, enough to tell two bodies apart: "…1325". */
-export function serialTail(serial: string | null): string | null {
-  if (!serial) return null;
-  return serial.length > 4 ? `…${serial.slice(-4)}` : serial;
-}
-
 /** Offset a camera starts with: the one last applied to it, else none. */
 export function initialOffsets(cameras: Camera[]): Record<string, number> {
   return Object.fromEntries(cameras.map((c) => [c.key, c.remembered ?? 0]));

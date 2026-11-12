@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampMargin, clampOffset, formatOffset, initialOffsets, serialTail } from "./cameras";
+import { clampMargin, clampOffset, formatOffset, initialOffsets } from "./cameras";
 import type { Camera } from "./types";
 
 describe("clock offsets", () => {
@@ -22,11 +22,5 @@ describe("clock offsets", () => {
   it("starts from each camera's remembered offset", () => {
     const cam = (key: string, remembered: number | null): Camera => ({ key, model: key, serial: null, photos: 1, remembered });
     expect(initialOffsets([cam("a", 240), cam("b", null)])).toEqual({ a: 240, b: 0 });
-  });
-
-  it("shows the end of the serial number", () => {
-    expect(serialTail("C3441325")).toBe("…1325");
-    expect(serialTail("A1")).toBe("A1");
-    expect(serialTail(null)).toBe(null);
   });
 });

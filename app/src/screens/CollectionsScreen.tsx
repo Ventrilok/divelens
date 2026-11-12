@@ -12,7 +12,6 @@ import {
   initialOffsets,
   MARGIN_STEP_MIN,
   MAX_MARGIN_MIN,
-  serialTail,
 } from "../cameras";
 import { Icon } from "../components/Icon";
 import { formatDay, formatRange, formatRowSpan } from "../format";
@@ -96,7 +95,6 @@ function CameraCard({
 }) {
   const warn = !ignored && inDives === 0;
   const name = camera.model ?? t("coll.unknownCamera");
-  const tail = serialTail(camera.serial);
   const total = inDives + outside;
   return (
     <div className={`cam ${warn ? "cam-warn" : ""} ${ignored ? "cam-off" : ""}`}>
@@ -111,7 +109,7 @@ function CameraCard({
         <div className="cam-n">
           <b>{name}</b>
           <span>
-            {tail && `${t("coll.serial", { n: tail })} · `}
+            {camera.serial && `${t("coll.serial", { n: camera.serial })} · `}
             {tn("coll.photos", camera.photos)}
           </span>
         </div>
