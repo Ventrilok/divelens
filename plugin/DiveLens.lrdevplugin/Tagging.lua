@@ -3,7 +3,9 @@ Turns a "tag the selection" request from the app into the list of changes to
 make on each photo. Pure Lua (no Lightroom import) so it is tested outside
 Lightroom; Link.lua applies the changes inside one catalog write.
 
-"Create Collections" requests are planned per dive with planCollections.
+"Create Collections" requests are planned per dive with planCollections;
+a photo's GPS altitude (the depth, negative) is written only when the
+request carries one, otherwise the photo keeps its altitude.
 
 Request (built by the app, see core/src/tags.rs):
   dive:     { diveId, start, end, duration, maxDepth, tempHigh, tempLow, rating } or null
@@ -87,33 +89,72 @@ local function planGroup(group, formatDate)
         if type(photo) ~= "table" or not text(photo.id) or not text(photo.clockOffset) then
             return nil, "bad photo"
         end
-        photos[#photos + 1] = {
-            id = photo.id,
-            changes = {
-                { kind = "plugin", field = "PhotoDepth", value = text(photo.photoDepth) },
-                { kind = "plugin", field = "PhotoTemp", value = text(photo.photoTemp) },
-                { kind = "plugin", field = "PhotoElapsed", value = text(photo.photoElapsed) },
-                { kind = "plugin", field = "ClockOffset", value = text(photo.clockOffset) },
-            },
+        local changes = {
+            { kind = "plugin", field = "PhotoDepth", value = text(photo.photoDepth) },
+            { kind = "plugin", field = "PhotoTemp", value = text(photo.photoTemp) },
+            { kind = "plugin", field = "PhotoElapsed", value = text(photo.photoElapsed) },
+            { kind = "plugin", field = "ClockOffset", value = text(photo.clockOffset) },
         }
+        local altitude = value(photo.gpsAltitude)
+        if type(altitude) == "number" then
+            changes[#changes + 1] = { kind = "raw", field = "gpsAltitude", value = altitude }
+        end
+        photos[#photos + 1] = { id = photo.id, changes = changes }
     end
     return { collection = group.collection, common = common, photos = photos }
 end
 
 --- Plans a "Create Collections" request (core/src/tags.rs, CollectionsRequest):
---- a list of groups (see planGroup), or nil and a reason.
+--- a list of groups (see planGroup) and where the collections go
+--- ({ parent = list of set names from the root, group = set name or nil }),
+--- or nil and a reason.
 function Tagging.planCollections(request, formatDate)
     if type(request) ~= "table" or type(value(request.groups)) ~= "table" then
         return nil, "bad request"
     end
+    local parent = {}
+    for i, name in ipairs(value(request.parent) or {}) do
+        if not text(name) or name == "" then return nil, "bad parent" end
+        parent[i] = name
+    end
+    local group = text(request.group)
+    if group == "" then group = nil end
     local groups = {}
-    for i, group in ipairs(request.groups) do
-        local planned, why = planGroup(group, formatDate)
+    for i, g in ipairs(request.groups) do
+        local planned, why = planGroup(g, formatDate)
         if not planned then return nil, why end
         groups[i] = planned
     end
     if #groups == 0 then return nil, "nothing to write" end
-    return groups
+    return groups, { parent = parent, group = group }
+end
+
+--- Follows `names` down from `root` (the catalog or a collection set): the
+--- collection set found, or nil. `names` empty: `root` itself.
+function Tagging.findSet(root, names)
+    local current = root
+    for _, name in ipairs(names) do
+        local found
+        for _, child in ipairs(current:getChildCollectionSets()) do
+            if child:getName() == name then
+                found = child
+                break
+            end
+        end
+        if not found then return nil end
+        current = found
+    end
+    return current
+end
+
+--- The collection sets under `root`, as a tree { name, children }.
+function Tagging.describeSets(root, emptyArray)
+    local list = {}
+    for _, set in ipairs(root:getChildCollectionSets()) do
+        list[#list + 1] = { name = set:getName(), children = Tagging.describeSets(set, emptyArray) }
+    end
+    if #list == 0 then return emptyArray end
+    return list
 end
 
 --- Wall-clock "YYYY-MM-DDTHH:MM:SS" from one of Lightroom's ISO 8601 capture

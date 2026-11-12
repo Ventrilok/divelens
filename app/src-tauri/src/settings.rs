@@ -148,6 +148,14 @@ impl Default for CollectionsPlace {
     }
 }
 
+impl CollectionsPlace {
+    /// Group name as written: trimmed, `None` when empty.
+    pub fn group_name(&self) -> Option<String> {
+        let name = self.group.trim();
+        (!name.is_empty()).then(|| name.to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -188,6 +196,17 @@ impl Default for Settings {
             legacy_imported: false,
         }
     }
+}
+
+/// Settings of the previous plugin (Lightroom plug-in preferences), as the
+/// plugin passes them on.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Legacy {
+    /// `MacDivePath`, possibly starting with `~`.
+    pub mac_dive_path: Option<String>,
+    /// `DisplayLogOrder`: `asc` or `desc`.
+    pub display_log_order: Option<String>,
 }
 
 impl Settings {
@@ -245,6 +264,34 @@ impl Settings {
         }
         if let Ok(next) = serde_json::from_value::<Self>(current) {
             *self = next;
+        }
+    }
+    /// Takes over the previous plugin's settings, once: its dive-log location
+    /// (when it is not the standard one) and its dive order. Never replaces a
+    /// setting already chosen in the app.
+    pub fn take_over(&mut self, legacy: &Legacy, home: &Path, standard_path: &Path) {
+        if self.legacy_imported {
+            return;
+        }
+        self.legacy_imported = true;
+        if self.source.path.is_none()
+            && let Some(path) = legacy.mac_dive_path.as_deref().map(str::trim)
+            && !path.is_empty()
+        {
+            let path = match path.strip_prefix("~/") {
+                Some(rest) => home.join(rest),
+                None => PathBuf::from(path),
+            };
+            if path != standard_path {
+                self.source.path = Some(path);
+            }
+        }
+        if self.dive_sort.is_none() {
+            self.dive_sort = match legacy.display_log_order.as_deref() {
+                Some("asc") => Some(DiveSort::Oldest),
+                Some("desc") => Some(DiveSort::Recent),
+                _ => None,
+            };
         }
     }
 }
@@ -363,7 +410,7 @@ mod tests {
         }));
         assert_eq!(s.units.depth, DepthChoice::Feet);
         assert_eq!(s.collections.parent, ["Trips"]);
-        assert_eq!(s.collections.group, "");
+        assert_eq!(s.collections.group_name(), None);
         assert!(s.depth_to_altitude, "untouched");
         assert!(!s.legacy_imported, "never patched");
         assert_eq!(s.version, CURRENT_VERSION);
@@ -382,5 +429,94 @@ mod tests {
         Settings::update(&dir, |s| s.depth_to_altitude = true).unwrap();
         assert!(Settings::load(&dir).depth_to_altitude);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn group_name_is_trimmed() {
+        let mut place = CollectionsPlace::default();
+        assert_eq!(place.group_name().as_deref(), Some("Dive Lens"));
+        place.group = "  Plongées 2026 ".into();
+        assert_eq!(place.group_name().as_deref(), Some("Plongées 2026"));
+        place.group = "   ".into();
+        assert_eq!(place.group_name(), None);
+    }
+
+    const HOME: &str = "/Users/diver";
+    const STANDARD: &str = "/Users/diver/Library/Application Support/MacDive/MacDive.sqlite";
+
+    fn legacy(path: Option<&str>, order: Option<&str>) -> Legacy {
+        Legacy {
+            mac_dive_path: path.map(Into::into),
+            display_log_order: order.map(Into::into),
+        }
+    }
+
+    #[test]
+    fn takes_over_the_previous_plugin_once() {
+        let mut s = Settings::default();
+        s.take_over(
+            &legacy(Some("~/Dropbox/MacDive.sqlite"), Some("asc")),
+            Path::new(HOME),
+            Path::new(STANDARD),
+        );
+        assert_eq!(
+            s.source.path.as_deref(),
+            Some(Path::new("/Users/diver/Dropbox/MacDive.sqlite"))
+        );
+        assert_eq!(s.dive_sort, Some(DiveSort::Oldest));
+        assert!(s.legacy_imported);
+        // Done once: later values are ignored.
+        s.source.path = None;
+        s.take_over(
+            &legacy(Some("/Other.sqlite"), Some("desc")),
+            Path::new(HOME),
+            Path::new(STANDARD),
+        );
+        assert_eq!(s.source.path, None);
+        assert_eq!(s.dive_sort, Some(DiveSort::Oldest));
+    }
+
+    #[test]
+    fn take_over_never_replaces_app_choices() {
+        let mut s = Settings {
+            source: Source {
+                kind: SourceKind::MacDive,
+                path: Some("/Chosen.sqlite".into()),
+            },
+            dive_sort: Some(DiveSort::Depth),
+            ..Settings::default()
+        };
+        s.take_over(
+            &legacy(Some("/Old.sqlite"), Some("asc")),
+            Path::new(HOME),
+            Path::new(STANDARD),
+        );
+        assert_eq!(s.source.path.as_deref(), Some(Path::new("/Chosen.sqlite")));
+        assert_eq!(s.dive_sort, Some(DiveSort::Depth));
+    }
+
+    #[test]
+    fn take_over_ignores_standard_and_empty_values() {
+        for (path, order) in [
+            (
+                Some("~/Library/Application Support/MacDive/MacDive.sqlite"),
+                Some("desc"),
+            ),
+            (Some(STANDARD), Some("sideways")),
+            (Some("  "), None),
+            (None, None),
+        ] {
+            let mut s = Settings::default();
+            s.take_over(&legacy(path, order), Path::new(HOME), Path::new(STANDARD));
+            assert_eq!(s.source.path, None, "{path:?}");
+            assert!(s.legacy_imported);
+        }
+        let mut s = Settings::default();
+        s.take_over(
+            &legacy(None, Some("desc")),
+            Path::new(HOME),
+            Path::new(STANDARD),
+        );
+        assert_eq!(s.dive_sort, Some(DiveSort::Recent));
     }
 }

@@ -18,7 +18,9 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use collections::{Choices, Period, Preview, Session};
-use lightroom::{ApplyOutcome, Command, End, Event, LinkFile, Status, Timing, WrittenCollection};
+use lightroom::{
+    ApplyOutcome, CollectionSet, Command, End, Event, LinkFile, Status, Timing, WrittenCollection,
+};
 use offsets::Offsets;
 use settings::{Settings, SourceKind};
 
@@ -60,6 +62,7 @@ fn change_settings(
         );
         if after.log_level != before.log_level {
             applog::set_level(after.log_level);
+            send_log_level(app, after.log_level);
         }
         let _ = app.emit("settings-changed", after.clone());
     }
@@ -190,6 +193,18 @@ async fn dive_profile(app: AppHandle, id: String) -> Result<Vec<Sample>, Error> 
 #[tauri::command]
 fn set_source_path(app: AppHandle, path: Option<PathBuf>) -> Result<Settings, String> {
     change_settings(&app, |s| s.source.path = path)
+}
+
+/// Tells the plugin what to write in its log (dropped when not connected:
+/// the level is sent again on connection).
+fn send_log_level(app: &AppHandle, level: settings::LogLevel) {
+    if let Some(state) = app.try_state::<Lightroom>() {
+        let _ = state
+            .commands
+            .lock()
+            .expect("lightroom commands")
+            .send(Command::SetLogLevel(level));
+    }
 }
 
 /// Last known state of the Lightroom link, and the way to send it requests.
@@ -482,9 +497,15 @@ async fn apply_collections(
             let state = app.state::<CollectionsState>();
             let session = state.session.lock().expect("collections");
             let session = session.as_ref().ok_or(CollectionsError::NoPhotos)?;
-            let request = session
+            let mut request = session
                 .request(&choices, units, |d| source.profile(&d.id))
                 .map_err(|detail| CollectionsError::Source { detail })?;
+            let settings = Settings::load(&config_dir(&app));
+            request.parent = settings.collections.parent.clone();
+            request.group = settings.collections.group_name();
+            if settings.depth_to_altitude {
+                request.copy_depth_to_altitude();
+            }
             let preview = session.preview(&choices);
             let empty: Vec<String> = preview
                 .dives
@@ -503,7 +524,17 @@ async fn apply_collections(
             .flat_map(|g| &g.photos)
             .filter(|p| p.photo_depth.is_some())
             .count();
-        let written = ask(&app, |reply| Command::ApplyCollections { request, reply })??;
+        let written = ask(&app, |reply| Command::ApplyCollections { request, reply })
+            .inspect_err(|e| log::warn!("collections not written: {e:?}"))?
+            .map_err(|outcome| {
+                log::warn!("collections refused by Lightroom: {outcome:?}");
+                CollectionsError::from(outcome)
+            })?;
+        log::info!(
+            "collections written: {} collections, {} photos ({with_depth} with depth)",
+            written.len(),
+            written.iter().map(|c| c.count).sum::<usize>()
+        );
         let dir = config_dir(&app);
         let mut offsets = Offsets::load(&dir);
         if let Some(session) = app
@@ -527,6 +558,16 @@ async fn apply_collections(
     })
     .await
     .expect("collections task failed")
+}
+
+/// The catalog's collection sets (Settings › Collections).
+#[tauri::command]
+async fn collection_sets(app: AppHandle) -> Result<Vec<CollectionSet>, CollectionsError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(ask(&app, |reply| Command::ListSets { reply })??)
+    })
+    .await
+    .expect("collection sets task failed")
 }
 
 /// Screen asked for on the command line (`--screen tag`), when Lightroom
@@ -574,6 +615,21 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                 &commands,
                 &mut |event| match event {
                     Event::Status(mut status) => {
+                        let was_connected = app
+                            .state::<Lightroom>()
+                            .status
+                            .lock()
+                            .expect("lightroom state")
+                            .connected;
+                        if status.connected && !was_connected {
+                            log::info!(
+                                "Lightroom {} connected, plugin {}, catalog {}",
+                                status.lightroom_version.as_deref().unwrap_or("?"),
+                                status.plugin_version.as_deref().unwrap_or("?"),
+                                status.catalog.as_deref().unwrap_or("?")
+                            );
+                            send_log_level(&app, Settings::load(&dir).log_level);
+                        }
                         let ranges: Vec<_> = status
                             .selection_cameras
                             .iter()
@@ -592,6 +648,16 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                         let _ = app.emit("lightroom-status", status);
                     }
                     Event::Show(screen) => show_screen(&app, screen),
+                    Event::Legacy(legacy) => {
+                        if let Ok(home) = app.path().home_dir() {
+                            let standard = MacDive::default_path(&home);
+                            let taken =
+                                change_settings(&app, |s| s.take_over(&legacy, &home, &standard));
+                            if let Err(e) = taken {
+                                log::error!("previous plugin's settings not taken over: {e}");
+                            }
+                        }
+                    }
                     Event::Progress { done, total } => {
                         let _ = app.emit("apply-progress", (done, total));
                     }
@@ -657,7 +723,8 @@ pub fn run() {
             find_collection_photos,
             collections_preview,
             suggest_offsets,
-            apply_collections
+            apply_collections,
+            collection_sets
         ])
         .setup(|app| {
             let settings = Settings::load(&config_dir(app.handle()));

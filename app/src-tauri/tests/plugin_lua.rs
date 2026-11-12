@@ -359,8 +359,10 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
         depth_m: 10.0,
         temp_c: Some(25.0),
     };
-    let request = CollectionsRequest {
+    let mut request = CollectionsRequest {
         search: 3,
+        parent: vec!["Trips".into(), "2026".into()],
+        group: Some("Dive Lens".into()),
         groups: vec![CollectionGroup {
             collection: "700 - Coral Garden".into(),
             dive: DiveTags::new(&dive, Units::default()),
@@ -371,6 +373,7 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
             ],
         }],
     };
+    request.copy_depth_to_altitude();
     let lua = lua();
     lua.globals()
         .set("input", serde_json::to_string(&request).unwrap())
@@ -380,8 +383,9 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
             r#"
             local Json = require "Json"
             local Tagging = require "Tagging"
-            local groups = assert(Tagging.planCollections(Json.decode(input), function(iso) return iso end))
-            local lines = {}
+            local groups, place = Tagging.planCollections(Json.decode(input), function(iso) return iso end)
+            assert(groups, place)
+            local lines = { "place " .. table.concat(place.parent, ">") .. " / " .. tostring(place.group) }
             for _, g in ipairs(groups) do
                 lines[#lines + 1] = "collection " .. g.collection .. " common " .. #g.common
                 for _, p in ipairs(g.photos) do
@@ -391,6 +395,13 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
                 end
             end
             assert(Tagging.planCollections({ groups = {} }) == nil)
+            -- Root without a group set; a blank set name is no set.
+            local request = Json.decode(input)
+            request.parent, request.group = Json.emptyArray, ""
+            local _, root = Tagging.planCollections(request, tostring)
+            assert(#root.parent == 0 and root.group == nil)
+            request.parent = { "Trips", "" }
+            assert(Tagging.planCollections(request, tostring) == nil)
             assert(Tagging.planCollections({ groups = { { collection = "x" } } }, tostring) == nil)
             return lines
             "#,
@@ -400,17 +411,48 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
     assert_eq!(
         out,
         [
+            "place Trips>2026 / Dive Lens",
             "collection 700 - Coral Garden common 11",
             "11 PhotoDepth=10.0 m",
             "11 PhotoTemp=25.0°C",
             "11 PhotoElapsed=02:40",
             "11 ClockOffset=+04:01",
-            // At the surface: per-photo values cleared, offset kept.
+            "11 gpsAltitude=-10",
+            // At the surface: per-photo values cleared, offset kept, altitude
+            // untouched.
             "12 PhotoDepth=nil",
             "12 PhotoTemp=nil",
             "12 PhotoElapsed=nil",
             "12 ClockOffset=-00:30",
         ]
+    );
+}
+
+#[test]
+fn collection_sets_are_found_by_path_and_listed() {
+    let lua = lua();
+    run(
+        &lua,
+        r#"
+        local Json = require "Json"
+        local Tagging = require "Tagging"
+        local function set(name, children)
+            return {
+                getName = function() return name end,
+                getChildCollectionSets = function() return children or {} end,
+            }
+        end
+        local y2026 = set("2026")
+        local catalog = set(nil, { set("Dive Lens"), set("Trips", { set("2025"), y2026 }) })
+        assert(Tagging.findSet(catalog, {}) == catalog)
+        assert(Tagging.findSet(catalog, { "Trips", "2026" }) == y2026)
+        assert(Tagging.findSet(catalog, { "Trips", "2027" }) == nil)
+        assert(Tagging.findSet(catalog, { "2026" }) == nil, "only from the root")
+        local tree = Tagging.describeSets(catalog, Json.emptyArray)
+        assert(Json.encode(tree) == '[{"children":[],"name":"Dive Lens"},'
+            .. '{"children":[{"children":[],"name":"2025"},{"children":[],"name":"2026"}],"name":"Trips"}]',
+            Json.encode(tree))
+        "#,
     );
 }
 
@@ -425,6 +467,8 @@ fn large_collections_request_is_framed_quickly() {
         .collect();
     let request = CollectionsRequest {
         search: 1,
+        parent: Vec::new(),
+        group: None,
         groups: vec![CollectionGroup {
             collection: "700 - Coral Garden".into(),
             dive: DiveTags::new(&dive, Units::default()),
