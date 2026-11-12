@@ -26,16 +26,18 @@ V1 sources: MacDive (SQLite, macOS) and Subsurface (XML file and git-based stora
 - `plugin/DiveLens.lrdevplugin/`: the Lua Lightroom plugin, shipped as plain source (no compile step). Never port `LicenseHelper.lua`, compiled bytecode or the `luac5.1` binary from the legacy repo, and never copy Adobe SDK files.
 - Link app ↔ plugin: the plugin listens on two local sockets (one per direction, LrSocket) and writes their ports and a token to `lightroom-link.json` in the app's settings folder; the app connects, says hello with the token, and receives the live selection. One JSON object per line. Plugin side `Link.lua`, app side `app/src-tauri/src/lightroom.rs`.
 - The plugin's pure-Lua parts (JSON, framing, manifest, fields) are tested under Lua 5.1 from `app/src-tauri/tests/plugin_lua.rs`.
-- Cargo workspace at the root: one `target/` and one `Cargo.lock` for both crates.
+- Cargo workspace at the root: one `target/` and one `Cargo.lock` for its three crates (`core`, `libdivecomputer-sys`, `app/src-tauri`).
 
 App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where app settings live). Version is set once in `app/package.json`.
 
 ## Commands
 
+- After cloning: `git submodule update --init` (the core does not build without libdivecomputer)
 - Core tests: `cargo test -p divelens-core`
 - App and plugin tests: `cargo test -p divelens` (needs `app/dist`, i.e. one front-end build)
 - Plugin in Lightroom (dev): Plug-in Manager › Add › `plugin/DiveLens.lrdevplugin`. Its menus launch `target/release/bundle/macos/DiveLens.app` (macOS) or `target/release/divelens.exe` (Windows) when no app ships in the plugin folder; a running dev window connects by itself. Plugin log: `DiveLens.log` in Lightroom's log folder (macOS `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/`).
-- Lint: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings`
+- Lint: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` (the app crate needs `app/dist`; core only: `cargo clippy -p divelens-core -p libdivecomputer-sys --all-targets -- -D warnings`)
+- Front-end type check (from `app/`): `npm run build` (runs `tsc`, then produces `app/dist`)
 - Front-end tests (from `app/`): `npm test` (runs in a UTC+14 time zone on purpose: dive times are wall-clock and must never shift)
 - Check the MacDive reader against a real database (local only, output is personal data): `cargo run -p divelens-core --example macdive_dump -- <path> [dive number]`
 - App build (from `app/`): `npm ci`, then `npm run tauri build -- --bundles app` (macOS, skips the DMG) or `-- --no-bundle`
@@ -51,3 +53,14 @@ App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where a
 
 - Test data must be fictional or anonymized.
 - Signing keys and credentials live in GitHub secrets or the owner's password manager, never in the repo.
+
+## Git & GitHub
+
+- Never push, open a PR, merge, force-push or rewrite pushed history unless I ask explicitly. Never merge without green CI.
+- CI runs on every push to a PR and again on merge; it is free (public repository), so there is no need to batch pushes.
+- One branch per coherent change, never work on `main`. Branch names: `<type>/<short-kebab-slug>` with a commit type, e.g. `feat/tag-selection`, `fix/12-empty-profile` (issue number when there is one).
+- Commits follow Conventional Commits 1.0.0: `<type>(<scope>): <description>`, imperative, lower-case, no trailing period, at most 72 characters. Types: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `style`, `revert`. Optional scope: `core`, `macdive`, `subsurface`, `app`, `plugin`, `link`, `spec`, `deps`. PR titles use the same format (PRs are squash-merged).
+- Don't mix unrelated changes in one commit; point out unrelated changes in the working tree instead of committing them.
+- Never commit real dive logs or databases (fictional fixtures only), output from a real database, build output or generated files. Never paste real dive data into a PR or issue: the repository is public.
+- Never move the `third_party/libdivecomputer` submodule unless I ask: it is pinned to a validated commit.
+- Before committing, run the checks for what changed (see Commands): `cargo fmt --all --check` always; core clippy and tests for `core/`; `npm test`, `npm run build`, then app clippy and tests for the app, front end or plugin. Fix failures; never hide or skip one.

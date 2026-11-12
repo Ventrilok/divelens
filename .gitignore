@@ -33,3 +33,6 @@ app/src-tauri/gen/
 .idea/
 *.code-workspace
 .claude/settings.local.json
+
+# Personal dev tooling
+divelens-session.sh
