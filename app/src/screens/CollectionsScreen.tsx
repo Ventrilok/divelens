@@ -213,6 +213,7 @@ function ResultView({
   dives,
   choices,
   cameras,
+  altitude,
   onBack,
   onRetry,
 }: {
@@ -220,6 +221,8 @@ function ResultView({
   dives: Dive[];
   choices: CollectionChoices;
   cameras: Camera[];
+  /** Depth was copied to GPS altitude, which Lightroom's Undo does not revert. */
+  altitude: boolean;
   onBack: () => void;
   onRetry: (ids: string[]) => void;
 }) {
@@ -277,7 +280,7 @@ function ResultView({
             <span>{t("coll.result.empty", { dive: diveName(d) })}</span>
           </div>
         ))}
-        <p className="muted small">{t("coll.undoHint")}</p>
+        <p className="muted small">{t(altitude ? "coll.undoHintAltitude" : "coll.undoHint")}</p>
         <div className="actions">
           <button type="button" className="btn btn-p" onClick={onBack}>
             {t("coll.result.back")}
@@ -453,6 +456,7 @@ export function CollectionsScreen({
         dives={dives}
         choices={run.choices}
         cameras={run.cameras}
+        altitude={settings.depthToAltitude}
         onBack={onChooseDives}
         onRetry={(ids) => {
           setRun({ state: "idle" });
@@ -691,7 +695,7 @@ export function CollectionsScreen({
             <span className="small">{blocker ?? t("coll.writes", { place })}</span>
             <span className="muted small">
               {t("coll.writesNote", { units, altitude: t(settings.depthToAltitude ? "coll.on" : "coll.off") })} ·{" "}
-              {t("coll.undoShort")}
+              {t(settings.depthToAltitude ? "coll.undoShortAltitude" : "coll.undoShort")}
             </span>
           </div>
         )}
