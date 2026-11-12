@@ -7,7 +7,6 @@ import {
   onLightroomStatus,
   onSettingsChanged,
   onShowScreen,
-  setSourcePath,
   updateSettings,
 } from "./api";
 import { unitsInUse } from "./collectionPlace";
@@ -68,7 +67,9 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   setLanguage(settings.language);
 
   const change = useCallback((patch: Partial<Settings>) => {
-    setSettings((s) => ({ ...s, ...patch }));
+    // A new dive log is read once its location is saved, not before (the
+    // back end reads the saved settings).
+    if (!patch.source) setSettings((s) => ({ ...s, ...patch }));
     updateSettings(patch)
       .then((s) => {
         setSettings(s);
@@ -107,12 +108,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
           lr={lr}
           info={info}
           error={saveError}
-          onChange={(patch) => {
-            if (patch.source) {
-              // Through its own command: the dive log is read again afterwards.
-              setSourcePath(patch.source.path).then(setSettings, (e: unknown) => setSaveError(String(e)));
-            } else change(patch);
-          }}
+          onChange={change}
         />
       )}
       {screen !== "settings" && state.status === "loading" && (

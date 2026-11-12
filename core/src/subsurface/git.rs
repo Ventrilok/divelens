@@ -101,6 +101,13 @@ fn pick(repo: &Repository, path: &Path) -> Result<(String, ObjectId)> {
     }
 }
 
+/// Branch and tree read; changes with every save in Subsurface.
+pub(super) fn fingerprint(path: &Path) -> Option<String> {
+    let repo = gix::open(path).ok()?;
+    let (branch, tree) = pick(&repo, path).ok()?;
+    Some(format!("{branch}/{tree}"))
+}
+
 pub(super) fn read(path: &Path) -> Result<(String, RawLog)> {
     let repo = gix::open(path).map_err(|_| Error::NotADiveLog(path.to_path_buf()))?;
     let (branch, root) = pick(&repo, path)?;

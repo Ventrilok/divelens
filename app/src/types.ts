@@ -23,6 +23,8 @@ export interface Dive {
   rating: number | null;
   site: Site;
   hasProfile: boolean;
+  /** Marked invalid in the dive log (Subsurface): listed with a badge. */
+  invalid: boolean;
 }
 
 export interface Sample {
@@ -38,7 +40,10 @@ export interface Capabilities {
   profile: boolean;
 }
 
-export type SourceKind = "macDive";
+export type SourceKind = "macDive" | "subsurface";
+
+/** How a Subsurface log is stored. */
+export type Storage = { kind: "xml" } | { kind: "git"; branch: string };
 
 export interface SourceInfo {
   kind: SourceKind;
@@ -48,6 +53,8 @@ export interface SourceInfo {
 
 export interface DiveLog {
   source: SourceInfo;
+  /** Subsurface only: file or git storage. */
+  storage: Storage | null;
   capabilities: Capabilities;
   dives: Dive[];
   /** Every named site of the log, including sites with no dive yet. */
@@ -62,6 +69,8 @@ export type ReaderError =
   | { kind: "notFound"; detail: string }
   | { kind: "notADiveLog"; detail: string }
   | { kind: "database"; detail: string }
+  | { kind: "oldFormat"; detail: string }
+  | { kind: "severalLogs"; detail: string }
   | { kind: "unknownDive"; detail: string }
   | { kind: "badProfile"; detail: string };
 
@@ -184,7 +193,8 @@ export type Sort = "recent" | "oldest" | "depth";
 
 export interface Settings {
   version: number;
-  source: { kind: SourceKind; path: string | null };
+  /** Application, and the location chosen for each (null: standard). */
+  source: { kind: SourceKind; macDivePath: string | null; subsurfacePath: string | null };
   units: { depth: "source" | "m" | "ft"; temp: "source" | "c" | "f" };
   language: "system" | "en" | "fr";
   depthToAltitude: boolean;

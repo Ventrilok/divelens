@@ -16,6 +16,7 @@ function dive(p: Partial<Dive> & { id: string }): Dive {
     rating: null,
     site: { id: null, name: null, location: null, country: null, lat: null, lon: null },
     hasProfile: false,
+    invalid: false,
     ...p,
   };
 }

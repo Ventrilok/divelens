@@ -2,13 +2,13 @@
 // the app follows it live (language, units, dive log location).
 
 import { useEffect, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { collectionSets } from "../api";
 import { flattenSets, pathKey, placeLabel, setExists } from "../collectionPlace";
 import { Icon } from "../components/Icon";
 import { systemLang, t, tn } from "../i18n";
-import type { AppInfo, CollectionSet, DiveLog, LightroomStatus, LoadError, Settings } from "../types";
+import { chooseLog, errorText, sourceName } from "../sourceText";
+import type { AppInfo, CollectionSet, DiveLog, LightroomStatus, LoadError, Settings, SourceKind } from "../types";
 
 const SOURCE_CODE = "https://github.com/Ventrilok/divelens";
 
@@ -51,7 +51,17 @@ function Segmented<T extends string>({
   );
 }
 
-function SourceSection({ logState, info, onChange }: { logState: LogState; info: AppInfo | null; onChange: (p: Patch) => void }) {
+function SourceSection({
+  settings,
+  logState,
+  info,
+  onChange,
+}: {
+  settings: Settings;
+  logState: LogState;
+  info: AppInfo | null;
+  onChange: (p: Patch) => void;
+}) {
   if (info?.os === "windows") {
     return (
       <section className="card" aria-labelledby="s-src">
@@ -65,38 +75,37 @@ function SourceSection({ logState, info, onChange }: { logState: LogState; info:
     );
   }
   const source = logState.status === "ok" ? logState.log.source : logState.status === "error" ? logState.failure.source : null;
-
-  const choose = async () => {
-    const dir = source?.path.replace(/[/\\][^/\\]*$/, "");
-    const picked = await open({
-      multiple: false,
-      directory: false,
-      defaultPath: dir || undefined,
-      filters: [{ name: t("err.dialogFilter"), extensions: ["sqlite"] }],
-    });
-    if (typeof picked === "string") onChange({ source: { kind: "macDive", path: picked } });
+  // The application in use (on Windows, always Subsurface).
+  const kind: SourceKind = source?.kind ?? settings.source.kind;
+  const ss = kind === "subsurface";
+  const setPath = (path: string | null) =>
+    onChange({ source: { ...settings.source, [ss ? "subsurfacePath" : "macDivePath"]: path } });
+  const choose = async (folder: boolean) => {
+    const picked = await chooseLog(kind, source?.path, folder);
+    if (picked) setPath(picked);
   };
 
   let state: React.ReactNode;
   if (logState.status === "loading") {
-    state = <span className="set-state">{t("settings.baseLoading")}</span>;
+    state = <span className="set-state muted">{t(ss ? "settings.ssLoading" : "settings.baseLoading")}</span>;
   } else if (logState.status === "ok") {
+    const counts = {
+      dives: tn("source.dives", logState.log.dives.length),
+      sites: tn("settings.sites", logState.log.sites.length),
+    };
+    const storage = logState.log.storage;
+    const key = storage?.kind === "git" ? "settings.gitOk" : storage?.kind === "xml" ? "settings.xmlOk" : "settings.baseOk";
     state = (
       <span className="set-state">
         <Icon name="check" size={14} className="accent" />
-        {t("settings.baseOk", {
-          dives: tn("source.dives", logState.log.dives.length),
-          sites: tn("settings.sites", logState.log.sites.length),
-        })}
+        {t(key, counts)}
       </span>
     );
   } else {
-    const kind = logState.failure.error.kind;
-    const title = kind === "notFound" || kind === "notADiveLog" ? t(`err.${kind}.title`) : t("err.database.title");
     state = (
       <span className="set-state set-warn">
         <Icon name="warn" size={14} />
-        {title}
+        {errorText(kind, logState.failure.error, "title")}
       </span>
     );
   }
@@ -107,25 +116,40 @@ function SourceSection({ logState, info, onChange }: { logState: LogState; info:
         {t("settings.source")}
       </h2>
       <Row title={t("settings.app")} hint={t("settings.appHint")}>
-        <select className="inp set-select" aria-label={t("settings.app")} value="macDive" onChange={() => {}}>
-          <option value="macDive">{t("source.macDive")}</option>
-          <option value="subsurface" disabled>
-            {t("settings.soon", { name: "Subsurface" })}
-          </option>
+        <select
+          className="inp set-select"
+          aria-label={t("settings.app")}
+          value={kind}
+          onChange={(e) => onChange({ source: { ...settings.source, kind: e.target.value as SourceKind } })}
+        >
+          <option value="macDive">{sourceName("macDive")}</option>
+          <option value="subsurface">{sourceName("subsurface")}</option>
         </select>
       </Row>
-      <Row title={t("settings.base")} hint={t("settings.baseHint")} top>
+      <Row title={t(ss ? "settings.ssBase" : "settings.base")} hint={t(ss ? "settings.ssBaseHint" : "settings.baseHint")} top>
         <div className="set-path">
           <div className="set-path-row">
-            <input className="inp" aria-label={t("settings.base")} value={source?.path ?? ""} readOnly />
-            <button type="button" className="btn btn-s" onClick={choose}>
-              {t("settings.choose")}
-            </button>
+            <input className="inp" aria-label={t(ss ? "settings.ssBase" : "settings.base")} value={source?.path ?? ""} readOnly />
+            {!ss && (
+              <button type="button" className="btn btn-s" onClick={() => choose(false)}>
+                {t("settings.choose")}
+              </button>
+            )}
           </div>
+          {ss && (
+            <div className="set-path-row">
+              <button type="button" className="btn btn-s" onClick={() => choose(false)}>
+                {t("errSs.chooseFile")}
+              </button>
+              <button type="button" className="btn btn-s" onClick={() => choose(true)}>
+                {t("errSs.chooseFolder")}
+              </button>
+            </div>
+          )}
           <div className="set-path-row set-path-state">
             {state}
             {source && !source.isDefaultPath && (
-              <button type="button" className="btn btn-g btn-small" onClick={() => onChange({ source: { kind: "macDive", path: null } })}>
+              <button type="button" className="btn btn-g btn-small" onClick={() => setPath(null)}>
                 {t("settings.standard")}
               </button>
             )}
@@ -233,10 +257,12 @@ export function SettingsScreen({
   error: string | null;
   onChange: (patch: Patch) => void;
 }) {
-  const sourceName = t("source.macDive");
+  const appName = sourceName(
+    logState.status === "ok" ? logState.log.source.kind : logState.status === "error" ? logState.failure.source.kind : settings.source.kind,
+  );
   const sourceUnits = logState.status === "ok" ? logState.log.sourceUnits : null;
   const asSource = (unit: string | null) =>
-    unit ? t("settings.asSource", { source: sourceName, unit }) : t("settings.asSourceBare", { source: sourceName });
+    unit ? t("settings.asSource", { source: appName, unit }) : t("settings.asSourceBare", { source: appName });
   const systemName = t(`lang.${systemLang()}`);
 
   return (
@@ -250,7 +276,7 @@ export function SettingsScreen({
           </p>
         )}
 
-        <SourceSection logState={logState} info={info} onChange={onChange} />
+        <SourceSection settings={settings} logState={logState} info={info} onChange={onChange} />
 
         <section className="card" aria-labelledby="s-aff">
           <h2 id="s-aff" className="sec">

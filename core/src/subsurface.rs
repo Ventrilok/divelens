@@ -130,6 +130,18 @@ impl Subsurface {
         }
     }
 
+    /// Changes whenever the log at `path` changes (file date and size, or
+    /// the git commit read); `None` when it cannot be told. Lets the app keep
+    /// an opened log instead of reading it again for every request.
+    pub fn fingerprint(path: &Path) -> Option<String> {
+        if path.is_dir() {
+            git::fingerprint(path)
+        } else {
+            let m = std::fs::metadata(path).ok()?;
+            Some(format!("{:?}/{}", m.modified().ok()?, m.len()))
+        }
+    }
+
     pub fn storage(&self) -> &Storage {
         &self.storage
     }

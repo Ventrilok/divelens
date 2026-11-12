@@ -85,7 +85,14 @@ export function DiveDetail({ dive, units, capabilities }: { dive: Dive | null; u
   return (
     <aside className="card detail" aria-label={label}>
       <div className="detail-head">
-        <span className="lbl">{label}</span>
+        <span className="lbl">
+          {label}
+          {dive.invalid && (
+            <span className="badge badge-invalid" title={t("list.invalidHint")}>
+              {t("list.invalid")}
+            </span>
+          )}
+        </span>
         <h2>{dive.site.name ?? t("detail.unknownSite")}</h2>
         {siteSubtitle(dive) && <span className="detail-place">{siteSubtitle(dive)}</span>}
         <span className="muted small">{formatDiveSpan(dive.start, dive.end)}</span>
