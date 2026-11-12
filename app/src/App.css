@@ -223,9 +223,12 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .cam-n span { font-size: 12px; color: var(--muted); }
 .ign { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); cursor: pointer; }
 .cam-c { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.cam-steps { display: flex; flex-wrap: wrap; gap: 6px; }
-.off { min-width: 104px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.cam-tag { padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: #e6f5fc; font-size: 11px; font-weight: 600; }
+.slider { flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px; }
+.slider input { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.slider input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.slider-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.off-field { width: 92px; text-align: center; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cam-tag { align-self: flex-start; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: #e6f5fc; font-size: 11px; font-weight: 600; }
 .step { min-width: 52px; min-height: 34px; padding: 0 8px; border-radius: 8px; background: var(--btn); border: 1px solid var(--line-strong); color: var(--text); font-weight: 600; font-size: 13px; cursor: pointer; font-variant-numeric: tabular-nums; }
 .step:hover:not(:disabled) { background: var(--btn-hover); }
 .step:disabled { opacity: 0.5; cursor: not-allowed; }

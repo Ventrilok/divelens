@@ -8,10 +8,13 @@ import { applyCollections, collectionsPreview, findCollectionPhotos, onApplyProg
 import {
   clampMargin,
   clampOffset,
-  formatOffset,
   initialOffsets,
   MARGIN_STEP_MIN,
   MAX_MARGIN_MIN,
+  offsetField,
+  parseOffset,
+  SLIDER_RANGE_MIN,
+  SLIDER_STEP_MIN,
 } from "../cameras";
 import { Icon } from "../components/Icon";
 import { formatDay, formatRange, formatRowSpan } from "../format";
@@ -70,6 +73,46 @@ function diveName(d: Dive): string {
   return [d.number !== null ? String(d.number) : null, d.site.name].filter(Boolean).join(" ");
 }
 
+/** Offset typed to the minute; arrows add or remove a minute. */
+function OffsetField({ offset, label, onOffset }: { offset: number; label: string; onOffset: (min: number) => void }) {
+  const [text, setText] = useState(offsetField(offset));
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!editing) setText(offsetField(offset));
+  }, [offset, editing]);
+  const commit = () => {
+    const value = parseOffset(text);
+    if (value !== null) onOffset(value);
+    else setText(offsetField(offset));
+    setEditing(false);
+  };
+  const bad = editing && parseOffset(text) === null;
+  return (
+    <input
+      className="inp off-field"
+      aria-label={label}
+      aria-invalid={bad}
+      value={text}
+      onFocus={() => setEditing(true)}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        else if (e.key === "Escape") {
+          setText(offsetField(offset));
+          setEditing(false);
+          e.currentTarget.blur();
+        } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          e.preventDefault();
+          const next = offset + (e.key === "ArrowUp" ? 1 : -1);
+          onOffset(next);
+          setText(offsetField(clampOffset(next)));
+        }
+      }}
+    />
+  );
+}
+
 function CameraCard({
   camera,
   offset,
@@ -123,29 +166,30 @@ function CameraCard({
       ) : (
         <>
           <div className="cam-c">
-            <span className="off" aria-live="polite">
-              {formatOffset(offset)}
-            </span>
-            {remembered && <span className="cam-tag">{t("coll.remembered")}</span>}
-            <span className="cam-steps">
-              <button type="button" className="step" onClick={() => onOffset(offset - 60)}>
-                −1 h
-              </button>
-              <button type="button" className="step" onClick={() => onOffset(offset - 1)}>
-                −1 min
-              </button>
-              <button type="button" className="step" onClick={() => onOffset(offset + 1)}>
-                +1 min
-              </button>
-              <button type="button" className="step" onClick={() => onOffset(offset + 60)}>
-                +1 h
-              </button>
-              <button type="button" className="mini" onClick={onSuggest}>
-                <Icon name="spark" size={15} />
-                {t("coll.suggest")}
-              </button>
-            </span>
+            <div className="slider">
+              <input
+                type="range"
+                min={-SLIDER_RANGE_MIN}
+                max={SLIDER_RANGE_MIN}
+                step={SLIDER_STEP_MIN}
+                value={Math.max(-SLIDER_RANGE_MIN, Math.min(SLIDER_RANGE_MIN, offset))}
+                aria-label={t("coll.offset", { camera: name })}
+                aria-valuetext={offsetField(offset)}
+                onChange={(e) => onOffset(Number(e.target.value))}
+              />
+              <div className="slider-scale" aria-hidden="true">
+                <span>−14 h</span>
+                <span>0</span>
+                <span>+14 h</span>
+              </div>
+            </div>
+            <OffsetField offset={offset} label={t("coll.offsetField", { camera: name })} onOffset={onOffset} />
+            <button type="button" className="mini" onClick={onSuggest}>
+              <Icon name="spark" size={15} />
+              {t("coll.suggest")}
+            </button>
           </div>
+          {remembered && <span className="cam-tag">{t("coll.remembered")}</span>}
           <div className={`cam-f ${warn ? "warn" : ""}`}>
             <span className="bar">
               <span className="bar-fill" style={{ width: `${total > 0 ? (100 * inDives) / total : 0}%` }} />
