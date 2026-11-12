@@ -81,8 +81,8 @@ Application DiveLens (Rust + Tauri)
 | Rating | note de la plongée | étoiles |
 
 - Les champs Lightroom standard remplis : **pays** ← pays du site, **ville** ← lieu du site, **lieu** ← nom du site, **GPS** ← coordonnées du site.
-- Le groupe de collections **« Dive Lens »** et le nom des collections **« numéro – site »**.
-- Les réglages existants : emplacement de la base MacDive, ordre d'affichage, niveau de journal. Le réglage « nombre de plongées affichées » est **supprimé** : c'était un contournement de la lenteur de Lua et Lightroom. **[Décidé]**
+- Le groupe de collections **« Dive Lens »** et le nom des collections **« numéro – site »**. « Dive Lens » (avec une espace) reste l'emplacement **par défaut** ; l'utilisateur peut en choisir un autre dans les réglages (F2). **[Décidé, 2026-11-12]**
+- Les réglages existants : emplacement de la base MacDive et ordre d'affichage, repris automatiquement (F2). Le niveau de journal de l'ancien plugin n'est pas repris : il était ignoré (journal toujours au maximum). Le réglage « nombre de plongées affichées » est **supprimé** : c'était un contournement de la lenteur de Lua et Lightroom. **[Décidé]**
 
 Les nouveaux champs (section 7) **s'ajoutent** sans rien renommer.
 
@@ -100,23 +100,33 @@ Critères d'acceptation :
 
 Tous les réglages sont gérés **dans l'application**. **[Décidé]** Le gestionnaire de modules externes de Lightroom n'affiche que la version et un bouton pour ouvrir DiveLens.
 
-Au premier lancement, l'application reprend automatiquement les réglages existants du plugin actuel : emplacement de la base, ordre d'affichage, niveau de journal. L'utilisateur n'a rien à ressaisir. **[Décidé]**
+Au premier lancement, l'application reprend automatiquement les réglages existants du plugin actuel : emplacement de la base et ordre d'affichage. L'utilisateur n'a rien à ressaisir. **[Décidé]** Le nouveau plugin garde le même identifiant, il lit donc directement les réglages de l'ancien et les transmet à l'application à la connexion. La reprise n'a lieu qu'une fois, et ne remplace jamais un réglage déjà choisi dans l'application. **[Décidé, 2026-11-12]**
 
+**Écran Réglages [Décidé, 2026-11-12]** — sections, dans l'ordre : Carnet de plongée, Affichage, Écriture sur les photos, Collections, Diagnostic, À propos. Chaque modification est enregistrée immédiatement, sans bouton « Enregistrer ». Les sections « Sauvegarde des réglages » (F11) et « Mises à jour » (F13) de la maquette sont masquées tant que ces fonctions n'existent pas.
 
-- Source de plongée : MacDive (Mac) ou Subsurface (Mac et Windows). Emplacement pré-rempli avec l'emplacement standard de l'application choisie, modifiable via un sélecteur. Pas de recherche automatique ailleurs sur le disque. **[Décidé]**
-- Ordre d'affichage des plongées (croissant / décroissant). **[Proposé : conservé]**
-- Niveau de journal et bouton « Afficher le journal ». **[Proposé : conservé]**
-- Profondeur copiée dans l'altitude (voir F7). **[Décidé]** Désactivée tant que l'écran Réglages n'existe pas. **[Décidé, 2026-11-12]**
-- « Inclure les photos prises en surface » (marge), valeur par défaut : **0 min**. **[Décidé]** Elle se règle sur l'écran « Créer les collections » (F5). **[Décidé, 2026-11-12]**
+- **Source de plongée** : MacDive (Mac) ou Subsurface (Mac et Windows). Emplacement pré-rempli avec l'emplacement standard de l'application choisie, modifiable via un sélecteur. Pas de recherche automatique ailleurs sur le disque. **[Décidé]**
+  - Tant que le lecteur Subsurface n'existe pas, il apparaît grisé avec la mention « bientôt ». Sur Windows, sans Subsurface, l'écran indique qu'aucune source n'est disponible sur ce système. **[Décidé, 2026-11-12]**
+  - Sous l'emplacement : état de la base (« Base valide · N plongées · N sites », ou le problème rencontré), « Choisir… » et, si l'emplacement n'est pas le standard, « Emplacement standard ». **[Décidé, 2026-11-12]**
+- **Ordre d'affichage des plongées** : pas de ligne dans Réglages. La liste mémorise le dernier ordre choisi (récentes, anciennes, profondeur) et le retrouve au lancement suivant ; il vaut pour Plongées et Tagger la sélection, qui partagent la même liste. L'ancien réglage (croissant / décroissant) sert de valeur de départ. **[Décidé, 2026-11-12]**
+- **Niveau de journal** : « Normal » ou « Détaillé », et bouton « Afficher le journal » (F10). **[Décidé, 2026-11-12]**
+- **Profondeur copiée dans l'altitude** (voir F7), désactivée par défaut. **[Décidé]**
+- « Inclure les photos prises en surface » (marge) : **pas de ligne dans Réglages**. Elle se règle sur l'écran « Créer les collections » (F5), repart de **0 min** à chaque fois et n'est pas mémorisée : une marge oubliée ferait entrer en silence des photos du bateau dans les collections. **[Décidé, 2026-11-12]**
 - **Unités** : profondeur en mètres ou en pieds, température en °C ou en °F. **[Décidé]** Elles s'appliquent à l'affichage dans l'application et aux valeurs écrites dans les champs DiveLens. L'altitude GPS (F7) reste toujours en mètres, c'est la norme du champ. Les photos déjà taguées gardent l'unité en vigueur au moment de l'application. **[Proposé]**
-  - **Tant que l'écran Réglages n'existe pas [Décidé, 2026-11-12]** : les unités sont reprises des **préférences de l'application de plongée** choisie, pas du carnet (qui stocke toujours en métrique). Lecture seule, comme le carnet. Le futur écran Réglages pourra les modifier.
+  - **Trois choix par unité [Décidé, 2026-11-12]** : « Comme MacDive » (valeur par défaut, avec l'unité qui en résulte entre parenthèses), ou forcée (mètres / pieds, °C / °F). Deux réglages séparés, car MacDive a un réglage « canadien » (pieds et °C).
+  - « Comme l'application de plongée » reprend les **préférences de l'application de plongée** choisie, pas du carnet (qui stocke toujours en métrique). Lecture seule, comme le carnet.
     - MacDive : préférence globale « unités » de MacDive : 0 = m et °C, 1 = ft et °F, 2 (canadien) = ft et °C ; toute autre valeur = m et °C.
     - Subsurface : ses réglages séparés de profondeur et de température (préférences sur Mac, registre sur Windows) ; absents = valeurs par défaut de Subsurface (métrique).
     - Préférences introuvables (application absente, carnet copié d'un autre ordinateur) : m et °C.
-- **Langue** de l'interface : anglais et français en V1, ouverte à d'autres langues. Par défaut la langue du système, modifiable dans les réglages. **[Décidé : multilingue ; Proposé : EN + FR, langue du système]**
+- **Langue** de l'interface : anglais et français en V1, ouverte à d'autres langues. Par défaut la langue du système, modifiable dans les réglages. **[Décidé : multilingue ; Proposé : EN + FR, langue du système]** Le changement est immédiat, sans redémarrage. Il ne concerne que l'application : les menus Lightroom et les noms des champs DiveLens suivent la langue de Lightroom. **[Décidé, 2026-11-12]**
+- **Emplacement des collections [Décidé, 2026-11-12]** : où « Créer les collections » range les collections, en deux réglages.
+  - « Placer dans » : la racine du catalogue, ou un ensemble de collections existant, choisi dans l'arborescence du catalogue (il faut que Lightroom soit connecté pour la parcourir).
+  - « Regrouper dans l'ensemble » : un nom, **« Dive Lens »** par défaut (section 4). L'ensemble est créé dans l'emplacement choisi s'il n'existe pas. Vide : les collections vont directement dans l'emplacement choisi.
+  - Un aperçu montre le chemin obtenu, par exemple « Voyages › Dive Lens › 700 - Banana Reef ».
+  - Changer ce réglage ne déplace pas les collections déjà créées ; une relance crée la collection au nouvel endroit.
+  - Si l'ensemble choisi n'existe plus (supprimé ou renommé dans Lightroom, autre catalogue), « Créer les collections » le signale et « Appliquer » reste désactivé jusqu'à un nouveau choix. Aucun repli silencieux vers la racine.
 
 Critères d'acceptation :
-- Une base invalide ou introuvable est signalée par un message clair, sans blocage de l'application.
+- Une base invalide ou introuvable est signalée par un message clair, sans blocage de l'application. L'écran Réglages reste accessible pour la corriger.
 - La base est toujours ouverte en lecture seule ; MacDive peut rester ouvert pendant ce temps.
 
 ### F3 — Gratuit, open source, dons
@@ -127,7 +137,8 @@ Critères d'acceptation :
 - Lien **« Soutenir DiveLens »** (don) dans Réglages › À propos et sur le site de documentation. **[Décidé]**
 - Licence open source du code : **GPL v3**. **[Décidé]** libdivecomputer (LGPL 2.1) est compilée dans l'application, ce que sa licence permet pour un programme GPL dont le code est publié.
 - **Dépôt [Décidé]** : la V2 démarre dans un dépôt entièrement nouveau, sans l'historique de la version 0.x. Les données de test sont fictives ou anonymisées (pas de nom de plongeur ni de numéro de série réels).
-- Plateforme de dons : **Ko-fi**, mise en place dans un second temps. **[Décidé]**
+- Plateforme de dons : **Ko-fi**, mise en place dans un second temps. **[Décidé]** Le bouton « Soutenir DiveLens » est masqué tant que Ko-fi n'existe pas. **[Décidé, 2026-11-12]**
+- Réglages › À propos affiche aussi la version installée et la licence (GPL v3). **[Décidé, 2026-11-12]**
 
 ### F4 — Liste des plongées
 
@@ -158,7 +169,7 @@ Parcours :
 4. **« Inclure les photos prises en surface »** (la marge) : « jusqu'à N min avant et après la plongée », optionnel, **par défaut 0**. Elle sert seulement à remplir les collections. **[Décidé]**
 5. **Retour en direct** pendant le réglage : nombre de photos trouvées **pour chaque plongée** et au total. Une plongée à 0 photo est mise en évidence, car c'est souvent le signe d'un changement d'horloge en cours de route. **[Décidé]**
 6. **Appliquer** : en une seule écriture,
-   - chaque plongée qui a des photos obtient sa collection « numéro – site » dans « Dive Lens » (créée si besoin) ;
+   - chaque plongée qui a des photos obtient sa collection « numéro – site », à l'emplacement choisi dans les réglages, « Dive Lens » par défaut (F2), créée si besoin. L'écran rappelle cet emplacement avant « Appliquer » ;
    - les photos reçoivent les infos de plongée et le lieu (section 4) ;
    - les photos reçoivent les données par photo (F6) et le décalage appliqué.
 7. **Écran de résultat [Décidé, 2026-11-12]** : collections créées, photos écrites, plongées sans photo.
@@ -194,7 +205,12 @@ Critères d'acceptation :
 **[Décidé]**
 
 - La profondeur est **toujours** écrite dans le champ DiveLens dédié.
-- Une option permet de la **copier aussi dans le champ altitude GPS**, en valeur négative. Désactivée tant que l'écran Réglages n'existe pas. **[Décidé, 2026-11-12]**
+- Une option permet de la **copier aussi dans le champ altitude GPS**, en valeur négative, en mètres. Désactivée par défaut. **[Décidé]**
+- Comportements **[Décidé, 2026-11-12]** :
+  - seul « Créer les collections » écrit l'altitude : « Tagger la sélection » n'écrit pas de profondeur par photo ;
+  - une photo sans profondeur (prise dans la marge, plongée sans courbe) garde l'altitude qu'elle a déjà ;
+  - désactiver l'option plus tard n'efface pas les altitudes déjà copiées ;
+  - « Annuler » dans Lightroom ne défait probablement pas l'altitude, comme pour le GPS : à vérifier.
 - L'option est accompagnée d'une explication, qui dit trois choses :
   - le champ DiveLens n'existe que dans Lightroom ;
   - l'altitude suit la photo exportée et se voit dans les autres logiciels ;
@@ -242,9 +258,13 @@ Suggestion **[Décidé]** : la ligne de la plongée dont les heures couvrent la 
 
 Un fichier journal est conservé pour le diagnostic, consultable depuis les réglages. **[Proposé : conservé]**
 
+**Emplacement [Décidé, 2026-11-12]** : l'application écrit son journal (`DiveLens App.log`) dans le dossier des journaux de Lightroom, à côté de celui du plugin (`DiveLens.log`) : `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/` sur Mac, `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\` sur Windows. « Afficher le journal » ouvre ce dossier, avec les deux fichiers côte à côte. Le niveau choisi (Normal / Détaillé) s'applique aux deux. Le journal de l'application est limité en taille : au-delà, l'ancien est gardé une fois puis remplacé.
+
 ### F11 — Exporter et importer les réglages
 
 **[Décidé]** L'utilisateur peut exporter ses réglages dans un fichier pour les reprendre sur un autre ordinateur, ou après une réinstallation.
+
+Pas dans le premier écran Réglages : chantier à part, après Subsurface. Les réglages tiennent déjà dans un seul fichier lisible. **[Décidé, 2026-11-12]**
 
 - Contenu : emplacement de la base de plongée, ordre d'affichage, unités, langue, option altitude, marge par défaut, niveau de journal, et les réglages ajoutés plus tard. **[Proposé]**
 - Format : un fichier texte lisible. **[Proposé]**
@@ -275,6 +295,8 @@ Diffusion **[Décidé]** : un seul texte source, publié à deux endroits :
 
 **[Décidé : oui]** L'application vérifie s'il existe une nouvelle version de DiveLens et propose de l'installer.
 
+Pas dans le premier écran Réglages : il faut d'abord la clé de signature des mises à jour et le circuit de publication. La section « Mises à jour » apparaîtra avec. **[Décidé, 2026-11-12]**
+
 - Une mise à jour remplace **tout le paquet** : l'application et la partie Lightroom. **[Proposé]**
 - Vérification au lancement, au plus une fois par jour, avec un réglage pour la désactiver et un bouton « Vérifier maintenant ». **[Proposé]**
 - **Numérotation [Décidé]** : la première version publique est la **2.0.0**, pour marquer la rupture avec le plugin 0.x. Versions de développement en 0.x d'ici là.
@@ -298,7 +320,7 @@ Description fonctionnelle seulement. La mise en page est une décision du propri
 | **Liste des plongées** | Plongées (F4), indicateur de courbe | Rechercher, sélectionner une ou plusieurs plongées |
 | **Créer les collections** (F5) | Plongées choisies avec compteur de photos chacune, appareils détectés, décalage et marge, total | Régler le décalage par appareil, « Suggérer », régler la marge, Appliquer |
 | **Tagger la sélection** (F8) | Sélection Lightroom en direct (nombre, vignettes), plongée choisie, lieu (site de la plongée ou autre site : pays › lieu › site, GPS) | Cocher données de plongée et/ou lieu, choisir, Appliquer |
-| **Réglages** (F2, F7, F11, F13) | Source de plongée, affichage, unités, langue, option altitude et son explication, journal | Modifier, afficher le journal |
+| **Réglages** (F2, F3, F7, F10) | Source de plongée et état de la base, langue, unités, option altitude et son explication, emplacement des collections, journal, à propos | Modifier, afficher le journal ; F11 et F13 plus tard |
 | **Résultat d'application** | Collections créées, photos écrites, plongées sans photo | Fermer |
 
 États à couvrir dans les maquettes : liaison perdue, base introuvable, plongée sans courbe, aucune photo trouvée, écriture en cours avec progression **[Décidé]**.
@@ -361,7 +383,8 @@ BlueDive et Submersion, après examen de leur stockage.
 - **Clé de signature des mises à jour** : créée dès le début, conservée hors du dépôt, jamais changée.
 - **Windows** : la partie Lightroom du plugin bloque Windows aujourd'hui ; chemins, lancement de l'application et installation à adapter. Tests manuels Windows **[Décidé]** : machine virtuelle Windows 11 sur le Mac (Apple Silicon, donc Windows ARM) + testeurs sur de vrais PC (Intel/AMD). Vérifier que Lightroom Classic et Subsurface tournent dans la machine virtuelle.
 - **Réglage « Application »** (F2) : MacDive ou Subsurface, avec l'emplacement du fichier ou du dossier correspondant ; sur Windows, seul Subsurface est proposé.
-- **Fichier journal** : définir où l'application écrit le sien par rapport à celui du plugin.
+- **Fichier journal** — tranché (2026-11-12) : le kit Lightroom documente l'emplacement fixe du journal du plugin ; l'application écrit le sien à côté (F10).
+- **Réglages de l'ancien plugin** — vérifié dans le kit Lightroom 16 (2026-11-12) : les préférences d'un plugin sont rangées sous son identifiant ; le nouveau plugin, de même identifiant, les lit donc directement.
 
 ## 10. À trancher
 
@@ -369,6 +392,7 @@ Aucune question ouverte à ce stade.
 
 ### Tranché
 
+- Écran Réglages (2026-11-12) : unités « comme l'application de plongée » ou forcées ; Subsurface grisé « bientôt » ; journal de l'application à côté de celui du plugin ; ordre des plongées mémorisé sur la liste ; marge non mémorisée ; emplacement des collections au choix, « Dive Lens » par défaut ; export / import et mises à jour reportés (F2, F10, F11, F13).
 - Fuseau horaire des photos : non utilisé par « Suggérer » en V1 (F5).
 - Documentation : un seul texte, embarqué dans l'application et publié sur querton.com (F12).
 
