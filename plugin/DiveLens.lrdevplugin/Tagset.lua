@@ -24,6 +24,11 @@ return {
         "com.querton.divelens.TempLow",
         "com.querton.divelens.MaxDepth",
         "com.adobe.separator",
+        "com.querton.divelens.PhotoDepth",
+        "com.querton.divelens.PhotoTemp",
+        "com.querton.divelens.PhotoElapsed",
+        "com.querton.divelens.ClockOffset",
+        "com.adobe.separator",
         "com.querton.divelens.Rating",
     },
 }

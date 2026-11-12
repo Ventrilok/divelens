@@ -1,4 +1,6 @@
+mod collections;
 mod lightroom;
+mod offsets;
 mod settings;
 mod units;
 
@@ -14,7 +16,9 @@ use divelens_core::{Capabilities, Dive, DiveSource, Error, Site};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use lightroom::{ApplyOutcome, Command, End, Event, LinkFile, Status, Timing};
+use collections::{Choices, Period, Preview, Session};
+use lightroom::{ApplyOutcome, Command, End, Event, LinkFile, Status, Timing, WrittenCollection};
+use offsets::Offsets;
 use settings::{Settings, SourceKind};
 
 /// Versions of the app and of the core library, shown in Settings › About.
@@ -140,11 +144,11 @@ struct Lightroom {
     status: Mutex<Status>,
     commands: Mutex<Sender<Command>>,
     /// Thumbnails of the current selection, as data URLs, by position.
-    preview: Mutex<Preview>,
+    preview: Mutex<SelectionPreview>,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
-struct Preview {
+struct SelectionPreview {
     version: u64,
     thumbnails: Vec<Option<String>>,
 }
@@ -152,7 +156,7 @@ struct Preview {
 /// Thumbnails received so far for the current selection; new ones arrive as
 /// `selection-preview` events.
 #[tauri::command]
-fn selection_preview(state: State<Lightroom>) -> Preview {
+fn selection_preview(state: State<Lightroom>) -> SelectionPreview {
     state.preview.lock().expect("preview").clone()
 }
 
@@ -262,7 +266,10 @@ async fn tag_selection(app: AppHandle, choice: TagChoice) -> Result<ApplyOutcome
             .commands
             .lock()
             .expect("lightroom commands")
-            .send(Command::Apply { request, reply });
+            .send(Command::Apply {
+                request: Box::new(request),
+                reply,
+            });
         if sent.is_err() {
             return Err(TagError::NotConnected);
         }
@@ -270,6 +277,204 @@ async fn tag_selection(app: AppHandle, choice: TagChoice) -> Result<ApplyOutcome
     })
     .await
     .expect("tagging task failed")
+}
+
+/// Photos found for "Create Collections", kept until the next search.
+#[derive(Default)]
+struct CollectionsState {
+    session: Mutex<Option<Session>>,
+}
+
+/// Why "Create Collections" could not go on.
+#[derive(Debug, Serialize)]
+#[serde(tag = "error", rename_all = "camelCase")]
+enum CollectionsError {
+    NothingChosen,
+    NotConnected,
+    LinkLost,
+    /// No photo search to work on (link reconnected, app restarted).
+    NoPhotos,
+    /// No photo goes to any dive.
+    NothingToWrite,
+    Source {
+        detail: Error,
+    },
+    /// Lightroom refused or failed; `reason` as in [`ApplyOutcome::Failed`].
+    #[serde(rename_all = "camelCase")]
+    Lightroom {
+        reason: String,
+        detail: Option<String>,
+    },
+}
+
+impl From<ApplyOutcome> for CollectionsError {
+    fn from(outcome: ApplyOutcome) -> Self {
+        match outcome {
+            ApplyOutcome::Failed { reason, detail } => Self::Lightroom { reason, detail },
+            ApplyOutcome::Applied { .. } => Self::Lightroom {
+                reason: "error".into(),
+                detail: Some("unexpected answer".into()),
+            },
+        }
+    }
+}
+
+/// Sends a request to the plugin and waits for its answer.
+fn ask<T>(
+    app: &AppHandle,
+    command: impl FnOnce(mpsc::Sender<T>) -> Command,
+) -> Result<T, CollectionsError> {
+    let state = app.state::<Lightroom>();
+    if !state.status.lock().expect("lightroom state").connected {
+        return Err(CollectionsError::NotConnected);
+    }
+    let (reply, answer) = mpsc::channel();
+    let sent = state
+        .commands
+        .lock()
+        .expect("lightroom commands")
+        .send(command(reply));
+    if sent.is_err() {
+        return Err(CollectionsError::NotConnected);
+    }
+    answer.recv().map_err(|_| CollectionsError::LinkLost)
+}
+
+/// Finds in Lightroom every photo of the chosen dives' period (whole
+/// catalog) and their cameras.
+#[tauri::command]
+async fn find_collection_photos(
+    app: AppHandle,
+    dive_ids: Vec<String>,
+) -> Result<Period, CollectionsError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let source =
+            open(&source_info(&app)).map_err(|detail| CollectionsError::Source { detail })?;
+        let dives: Vec<Dive> = source
+            .dives()
+            .map_err(|detail| CollectionsError::Source { detail })?
+            .into_iter()
+            .filter(|d| dive_ids.contains(&d.id))
+            .collect();
+        let (from, to) = collections::search_days(&dives).ok_or(CollectionsError::NothingChosen)?;
+        let (f, t) = (from.clone(), to.clone());
+        let found = ask(&app, |reply| Command::FindPhotos {
+            from: f,
+            to: t,
+            reply,
+        })??;
+        let offsets = Offsets::load(&config_dir(&app));
+        let session = Session::new(found.search, dives, found.photos, &offsets);
+        let period = session.period(from, to);
+        *app.state::<CollectionsState>()
+            .session
+            .lock()
+            .expect("collections") = Some(session);
+        Ok(period)
+    })
+    .await
+    .expect("photo search task failed")
+}
+
+/// Live counts for the current choices.
+#[tauri::command]
+fn collections_preview(
+    state: State<CollectionsState>,
+    choices: Choices,
+) -> Result<Preview, CollectionsError> {
+    let session = state.session.lock().expect("collections");
+    let session = session.as_ref().ok_or(CollectionsError::NoPhotos)?;
+    Ok(session.preview(&choices))
+}
+
+/// Suggested clock offset of the given cameras (`None`: no offset fits).
+#[tauri::command]
+async fn suggest_offsets(
+    app: AppHandle,
+    cameras: Vec<String>,
+) -> Result<std::collections::HashMap<String, Option<i32>>, CollectionsError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<CollectionsState>();
+        let session = state.session.lock().expect("collections");
+        let session = session.as_ref().ok_or(CollectionsError::NoPhotos)?;
+        Ok(session.suggest(&cameras))
+    })
+    .await
+    .expect("suggestion task failed")
+}
+
+/// What "Create Collections › Apply" wrote.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CollectionsResult {
+    collections: Vec<WrittenCollection>,
+    photos: usize,
+    with_depth: usize,
+    /// Chosen dives that got no photo (no collection).
+    empty_dives: Vec<String>,
+}
+
+/// Writes the collections, dive data and per-photo values in one Lightroom
+/// step, then remembers each camera's offset.
+#[tauri::command]
+async fn apply_collections(
+    app: AppHandle,
+    choices: Choices,
+) -> Result<CollectionsResult, CollectionsError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let info = source_info(&app);
+        let source = open(&info).map_err(|detail| CollectionsError::Source { detail })?;
+        let units = source_units(&app, &info);
+        let (request, empty_dives) = {
+            let state = app.state::<CollectionsState>();
+            let session = state.session.lock().expect("collections");
+            let session = session.as_ref().ok_or(CollectionsError::NoPhotos)?;
+            let request = session
+                .request(&choices, units, |d| source.profile(&d.id))
+                .map_err(|detail| CollectionsError::Source { detail })?;
+            let preview = session.preview(&choices);
+            let empty: Vec<String> = preview
+                .dives
+                .iter()
+                .filter(|d| d.photos == 0)
+                .map(|d| d.id.clone())
+                .collect();
+            (request, empty)
+        };
+        if request.groups.is_empty() {
+            return Err(CollectionsError::NothingToWrite);
+        }
+        let photos = request.groups.iter().map(|g| g.photos.len()).sum();
+        let with_depth = request
+            .groups
+            .iter()
+            .flat_map(|g| &g.photos)
+            .filter(|p| p.photo_depth.is_some())
+            .count();
+        let written = ask(&app, |reply| Command::ApplyCollections { request, reply })??;
+        let dir = config_dir(&app);
+        let mut offsets = Offsets::load(&dir);
+        if let Some(session) = app
+            .state::<CollectionsState>()
+            .session
+            .lock()
+            .expect("collections")
+            .as_ref()
+        {
+            session.remember(&choices, &mut offsets);
+        }
+        if let Err(e) = offsets.save(&dir) {
+            eprintln!("clock offsets not saved: {e}");
+        }
+        Ok(CollectionsResult {
+            collections: written,
+            photos,
+            with_depth,
+            empty_dives,
+        })
+    })
+    .await
+    .expect("collections task failed")
 }
 
 /// Screen asked for on the command line (`--screen tag`), when Lightroom
@@ -316,7 +521,18 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                 Timing::default(),
                 &commands,
                 &mut |event| match event {
-                    Event::Status(status) => {
+                    Event::Status(mut status) => {
+                        let ranges: Vec<_> = status
+                            .selection_cameras
+                            .iter()
+                            .map(|c| {
+                                let key =
+                                    offsets::camera_key(c.model.as_deref(), c.serial.as_deref());
+                                (key, c.from.clone(), c.to.clone())
+                            })
+                            .collect();
+                        let cover = offsets::corrected_range(&Offsets::load(&dir), &ranges);
+                        (status.cover_from, status.cover_to) = cover.unzip();
                         *app.state::<Lightroom>()
                             .status
                             .lock()
@@ -335,7 +551,7 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                         let state = app.state::<Lightroom>();
                         let mut preview = state.preview.lock().expect("preview");
                         if preview.version != version {
-                            *preview = Preview {
+                            *preview = SelectionPreview {
                                 version,
                                 thumbnails: Vec::new(),
                             };
@@ -383,15 +599,20 @@ pub fn run() {
             lightroom_status,
             initial_screen,
             tag_selection,
-            selection_preview
+            selection_preview,
+            find_collection_photos,
+            collections_preview,
+            suggest_offsets,
+            apply_collections
         ])
         .setup(|app| {
             let (commands, inbox) = mpsc::channel();
             app.manage(Lightroom {
                 status: Mutex::new(Status::default()),
                 commands: Mutex::new(commands),
-                preview: Mutex::new(Preview::default()),
+                preview: Mutex::new(SelectionPreview::default()),
             });
+            app.manage(CollectionsState::default());
             let handle = app.handle().clone();
             std::thread::Builder::new()
                 .name("lightroom-link".into())

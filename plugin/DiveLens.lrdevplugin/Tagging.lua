@@ -3,6 +3,8 @@ Turns a "tag the selection" request from the app into the list of changes to
 make on each photo. Pure Lua (no Lightroom import) so it is tested outside
 Lightroom; Link.lua applies the changes inside one catalog write.
 
+"Create Collections" requests are planned per dive with planCollections.
+
 Request (built by the app, see core/src/tags.rs):
   dive:     { diveId, start, end, duration, maxDepth, tempHigh, tempLow, rating } or null
   location: { country, city, location, lat, lon } or null
@@ -69,6 +71,77 @@ function Tagging.plan(request, formatDate)
         end
     end
     return changes
+end
+
+--- Changes for one dive of a "Create Collections" request:
+--- { collection = name, common = changes for every photo,
+---   photos = { { id = photo id, changes = per-photo changes }, ... } },
+--- or nil and a reason.
+local function planGroup(group, formatDate)
+    if type(group) ~= "table" or not text(group.collection) then return nil, "bad group" end
+    local common, why = Tagging.plan({ dive = group.dive, location = group.location }, formatDate)
+    if not common then return nil, why end
+    if not value(group.dive) then return nil, "bad dive" end
+    local photos = {}
+    for _, photo in ipairs(value(group.photos) or {}) do
+        if type(photo) ~= "table" or not text(photo.id) or not text(photo.clockOffset) then
+            return nil, "bad photo"
+        end
+        photos[#photos + 1] = {
+            id = photo.id,
+            changes = {
+                { kind = "plugin", field = "PhotoDepth", value = text(photo.photoDepth) },
+                { kind = "plugin", field = "PhotoTemp", value = text(photo.photoTemp) },
+                { kind = "plugin", field = "PhotoElapsed", value = text(photo.photoElapsed) },
+                { kind = "plugin", field = "ClockOffset", value = text(photo.clockOffset) },
+            },
+        }
+    end
+    return { collection = group.collection, common = common, photos = photos }
+end
+
+--- Plans a "Create Collections" request (core/src/tags.rs, CollectionsRequest):
+--- a list of groups (see planGroup), or nil and a reason.
+function Tagging.planCollections(request, formatDate)
+    if type(request) ~= "table" or type(value(request.groups)) ~= "table" then
+        return nil, "bad request"
+    end
+    local groups = {}
+    for i, group in ipairs(request.groups) do
+        local planned, why = planGroup(group, formatDate)
+        if not planned then return nil, why end
+        groups[i] = planned
+    end
+    if #groups == 0 then return nil, "nothing to write" end
+    return groups
+end
+
+--- Wall-clock "YYYY-MM-DDTHH:MM:SS" from one of Lightroom's ISO 8601 capture
+--- times ("2025-12-31T07:14:09", with or without fraction, seconds or time
+--- zone; the zone is dropped: times are wall-clock, like the dives'), or nil.
+function Tagging.wallClock(iso)
+    if type(iso) ~= "string" then return nil end
+    local date, h, mi, rest = iso:match("^(%d%d%d%d%-%d%d%-%d%d)T(%d%d):(%d%d)(.*)$")
+    if not date then return nil end
+    local sec = rest:match("^:(%d%d)") or "00"
+    return string.format("%sT%s:%s:%s", date, h, mi, sec)
+end
+
+--- One photo as sent to the app: Lightroom id, wall-clock capture time,
+--- camera model and serial number (nil when unknown).
+function Tagging.describePhoto(id, iso, make, model, serial)
+    local function clean(v)
+        if type(v) ~= "string" then return nil end
+        v = v:gsub("^%s+", ""):gsub("%s+$", "")
+        if v == "" then return nil end
+        return v
+    end
+    return {
+        id = tostring(id),
+        time = Tagging.wallClock(iso),
+        model = clean(model) or clean(make),
+        serial = clean(serial),
+    }
 end
 
 --- Wall-clock "YYYY-MM-DDTHH:MM:SS" to its parts, or nil.

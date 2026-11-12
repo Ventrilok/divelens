@@ -170,13 +170,14 @@ fn plugin_keeps_its_identifier_and_fields() {
         r#"
         assert(require "Info".LrToolkitIdentifier == "com.querton.divelens")
         local metadata = require "Metadata"
-        assert(metadata.schemaVersion == 1)
+        assert(metadata.schemaVersion == 2)
         local ids = {}
         for _, field in ipairs(metadata.metadataFieldsForPhotos) do
             assert(field.dataType == "string" and field.version == 1, field.id)
             ids[#ids + 1] = field.id
         end
-        assert(table.concat(ids, ",") == "DiveId,StartDate,EndDate,Duration,MaxDepth,TempHigh,TempLow,Rating",
+        assert(table.concat(ids, ",") == "DiveId,StartDate,EndDate,Duration,MaxDepth,TempHigh,TempLow,Rating,"
+            .. "PhotoDepth,PhotoTemp,PhotoElapsed,ClockOffset",
             table.concat(ids, ","))
         "#,
     );
@@ -302,5 +303,113 @@ fn tagging_reads_wall_clock_dates() {
         assert(y == 2025 and mo == 12 and d == 31 and h == 7 and mi == 4 and s == 9)
         assert(Tagging.dateParts("31/12/2025") == nil)
         "#,
+    );
+}
+
+#[test]
+fn every_plugin_file_compiles_under_lua_5_1() {
+    let lua = lua();
+    for entry in std::fs::read_dir(plugin_dir()).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|e| e == "lua") {
+            let code = std::fs::read_to_string(&path).unwrap();
+            if let Err(e) = lua
+                .load(&code)
+                .set_name(path.display().to_string())
+                .into_function()
+            {
+                panic!("{e}");
+            }
+        }
+    }
+}
+
+#[test]
+fn photos_are_described_with_wall_clock_times() {
+    let lua = lua();
+    run(
+        &lua,
+        r#"
+        local Tagging = require "Tagging"
+        local w = Tagging.wallClock
+        assert(w("2025-12-31T07:14:09") == "2025-12-31T07:14:09")
+        assert(w("2025-12-31T07:14:09.250") == "2025-12-31T07:14:09")
+        -- The camera's time zone is dropped: times stay wall-clock.
+        assert(w("2025-12-31T07:14:09+04:00") == "2025-12-31T07:14:09")
+        assert(w("2025-12-31T07:14") == "2025-12-31T07:14:00")
+        assert(w("2025-12-31") == nil and w(nil) == nil)
+
+        local p = Tagging.describePhoto(4012, "2025-12-31T07:14:09.5", "OM Digital", " TG-7 ", "  ")
+        assert(p.id == "4012" and p.time == "2025-12-31T07:14:09")
+        assert(p.model == "TG-7" and p.serial == nil)
+        local q = Tagging.describePhoto(1, nil, "GoPro", nil, "C3441325")
+        assert(q.model == "GoPro" and q.serial == "C3441325" and q.time == nil)
+        "#,
+    );
+}
+
+#[test]
+fn collections_plan_writes_dive_data_and_per_photo_values() {
+    use divelens_core::tags::{
+        CollectionGroup, CollectionsRequest, DiveTags, LocationTags, PhotoTags, Units,
+    };
+    let dive = sample_dive();
+    let point = divelens_core::profile::PhotoPoint {
+        elapsed_s: 160,
+        depth_m: 10.0,
+        temp_c: Some(25.0),
+    };
+    let request = CollectionsRequest {
+        search: 3,
+        groups: vec![CollectionGroup {
+            collection: "700 - Coral Garden".into(),
+            dive: DiveTags::new(&dive, Units::default()),
+            location: LocationTags::new(&dive.site, None, None),
+            photos: vec![
+                PhotoTags::new("11".into(), Some(point), 241, Units::default()),
+                PhotoTags::new("12".into(), None, -30, Units::default()),
+            ],
+        }],
+    };
+    let lua = lua();
+    lua.globals()
+        .set("input", serde_json::to_string(&request).unwrap())
+        .unwrap();
+    let out: Vec<String> = lua
+        .load(
+            r#"
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            local groups = assert(Tagging.planCollections(Json.decode(input), function(iso) return iso end))
+            local lines = {}
+            for _, g in ipairs(groups) do
+                lines[#lines + 1] = "collection " .. g.collection .. " common " .. #g.common
+                for _, p in ipairs(g.photos) do
+                    for _, c in ipairs(p.changes) do
+                        lines[#lines + 1] = ("%s %s=%s"):format(p.id, c.field, tostring(c.value))
+                    end
+                end
+            end
+            assert(Tagging.planCollections({ groups = {} }) == nil)
+            assert(Tagging.planCollections({ groups = { { collection = "x" } } }, tostring) == nil)
+            return lines
+            "#,
+        )
+        .eval()
+        .unwrap();
+    assert_eq!(
+        out,
+        [
+            "collection 700 - Coral Garden common 11",
+            "11 PhotoDepth=10.0 m",
+            "11 PhotoTemp=25.0°C",
+            "11 PhotoElapsed=02:40",
+            "11 ClockOffset=+04:01",
+            // At the surface: per-photo values cleared, offset kept.
+            "12 PhotoDepth=nil",
+            "12 PhotoTemp=nil",
+            "12 PhotoElapsed=nil",
+            "12 ClockOffset=-00:30",
+        ]
     );
 }
