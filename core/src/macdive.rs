@@ -127,6 +127,7 @@ fn dive_from_row(r: &Row, computers: &Catalog) -> rusqlite::Result<Dive> {
         rating,
         site: site_from_row(r)?,
         has_profile,
+        invalid: false,
     })
 }
 

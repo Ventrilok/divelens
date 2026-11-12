@@ -11,6 +11,7 @@ pub mod error;
 pub mod macdive;
 pub mod model;
 pub mod profile;
+pub mod subsurface;
 pub mod tags;
 
 pub use error::{Error, Result};

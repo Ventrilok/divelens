@@ -240,6 +240,7 @@ fn sample_dive() -> divelens_core::Dive {
             lon: Some(-45.25),
         },
         has_profile: true,
+        invalid: false,
     }
 }
 

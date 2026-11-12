@@ -262,6 +262,7 @@ mod tests {
                 lon: Some(-45.25),
             },
             has_profile: true,
+            invalid: false,
         }
     }
 

@@ -283,6 +283,7 @@ mod tests {
                 ..Site::default()
             },
             has_profile: true,
+            invalid: false,
         }
     }
 
