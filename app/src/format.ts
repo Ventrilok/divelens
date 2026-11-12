@@ -126,6 +126,18 @@ export function formatRange(start: string, end: string): string {
   return `${fDate.format(s)}, ${fTime.format(s)} → ${fDate.format(e)}, ${fTime.format(e)}`;
 }
 
+/** A day: "30 déc. 2025" ("YYYY-MM-DD" or a wall-clock date-time). */
+export function formatDay(day: string): string {
+  return fDate.format(parseWallClock(day.slice(0, 10)));
+}
+
+/** Dive times in a table row: "31 déc. · 07:14 → 07:49". */
+export function formatRowSpan(start: string, end: string): string {
+  const sameDay = start.slice(0, 10) === end.slice(0, 10);
+  const e = parseWallClock(end);
+  return `${formatRowDate(start)} → ${sameDay ? fTime.format(e) : `${fDayMonth.format(e)} · ${fTime.format(e)}`}`;
+}
+
 /** Text used by search: lower case, accents removed ("Égypte" → "egypte"). */
 export function fold(s: string): string {
   return s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();

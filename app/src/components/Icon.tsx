@@ -35,6 +35,13 @@ const paths = {
   noCurve: <path d="M3 12h4M10 12h4M17 12h4" />,
   check: <path d="M20 6L9 17l-5-5" />,
   arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
+  warn: (
+    <>
+      <path d="M12 3l9.5 17H2.5z" />
+      <path d="M12 10v4M12 17.5h.01" />
+    </>
+  ),
+  spark: <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />,
   database: (
     <>
       <ellipse cx="12" cy="6" rx="7" ry="3" />

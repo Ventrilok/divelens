@@ -10,12 +10,21 @@ import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filt
 import { formatInt, t, tn } from "../i18n";
 import type { DiveLog } from "../types";
 
-export function DivesScreen({ log }: { log: DiveLog }) {
+export function DivesScreen({
+  log,
+  selected,
+  onSelect: setSelected,
+  onCreate,
+}: {
+  log: DiveLog;
+  selected: Set<string>;
+  onSelect: (s: Set<string>) => void;
+  onCreate: () => void;
+}) {
   const units = log.units;
   const { dives, capabilities } = log;
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [sort, setSort] = useState<Sort>("recent");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
 
   // Typing stays fluid: the list catches up with the filters just after.
@@ -131,7 +140,7 @@ export function DivesScreen({ log }: { log: DiveLog }) {
             <button type="button" className="btn btn-g" onClick={() => setSelected(new Set())}>
               {t("sel.clear")}
             </button>
-            <button type="button" className="btn btn-p" disabled title={t("nav.soon")}>
+            <button type="button" className="btn btn-p" onClick={onCreate}>
               {t("sel.create")}
               <Icon name="arrow" />
             </button>

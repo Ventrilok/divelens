@@ -6,7 +6,7 @@ export type Screen = "dives" | "collections" | "tag" | "settings";
 
 const items: { id: Screen; icon: IconName; label: () => string; ready: boolean }[] = [
   { id: "dives", icon: "list", label: () => t("nav.dives"), ready: true },
-  { id: "collections", icon: "folder", label: () => t("nav.collections"), ready: false },
+  { id: "collections", icon: "folder", label: () => t("nav.collections"), ready: true },
   { id: "tag", icon: "tag", label: () => t("nav.tag"), ready: true },
 ];
 

@@ -90,8 +90,8 @@ export function TagScreen({ log, lr, onCancel }: { log: DiveLog; lr: LightroomSt
   // The dive covering the selection is pointed out and shown in the detail
   // card, never chosen for the user.
   const covering = useMemo(
-    () => coveringDive(dives, lr.selectionFrom, lr.selectionTo),
-    [dives, lr.selectionFrom, lr.selectionTo],
+    () => coveringDive(dives, lr.coverFrom, lr.coverTo),
+    [dives, lr.coverFrom, lr.coverTo],
   );
   useEffect(() => {
     if (covering) setFocusedId(covering.id);

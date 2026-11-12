@@ -86,6 +86,9 @@ export interface LightroomStatus {
   /** Earliest and latest capture times, wall-clock "YYYY-MM-DDTHH:MM:SS". */
   selectionFrom: string | null;
   selectionTo: string | null;
+  /** The selection's range moved by each camera's remembered clock offset. */
+  coverFrom: string | null;
+  coverTo: string | null;
 }
 
 /** Thumbnails of the selection received so far (data URLs, by position). */
@@ -107,3 +110,68 @@ export type ApplyOutcome =
 export type TagError =
   | { error: "nothingChosen" | "notConnected" | "linkLost" | "badGps" | "unknownDive" | "unknownSite" }
   | { error: "source"; detail: ReaderError };
+
+// --- Create Collections (app/src-tauri/src/collections.rs) ------------------
+
+export interface Camera {
+  key: string;
+  model: string | null;
+  serial: string | null;
+  photos: number;
+  /** Offset last applied to this camera, in minutes. */
+  remembered: number | null;
+}
+
+export interface Period {
+  /** First and last day searched, "YYYY-MM-DD". */
+  from: string;
+  to: string;
+  photos: number;
+  undated: number;
+  cameras: Camera[];
+}
+
+export interface CollectionChoices {
+  offsets: Record<string, number>;
+  ignored: string[];
+  marginMin: number;
+}
+
+export interface DiveCount {
+  id: string;
+  photos: number;
+  inDive: number;
+  cameras: number;
+}
+
+export interface CameraCount {
+  key: string;
+  inDives: number;
+  outside: number;
+}
+
+export interface CollectionsPreview {
+  dives: DiveCount[];
+  cameras: CameraCount[];
+  total: number;
+  outside: number;
+  ignored: number;
+}
+
+export interface WrittenCollection {
+  collection: string;
+  count: number;
+  created: boolean;
+}
+
+export interface CollectionsResult {
+  collections: WrittenCollection[];
+  photos: number;
+  withDepth: number;
+  emptyDives: string[];
+}
+
+export type CollectionsError =
+  | { error: "nothingChosen" | "notConnected" | "linkLost" | "noPhotos" | "nothingToWrite" }
+  | { error: "source"; detail: ReaderError }
+  | { error: "lightroom"; reason: string; detail: string | null };
