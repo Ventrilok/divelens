@@ -31,13 +31,22 @@ where
     Ok(T::deserialize(value).unwrap_or_default())
 }
 
-/// Dive application whose log is read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+/// Dive application whose log is read. MacDive exists on macOS only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SourceKind {
-    #[default]
     MacDive,
     Subsurface,
+}
+
+impl Default for SourceKind {
+    fn default() -> Self {
+        if cfg!(windows) {
+            SourceKind::Subsurface
+        } else {
+            SourceKind::MacDive
+        }
+    }
 }
 
 /// The dive application and the log location chosen for each application
@@ -58,9 +67,14 @@ pub struct Source {
 }
 
 impl Source {
-    /// Application in use.
+    /// Application in use: Subsurface on Windows, whatever the file says
+    /// (settings copied from a Mac).
     pub fn kind(&self) -> SourceKind {
-        self.kind
+        if cfg!(windows) {
+            SourceKind::Subsurface
+        } else {
+            self.kind
+        }
     }
 
     /// Location chosen for `kind`; `None`: its standard location.
@@ -405,7 +419,18 @@ mod tests {
             s.source.path(SourceKind::MacDive),
             Some(&PathBuf::from("/A.sqlite"))
         );
-        assert_eq!(s.source.kind(), SourceKind::Subsurface);
+        if cfg!(windows) {
+            assert_eq!(Source::default().kind(), SourceKind::Subsurface);
+            s.source.kind = SourceKind::MacDive;
+            assert_eq!(
+                s.source.kind(),
+                SourceKind::Subsurface,
+                "no MacDive on Windows"
+            );
+        } else {
+            assert_eq!(Source::default().kind(), SourceKind::MacDive);
+            assert_eq!(s.source.kind(), SourceKind::Subsurface);
+        }
         // A kind this version does not know keeps the locations.
         let s: Settings =
             serde_json::from_str(r#"{"source":{"kind":"blueDive","macDivePath":"/A.sqlite"}}"#)

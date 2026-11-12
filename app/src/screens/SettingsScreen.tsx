@@ -62,18 +62,6 @@ function SourceSection({
   info: AppInfo | null;
   onChange: (p: Patch) => void;
 }) {
-  if (info?.os === "windows") {
-    return (
-      <section className="card" aria-labelledby="s-src">
-        <h2 id="s-src" className="sec">
-          {t("settings.source")}
-        </h2>
-        <div className="set">
-          <span className="muted">{t("settings.noSource")}</span>
-        </div>
-      </section>
-    );
-  }
   const source = logState.status === "ok" ? logState.log.source : logState.status === "error" ? logState.failure.source : null;
   // The application in use (on Windows, always Subsurface).
   const kind: SourceKind = source?.kind ?? settings.source.kind;
@@ -110,6 +98,7 @@ function SourceSection({
     );
   }
 
+  const windows = info?.os === "windows";
   return (
     <section className="card" aria-labelledby="s-src">
       <h2 id="s-src" className="sec">
@@ -122,7 +111,7 @@ function SourceSection({
           value={kind}
           onChange={(e) => onChange({ source: { ...settings.source, kind: e.target.value as SourceKind } })}
         >
-          <option value="macDive">{sourceName("macDive")}</option>
+          {!windows && <option value="macDive">{sourceName("macDive")}</option>}
           <option value="subsurface">{sourceName("subsurface")}</option>
         </select>
       </Row>
