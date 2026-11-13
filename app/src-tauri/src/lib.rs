@@ -5,13 +5,14 @@ mod offsets;
 mod settings;
 mod units;
 
-use std::path::PathBuf;
-use std::sync::Mutex;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Sender};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use divelens_core::macdive::MacDive;
 use divelens_core::profile::Sample;
+use divelens_core::subsurface::{self, Storage, Subsurface};
 use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
 use divelens_core::{Capabilities, Dive, DiveSource, Error, Site};
 use serde::{Deserialize, Serialize};
@@ -93,6 +94,8 @@ struct SourceInfo {
 #[serde(rename_all = "camelCase")]
 struct DiveLog {
     source: SourceInfo,
+    /// How a Subsurface log is stored (file or git); `None` for MacDive.
+    storage: Option<Storage>,
     capabilities: Capabilities,
     dives: Vec<Dive>,
     /// Every named site of the log (Tag Selection › other site).
@@ -114,22 +117,44 @@ fn config_dir(app: &AppHandle) -> PathBuf {
     app.path().app_config_dir().expect("no config folder")
 }
 
+/// Login name, which names Subsurface's standard file.
+fn login_name() -> String {
+    ["LOGNAME", "USER", "USERNAME"]
+        .iter()
+        .find_map(|v| std::env::var(v).ok().filter(|n| !n.is_empty()))
+        .unwrap_or_else(|| "username".into())
+}
+
+/// Standard location of each application's log.
+fn standard_path(app: &AppHandle, kind: SourceKind) -> PathBuf {
+    match kind {
+        SourceKind::MacDive => app
+            .path()
+            .home_dir()
+            .map(|h| MacDive::default_path(&h))
+            .unwrap_or_default(),
+        // ~/Library/Application Support/Subsurface on macOS,
+        // %APPDATA%\Subsurface on Windows.
+        SourceKind::Subsurface => app
+            .path()
+            .data_dir()
+            .map(|d| subsurface::default_path(&d.join("Subsurface"), &login_name()))
+            .unwrap_or_default(),
+    }
+}
+
 fn source_info(app: &AppHandle) -> SourceInfo {
     let settings = Settings::load(&config_dir(app));
-    let default = app
-        .path()
-        .home_dir()
-        .map(|h| MacDive::default_path(&h))
-        .unwrap_or_default();
-    match settings.source.path {
+    let kind = settings.source.kind();
+    match settings.source.path(kind) {
         Some(path) => SourceInfo {
-            kind: settings.source.kind,
-            path,
+            kind,
+            path: path.clone(),
             is_default_path: false,
         },
         None => SourceInfo {
-            kind: settings.source.kind,
-            path: default,
+            kind,
+            path: standard_path(app, kind),
             is_default_path: true,
         },
     }
@@ -142,6 +167,7 @@ fn source_units(app: &AppHandle, info: &SourceInfo) -> Units {
     };
     match info.kind {
         SourceKind::MacDive => units::read_macdive(&home),
+        SourceKind::Subsurface => units::read_subsurface(&home),
     }
 }
 
@@ -153,9 +179,74 @@ fn units_in_use(app: &AppHandle, info: &SourceInfo) -> Units {
         .resolve(source_units(app, info))
 }
 
-fn open(info: &SourceInfo) -> Result<MacDive, Error> {
+/// An opened dive log.
+enum Source {
+    MacDive(MacDive),
+    Subsurface(Arc<Subsurface>),
+}
+
+impl Source {
+    fn storage(&self) -> Option<Storage> {
+        match self {
+            Source::MacDive(_) => None,
+            Source::Subsurface(s) => Some(s.storage().clone()),
+        }
+    }
+}
+
+impl DiveSource for Source {
+    fn capabilities(&self) -> Capabilities {
+        match self {
+            Source::MacDive(s) => s.capabilities(),
+            Source::Subsurface(s) => s.capabilities(),
+        }
+    }
+    fn dives(&self) -> Result<Vec<Dive>, Error> {
+        match self {
+            Source::MacDive(s) => s.dives(),
+            Source::Subsurface(s) => s.dives(),
+        }
+    }
+    fn profile(&self, dive_id: &str) -> Result<Vec<Sample>, Error> {
+        match self {
+            Source::MacDive(s) => s.profile(dive_id),
+            Source::Subsurface(s) => s.profile(dive_id),
+        }
+    }
+    fn sites(&self) -> Result<Vec<Site>, Error> {
+        match self {
+            Source::MacDive(s) => s.sites(),
+            Source::Subsurface(s) => s.sites(),
+        }
+    }
+}
+
+/// The last Subsurface log read, kept while it does not change on disk:
+/// Subsurface logs are read whole (profiles included), so reading one again
+/// for every profile shown would be slow.
+#[derive(Default)]
+struct SubsurfaceCache(Mutex<Option<(PathBuf, String, Arc<Subsurface>)>>);
+
+fn open_subsurface(app: &AppHandle, path: &Path) -> Result<Arc<Subsurface>, Error> {
+    let state = app.state::<SubsurfaceCache>();
+    let fingerprint = Subsurface::fingerprint(path);
+    if let Some(f) = &fingerprint
+        && let Some((p, cached, log)) = state.0.lock().expect("subsurface cache").as_ref()
+        && p == path
+        && cached == f
+    {
+        return Ok(log.clone());
+    }
+    let log = Arc::new(Subsurface::open(path)?);
+    *state.0.lock().expect("subsurface cache") =
+        fingerprint.map(|f| (path.to_path_buf(), f, log.clone()));
+    Ok(log)
+}
+
+fn open(app: &AppHandle, info: &SourceInfo) -> Result<Source, Error> {
     match info.kind {
-        SourceKind::MacDive => MacDive::open(&info.path),
+        SourceKind::MacDive => MacDive::open(&info.path).map(Source::MacDive),
+        SourceKind::Subsurface => open_subsurface(app, &info.path).map(Source::Subsurface),
     }
 }
 
@@ -165,9 +256,10 @@ fn open(info: &SourceInfo) -> Result<MacDive, Error> {
 async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
     tauri::async_runtime::spawn_blocking(move || {
         let source = source_info(&app);
-        let result = open(&source).and_then(|s| Ok((s.capabilities(), s.dives()?, s.sites()?)));
+        let result = open(&app, &source)
+            .and_then(|s| Ok((s.storage(), s.capabilities(), s.dives()?, s.sites()?)));
         match &result {
-            Ok((_, dives, sites)) => log::info!(
+            Ok((_, _, dives, sites)) => log::info!(
                 "dive log {}: {} dives, {} sites",
                 source.path.display(),
                 dives.len(),
@@ -176,9 +268,10 @@ async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
             Err(e) => log::warn!("dive log {} not read: {e:?}", source.path.display()),
         }
         match result {
-            Ok((capabilities, dives, sites)) => Ok(DiveLog {
+            Ok((storage, capabilities, dives, sites)) => Ok(DiveLog {
                 source_units: source_units(&app, &source).into(),
                 source,
+                storage,
                 capabilities,
                 dives,
                 sites,
@@ -193,7 +286,7 @@ async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
 /// Profile of one dive; empty when the dive has none.
 #[tauri::command]
 async fn dive_profile(app: AppHandle, id: String) -> Result<Vec<Sample>, Error> {
-    tauri::async_runtime::spawn_blocking(move || open(&source_info(&app))?.profile(&id))
+    tauri::async_runtime::spawn_blocking(move || open(&app, &source_info(&app))?.profile(&id))
         .await
         .expect("profile task failed")
 }
@@ -201,7 +294,10 @@ async fn dive_profile(app: AppHandle, id: String) -> Result<Vec<Sample>, Error> 
 /// Points DiveLens at another dive-log file, chosen by the user.
 #[tauri::command]
 fn set_source_path(app: AppHandle, path: Option<PathBuf>) -> Result<Settings, String> {
-    change_settings(&app, |s| s.source.path = path)
+    change_settings(&app, |s| {
+        let kind = s.source.kind();
+        s.source.set_path(kind, path);
+    })
 }
 
 /// Tells the plugin what to write in its log (dropped when not connected:
@@ -285,7 +381,7 @@ enum TagError {
 
 fn tag_request(app: &AppHandle, choice: &TagChoice) -> Result<TagRequest, TagError> {
     let info = source_info(app);
-    let source = open(&info).map_err(|detail| TagError::Source { detail })?;
+    let source = open(app, &info).map_err(|detail| TagError::Source { detail })?;
     let units = units_in_use(app, &info);
     let dive = match &choice.dive_id {
         Some(id) => Some(
@@ -323,7 +419,7 @@ fn tag_request(app: &AppHandle, choice: &TagChoice) -> Result<TagRequest, TagErr
         return Err(TagError::NothingChosen);
     }
     Ok(TagRequest {
-        dive: dive.map(|d| DiveTags::new(&d, units)),
+        dive: dive.map(|d| DiveTags::new(&d, units, info.kind.name())),
         location,
     })
 }
@@ -425,8 +521,8 @@ async fn find_collection_photos(
     dive_ids: Vec<String>,
 ) -> Result<Period, CollectionsError> {
     tauri::async_runtime::spawn_blocking(move || {
-        let source =
-            open(&source_info(&app)).map_err(|detail| CollectionsError::Source { detail })?;
+        let info = source_info(&app);
+        let source = open(&app, &info).map_err(|detail| CollectionsError::Source { detail })?;
         let dives: Vec<Dive> = source
             .dives()
             .map_err(|detail| CollectionsError::Source { detail })?
@@ -440,7 +536,7 @@ async fn find_collection_photos(
             to: t,
             reply,
         })??;
-        let offsets = Offsets::load(&config_dir(&app));
+        let offsets = Offsets::load(&config_dir(&app), info.kind);
         let session = Session::new(found.search, dives, found.photos, &offsets);
         let period = session.period(from, to);
         *app.state::<CollectionsState>()
@@ -500,14 +596,14 @@ async fn apply_collections(
 ) -> Result<CollectionsResult, CollectionsError> {
     tauri::async_runtime::spawn_blocking(move || {
         let info = source_info(&app);
-        let source = open(&info).map_err(|detail| CollectionsError::Source { detail })?;
+        let source = open(&app, &info).map_err(|detail| CollectionsError::Source { detail })?;
         let units = units_in_use(&app, &info);
         let (request, empty_dives) = {
             let state = app.state::<CollectionsState>();
             let session = state.session.lock().expect("collections");
             let session = session.as_ref().ok_or(CollectionsError::NoPhotos)?;
             let mut request = session
-                .request(&choices, units, |d| source.profile(&d.id))
+                .request(&choices, units, info.kind.name(), |d| source.profile(&d.id))
                 .map_err(|detail| CollectionsError::Source { detail })?;
             let settings = Settings::load(&config_dir(&app));
             request.parent = settings.collections.parent.clone();
@@ -545,7 +641,7 @@ async fn apply_collections(
             written.iter().map(|c| c.count).sum::<usize>()
         );
         let dir = config_dir(&app);
-        let mut offsets = Offsets::load(&dir);
+        let mut offsets = Offsets::load(&dir, info.kind);
         if let Some(session) = app
             .state::<CollectionsState>()
             .session
@@ -555,7 +651,7 @@ async fn apply_collections(
         {
             session.remember(&choices, &mut offsets);
         }
-        if let Err(e) = offsets.save(&dir) {
+        if let Err(e) = offsets.save(&dir, info.kind) {
             log::error!("clock offsets not saved: {e}");
         }
         Ok(CollectionsResult {
@@ -648,7 +744,8 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                                 (key, c.from.clone(), c.to.clone())
                             })
                             .collect();
-                        let cover = offsets::corrected_range(&Offsets::load(&dir), &ranges);
+                        let kind = source_info(&app).kind;
+                        let cover = offsets::corrected_range(&Offsets::load(&dir, kind), &ranges);
                         (status.cover_from, status.cover_to) = cover.unzip();
                         *app.state::<Lightroom>()
                             .status
@@ -755,6 +852,7 @@ pub fn run() {
                 preview: Mutex::new(SelectionPreview::default()),
             });
             app.manage(CollectionsState::default());
+            app.manage(SubsurfaceCache::default());
             let handle = app.handle().clone();
             std::thread::Builder::new()
                 .name("lightroom-link".into())

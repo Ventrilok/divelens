@@ -1,0 +1,10 @@
+model "No Computer"
+lastmanualtime 30:00 min
+maxdepth 15.0m
+meandepth 9.0m
+  0:00 0.0m
+  3:00 15.0m
+ 20:00 15.0m
+ 24:00 5.0m
+ 27:00 5.0m
+ 30:00 0.0m

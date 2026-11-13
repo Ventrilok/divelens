@@ -12,6 +12,11 @@ pub enum Error {
     NotFound(PathBuf),
     /// The file exists but is not a database of the expected application.
     NotADiveLog(PathBuf),
+    /// A dive log saved by a version of the application too old to be read;
+    /// opening and saving it again in that application updates it.
+    OldFormat(PathBuf),
+    /// The folder holds several dive logs and none is the current one.
+    SeveralLogs(PathBuf),
     /// The database could not be read (locked, corrupt, not downloaded…).
     Database(String),
     /// A dive with this id does not exist in the source.
@@ -29,6 +34,8 @@ impl fmt::Display for Error {
         match self {
             Error::NotFound(p) => write!(f, "no dive log at {}", p.display()),
             Error::NotADiveLog(p) => write!(f, "{} is not a dive log", p.display()),
+            Error::OldFormat(p) => write!(f, "{} uses an old format", p.display()),
+            Error::SeveralLogs(p) => write!(f, "{} holds several dive logs", p.display()),
             Error::Database(m) => write!(f, "database error: {m}"),
             Error::UnknownDive(id) => write!(f, "unknown dive {id}"),
             Error::BadProfile(m) => write!(f, "unreadable dive profile: {m}"),

@@ -106,8 +106,17 @@ return {
             browsable = true,
             version = 1,
         },
+        {
+            -- Dive application the dive data come from (MacDive, Subsurface).
+            id = "Source",
+            title = LOC "$$$/DiveLens/Metadata/Source=Source",
+            dataType = "string",
+            searchable = true,
+            browsable = true,
+            version = 1,
+        },
     },
 
-    -- 2: per-photo fields added (no data to migrate).
-    schemaVersion = 2,
+    -- 2: per-photo fields added; 3: Source added (no data to migrate).
+    schemaVersion = 3,
 }

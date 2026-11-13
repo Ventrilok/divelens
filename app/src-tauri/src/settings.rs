@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 
 pub const FILE_NAME: &str = "settings.json";
-const CURRENT_VERSION: u32 = 2;
+const CURRENT_VERSION: u32 = 3;
 
 /// Name of the collection set "Create Collections" uses by default
 /// (compatibility contract: never translated, never renamed).
@@ -31,21 +31,77 @@ where
     Ok(T::deserialize(value).unwrap_or_default())
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+/// Dive application whose log is read. MacDive exists on macOS only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SourceKind {
-    #[default]
     MacDive,
+    Subsurface,
 }
 
+impl Default for SourceKind {
+    fn default() -> Self {
+        if cfg!(windows) {
+            SourceKind::Subsurface
+        } else {
+            SourceKind::MacDive
+        }
+    }
+}
+
+/// The dive application and the log location chosen for each application
+/// (spec F2: switching back finds the previous location again).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Source {
     #[serde(deserialize_with = "lenient")]
     pub kind: SourceKind,
-    /// `None` means the application's standard location.
+    /// `None` means MacDive's standard location. Version 2 of the file
+    /// called it `path` (MacDive was the only application).
+    #[serde(deserialize_with = "lenient", alias = "path")]
+    pub mac_dive_path: Option<PathBuf>,
+    /// A file (XML) or a folder (git storage); `None`: Subsurface's standard
+    /// file.
     #[serde(deserialize_with = "lenient")]
-    pub path: Option<PathBuf>,
+    pub subsurface_path: Option<PathBuf>,
+}
+
+impl SourceKind {
+    /// The application's name, as written in the photos' Source field
+    /// (never translated).
+    pub fn name(self) -> &'static str {
+        match self {
+            SourceKind::MacDive => "MacDive",
+            SourceKind::Subsurface => "Subsurface",
+        }
+    }
+}
+
+impl Source {
+    /// Application in use: Subsurface on Windows, whatever the file says
+    /// (settings copied from a Mac).
+    pub fn kind(&self) -> SourceKind {
+        if cfg!(windows) {
+            SourceKind::Subsurface
+        } else {
+            self.kind
+        }
+    }
+
+    /// Location chosen for `kind`; `None`: its standard location.
+    pub fn path(&self, kind: SourceKind) -> Option<&PathBuf> {
+        match kind {
+            SourceKind::MacDive => self.mac_dive_path.as_ref(),
+            SourceKind::Subsurface => self.subsurface_path.as_ref(),
+        }
+    }
+
+    pub fn set_path(&mut self, kind: SourceKind, path: Option<PathBuf>) {
+        match kind {
+            SourceKind::MacDive => self.mac_dive_path = path,
+            SourceKind::Subsurface => self.subsurface_path = path,
+        }
+    }
 }
 
 /// Depth unit: the dive application's, or forced.
@@ -274,7 +330,7 @@ impl Settings {
             return;
         }
         self.legacy_imported = true;
-        if self.source.path.is_none()
+        if self.source.mac_dive_path.is_none()
             && let Some(path) = legacy.mac_dive_path.as_deref().map(str::trim)
             && !path.is_empty()
         {
@@ -283,7 +339,7 @@ impl Settings {
                 None => PathBuf::from(path),
             };
             if path != standard_path && path.is_file() {
-                self.source.path = Some(path);
+                self.source.mac_dive_path = Some(path);
             }
         }
         if self.dive_sort.is_none() {
@@ -346,11 +402,52 @@ mod tests {
         let s = Settings::load(&dir);
         assert_eq!(s.version, CURRENT_VERSION);
         assert_eq!(
-            s.source.path.as_deref(),
+            s.source.mac_dive_path.as_deref(),
             Some(Path::new("/Dives/MacDive.sqlite"))
         );
         assert_eq!(s.collections.group, "Dive Lens");
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn one_location_per_application() {
+        let mut s: Settings = serde_json::from_str(
+            r#"{"version":3,"source":{"kind":"subsurface","macDivePath":"/A.sqlite",
+                "subsurfacePath":"/Logs/diver.ssrf"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            s.source.path(SourceKind::MacDive),
+            Some(&PathBuf::from("/A.sqlite"))
+        );
+        assert_eq!(
+            s.source.path(SourceKind::Subsurface),
+            Some(&PathBuf::from("/Logs/diver.ssrf"))
+        );
+        s.source.set_path(SourceKind::Subsurface, None);
+        assert_eq!(s.source.path(SourceKind::Subsurface), None);
+        assert_eq!(
+            s.source.path(SourceKind::MacDive),
+            Some(&PathBuf::from("/A.sqlite"))
+        );
+        if cfg!(windows) {
+            assert_eq!(Source::default().kind(), SourceKind::Subsurface);
+            s.source.kind = SourceKind::MacDive;
+            assert_eq!(
+                s.source.kind(),
+                SourceKind::Subsurface,
+                "no MacDive on Windows"
+            );
+        } else {
+            assert_eq!(Source::default().kind(), SourceKind::MacDive);
+            assert_eq!(s.source.kind(), SourceKind::Subsurface);
+        }
+        // A kind this version does not know keeps the locations.
+        let s: Settings =
+            serde_json::from_str(r#"{"source":{"kind":"blueDive","macDivePath":"/A.sqlite"}}"#)
+                .unwrap();
+        assert_eq!(s.source.kind, SourceKind::default());
+        assert_eq!(s.source.mac_dive_path, Some(PathBuf::from("/A.sqlite")));
     }
 
     #[test]
@@ -463,19 +560,19 @@ mod tests {
             Path::new(STANDARD),
         );
         assert_eq!(
-            s.source.path.as_deref(),
+            s.source.mac_dive_path.as_deref(),
             Some(home.join("Dropbox/MacDive.sqlite").as_path())
         );
         assert_eq!(s.dive_sort, Some(DiveSort::Oldest));
         assert!(s.legacy_imported);
         // Done once: later values are ignored.
-        s.source.path = None;
+        s.source.mac_dive_path = None;
         s.take_over(
             &legacy(Some("/Other.sqlite"), Some("desc")),
             Path::new(HOME),
             Path::new(STANDARD),
         );
-        assert_eq!(s.source.path, None);
+        assert_eq!(s.source.mac_dive_path, None);
         assert_eq!(s.dive_sort, Some(DiveSort::Oldest));
         std::fs::remove_dir_all(home).unwrap();
     }
@@ -485,7 +582,8 @@ mod tests {
         let mut s = Settings {
             source: Source {
                 kind: SourceKind::MacDive,
-                path: Some("/Chosen.sqlite".into()),
+                mac_dive_path: Some("/Chosen.sqlite".into()),
+                subsurface_path: None,
             },
             dive_sort: Some(DiveSort::Depth),
             ..Settings::default()
@@ -495,7 +593,10 @@ mod tests {
             Path::new(HOME),
             Path::new(STANDARD),
         );
-        assert_eq!(s.source.path.as_deref(), Some(Path::new("/Chosen.sqlite")));
+        assert_eq!(
+            s.source.mac_dive_path.as_deref(),
+            Some(Path::new("/Chosen.sqlite"))
+        );
         assert_eq!(s.dive_sort, Some(DiveSort::Depth));
     }
 
@@ -513,7 +614,7 @@ mod tests {
         ] {
             let mut s = Settings::default();
             s.take_over(&legacy(path, order), Path::new(HOME), Path::new(STANDARD));
-            assert_eq!(s.source.path, None, "{path:?}");
+            assert_eq!(s.source.mac_dive_path, None, "{path:?}");
             assert!(s.legacy_imported);
         }
         let mut s = Settings::default();

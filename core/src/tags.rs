@@ -50,6 +50,8 @@ pub struct DiveTags {
     pub temp_high: Option<String>,
     pub temp_low: Option<String>,
     pub rating: Option<String>,
+    /// Dive application the data come from ("MacDive", "Subsurface").
+    pub source: String,
 }
 
 /// Lightroom location fields. `None` leaves the photo's value untouched (a
@@ -177,7 +179,8 @@ pub fn rating(stars: Option<u8>) -> Option<String> {
 }
 
 impl DiveTags {
-    pub fn new(dive: &Dive, units: Units) -> Self {
+    /// Tags of `dive`, read from the dive application named `source`.
+    pub fn new(dive: &Dive, units: Units, source: &str) -> Self {
         Self {
             dive_id: dive.number.map(|n| n.to_string()),
             start: wall_clock(dive.start),
@@ -187,6 +190,7 @@ impl DiveTags {
             temp_high: dive.temp_high_c.map(|c| temperature(c, units.temp)),
             temp_low: dive.temp_low_c.map(|c| temperature(c, units.temp)),
             rating: rating(dive.rating),
+            source: source.to_string(),
         }
     }
 }
@@ -262,12 +266,13 @@ mod tests {
                 lon: Some(-45.25),
             },
             has_profile: true,
+            invalid: false,
         }
     }
 
     #[test]
     fn dive_fields_follow_the_previous_plugin() {
-        let tags = DiveTags::new(&dive(), Units::default());
+        let tags = DiveTags::new(&dive(), Units::default(), "MacDive");
         assert_eq!(
             tags,
             DiveTags {
@@ -279,6 +284,7 @@ mod tests {
                 temp_high: Some("28.0°C".into()),
                 temp_low: Some("-1.5°C".into()),
                 rating: Some("★★★★".into()),
+                source: "MacDive".into(),
             }
         );
     }
@@ -292,7 +298,7 @@ mod tests {
         d.temp_low_c = None;
         d.rating = None;
         d.duration_s = 0;
-        let tags = DiveTags::new(&d, Units::default());
+        let tags = DiveTags::new(&d, Units::default(), "MacDive");
         assert_eq!(tags.dive_id, None);
         assert_eq!(tags.duration, "00:00");
         assert_eq!(
@@ -308,7 +314,7 @@ mod tests {
             depth: DepthUnit::Feet,
             temp: TempUnit::Fahrenheit,
         };
-        let tags = DiveTags::new(&dive(), units);
+        let tags = DiveTags::new(&dive(), units, "MacDive");
         assert_eq!(tags.max_depth.as_deref(), Some("103 ft"));
         assert_eq!(tags.temp_high.as_deref(), Some("82.4°F"));
         assert_eq!(tags.temp_low.as_deref(), Some("29.3°F"));
@@ -359,7 +365,7 @@ mod tests {
             group: None,
             groups: vec![CollectionGroup {
                 collection: "700 - Coral Garden".into(),
-                dive: DiveTags::new(&dive(), Units::default()),
+                dive: DiveTags::new(&dive(), Units::default(), "MacDive"),
                 location: LocationTags::new(&dive().site, None, None),
                 photos: vec![
                     PhotoTags::new("1".into(), Some(point), 0, Units::default()),

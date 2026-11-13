@@ -37,7 +37,7 @@ local Json = require "Json"
 local Log = require "Log"
 local Tagging = require "Tagging"
 
-local PROTOCOL = 3
+local PROTOCOL = 4
 local APP_ID = "com.querton.divelens.desktop" -- the app's bundle identifier
 local LINK_FILE = "lightroom-link.json"
 local TICK = 0.1           -- seconds between two passes of the link task

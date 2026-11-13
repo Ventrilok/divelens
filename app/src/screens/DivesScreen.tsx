@@ -8,6 +8,7 @@ import { Icon } from "../components/Icon";
 import { formatRange } from "../format";
 import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters, type Sort } from "../filters";
 import { formatInt, t, tn } from "../i18n";
+import { sourceName } from "../sourceText";
 import type { DiveLog } from "../types";
 
 export function DivesScreen({
@@ -81,7 +82,7 @@ export function DivesScreen({
         <div>
           <h1>{t("dives.title")}</h1>
           <p className="muted">
-            {t("source.macDive")} · {tn("source.dives", dives.length)}
+            {sourceName(log.source.kind)} · {tn("source.dives", dives.length)}
             {capabilities.profile && <> · {t("dives.withProfile", { n: formatInt(withProfile) })}</>}
           </p>
         </div>

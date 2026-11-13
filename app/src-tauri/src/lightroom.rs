@@ -30,7 +30,7 @@ use crate::settings::{Legacy, LogLevel};
 /// Name of the link file, written by the plugin in the app's settings folder.
 pub const LINK_FILE: &str = "lightroom-link.json";
 /// Version of the message set; both sides must agree.
-pub const PROTOCOL: u32 = 3;
+pub const PROTOCOL: u32 = 4;
 
 /// Content of the link file.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -645,7 +645,7 @@ mod tests {
         stream.write_all(text.as_bytes()).unwrap();
     }
 
-    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":3,"type":"hello"}"#;
+    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":4,"type":"hello"}"#;
 
     #[test]
     fn reads_link_file() {
@@ -1015,7 +1015,7 @@ mod tests {
             lines.next().unwrap();
             write(
                 to_app,
-                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":3,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
+                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":4,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
             );
             write(to_app, "\n");
             lines.next().unwrap(); // first ping: the app is connected

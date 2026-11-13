@@ -1,0 +1,2 @@
+# Subsurface fixtures are compared byte for byte with what Subsurface writes.
+core/fixtures/subsurface/** text eol=lf

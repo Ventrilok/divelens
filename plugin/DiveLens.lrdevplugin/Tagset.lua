@@ -28,6 +28,7 @@ return {
         "com.querton.divelens.PhotoTemp",
         "com.querton.divelens.PhotoElapsed",
         "com.querton.divelens.ClockOffset",
+        "com.querton.divelens.Source",
         "com.adobe.separator",
         "com.querton.divelens.Rating",
     },

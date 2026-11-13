@@ -1,0 +1,11 @@
+model "Suunto D5"
+deviceid 00000003
+date 2025-06-14
+time 14:00:30
+duration 34:00 min
+maxdepth 12.6m
+meandepth 8.2m
+watertemp 21.0°C
+  0:20 3.2m 21.0°C
+ 10:00 12.6m
+ 34:00 0.0m

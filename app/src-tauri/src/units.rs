@@ -163,7 +163,6 @@ pub fn read_subsurface_windows() -> Units {
 }
 
 /// Units of Subsurface on this computer.
-#[allow(dead_code)] // used once Subsurface is a source
 pub fn read_subsurface(home: &Path) -> Units {
     #[cfg(windows)]
     {

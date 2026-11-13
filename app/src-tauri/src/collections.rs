@@ -313,11 +313,13 @@ impl Session {
     }
 
     /// The write request. `profile` gives a dive's profile (only asked for
-    /// dives with photos taken during the dive).
+    /// dives with photos taken during the dive); `source` names the dive
+    /// application.
     pub fn request(
         &self,
         choices: &Choices,
         units: Units,
+        source: &str,
         mut profile: impl FnMut(&Dive) -> Result<Vec<Sample>, Error>,
     ) -> Result<CollectionsRequest, Error> {
         let mut profiles: HashMap<usize, Vec<Sample>> = HashMap::new();
@@ -348,7 +350,7 @@ impl Session {
             .filter(|(_, photos)| !photos.is_empty())
             .map(|(dive, photos)| CollectionGroup {
                 collection: matching::collection_name(dive),
-                dive: DiveTags::new(dive, units),
+                dive: DiveTags::new(dive, units, source),
                 location: LocationTags::new(&dive.site, None, None),
                 photos,
             })
@@ -409,6 +411,7 @@ mod tests {
                 ..Site::default()
             },
             has_profile,
+            invalid: false,
         }
     }
 
@@ -523,7 +526,7 @@ mod tests {
         let s = session(&Offsets::default());
         let mut asked = Vec::new();
         let request = s
-            .request(&choices(10), Units::default(), |d| {
+            .request(&choices(10), Units::default(), "Subsurface", |d| {
                 asked.push(d.id.clone());
                 Ok(vec![
                     Sample {
@@ -551,6 +554,7 @@ mod tests {
             .map(|g| g.collection.as_str())
             .collect();
         assert_eq!(names, ["701 - Site 701", "702 - Site 702"]);
+        assert!(request.groups.iter().all(|g| g.dive.source == "Subsurface"));
         let a = &request.groups[0];
         let by_id = |id: &str| a.photos.iter().find(|p| p.id == id).unwrap();
         // TG-7 photo 1: 05:05 + 4 h = 09:05, 300 s into the dive.

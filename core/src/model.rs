@@ -45,6 +45,9 @@ pub struct Dive {
     pub site: Site,
     /// The dive has a recorded profile (so per-photo values are possible).
     pub has_profile: bool,
+    /// The dive log marks the dive as invalid (Subsurface); it is still
+    /// listed, with a badge.
+    pub invalid: bool,
 }
 
 /// What a source can provide; the UI hides what is missing.

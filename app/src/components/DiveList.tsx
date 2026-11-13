@@ -143,6 +143,11 @@ export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, o
                   <td className="site-cell">
                     <span className="site-name">{d.site.name ?? t("detail.unknownSite")}</span>
                     {d.site.location && <span className="muted"> · {d.site.location}</span>}
+                    {d.invalid && (
+                      <span className="badge badge-invalid" title={t("list.invalidHint")}>
+                        {t("list.invalid")}
+                      </span>
+                    )}
                     {mark?.id === d.id && <span className="badge">{mark.label}</span>}
                   </td>
                   <td>{d.site.country ?? ""}</td>

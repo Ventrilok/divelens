@@ -59,6 +59,7 @@ function Tagging.plan(request, formatDate)
         plugin("TempHigh", text(dive.tempHigh))
         plugin("TempLow", text(dive.tempLow))
         plugin("Rating", text(dive.rating))
+        plugin("Source", text(dive.source))
     end
 
     if location then
