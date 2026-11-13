@@ -86,6 +86,8 @@ Application Dive Lens (Rust + Tauri)
 
 Les nouveaux champs (section 7) **s'ajoutent** sans rien renommer.
 
+**Libellés affichés dans Lightroom [Décidé, 2026-11-13]** : seuls les libellés changent, jamais les identifiants. StartDate « Start Dive » (FR « Début de plongée »), EndDate « End Dive » (« Fin de plongée »), PhotoDepth « Depth » (« Profondeur »), PhotoTemp « Temperature » (« Température »). Les libellés français sont **[Proposé]**.
+
 ## 5. Fonctionnalités
 
 ### F1 — Ouvrir Dive Lens
