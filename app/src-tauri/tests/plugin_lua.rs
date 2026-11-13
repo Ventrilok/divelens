@@ -241,6 +241,7 @@ fn sample_dive() -> divelens_core::Dive {
         },
         has_profile: true,
         invalid: false,
+        notes: None,
     }
 }
 

@@ -8,9 +8,10 @@
 //!     </site>
 //!   </divesites>
 //!   <dives>
-//!     <trip …> <dive …> … </dive> </trip>
+//!     <trip …> <notes>…</notes> <dive …> … </dive> </trip>
 //!     <dive number='12' rating='4' invalid='1' divesiteid='1a2b3c4d'
 //!           date='2025-06-14' time='09:30:00' duration='45:00 min'>
+//!       <notes>Free text, line breaks kept</notes>
 //!       <divetemperature water='24.0 C' />
 //!       <divecomputer model='…' duration='…'>
 //!         <depth max='18.4 m' />
@@ -25,6 +26,7 @@
 use std::path::Path;
 
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::{BytesStart, Event};
 use quick_xml::{Reader, XmlVersion};
 
@@ -58,6 +60,7 @@ fn new_dive(e: &BytesStart) -> Option<RawDive> {
         duration_s: attr(e, "duration").and_then(|d| duration(&d)),
         rating: attr(e, "rating").and_then(|r| r.trim().parse().ok()),
         invalid: attr(e, "invalid").is_some_and(|v| v.trim() == "1"),
+        notes: None,
         site: attr(e, "divesiteid").and_then(|u| uuid(&u)),
         water_c: None,
         computers: Vec::new(),
@@ -73,6 +76,8 @@ pub(super) fn read(path: &Path) -> Result<RawLog> {
     let mut site: Option<RawSite> = None;
     let mut dive: Option<RawDive> = None;
     let mut computer: Option<RawComputer> = None;
+    // Inside the dive's own <notes> (not a trip's, not a computer's).
+    let mut in_notes = false;
 
     loop {
         let event = reader.read_event().map_err(|e| {
@@ -82,6 +87,23 @@ pub(super) fn read(path: &Path) -> Result<RawLog> {
                 Error::NotADiveLog(path.to_path_buf())
             }
         })?;
+        // Notes text arrives in pieces: text, then each `&…;` reference.
+        if in_notes {
+            let piece = match &event {
+                Event::Text(t) => Some(t.xml_content(XmlVersion::Implicit1_0).into_owned()),
+                Event::CData(t) => Some(t.xml_content(XmlVersion::Implicit1_0).into_owned()),
+                Event::GeneralRef(r) => match r.resolve_char_ref() {
+                    Ok(Some(c)) => Some(c.to_string()),
+                    _ => resolve_predefined_entity(&r.xml_content(XmlVersion::Implicit1_0))
+                        .map(str::to_string),
+                },
+                _ => None,
+            };
+            if let (Some(piece), Some(d)) = (piece, dive.as_mut()) {
+                d.notes.get_or_insert_default().push_str(&piece);
+                continue;
+            }
+        }
         let (e, empty) = match &event {
             Event::Start(e) => (e, false),
             Event::Empty(e) => (e, true),
@@ -94,6 +116,7 @@ pub(super) fn read(path: &Path) -> Result<RawLog> {
                         }
                     }
                     "dive" => log.dives.extend(dive.take()),
+                    "notes" => in_notes = false,
                     _ => {}
                 }
                 continue;
@@ -141,6 +164,7 @@ pub(super) fn read(path: &Path) -> Result<RawLog> {
                     dive = d;
                 }
             }
+            "notes" => in_notes = !empty && dive.is_some() && computer.is_none(),
             "divetemperature" => {
                 if let Some(d) = dive.as_mut() {
                     d.water_c = attr(e, "water").and_then(|t| temperature(&t));

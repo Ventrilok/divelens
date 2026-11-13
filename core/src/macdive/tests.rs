@@ -20,9 +20,11 @@ INSERT INTO ZDIVESITE (Z_PK, ZNAME, ZLOCATION, ZCOUNTRY, ZGPSLAT, ZGPSLON)
 INSERT INTO ZDIVESITE (Z_PK, ZUUID, ZNAME, ZLOCATION, ZCOUNTRY, ZGPSLAT, ZGPSLON)
   VALUES (4, 'SITE-4', 'Blue Lagoon', 'East Bay', 'Atlantis', -8.25, 115.5);
 
--- 1: full dive with raw data from a known computer, rated 4, GPS.
-INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH, ZTEMPHIGH, ZTEMPLOW, ZRATING, ZRELATIONSHIPDIVESITE, ZCOMPUTER, ZRAWDATA)
-  VALUES (1, 'UUID-A', 12, 771586200, 2130.0, 18.4, 26.0, 24.0, 4.0, 1, 'Mares Genius', x'00112233');
+-- 1: full dive with raw data from a known computer, rated 4, GPS, notes
+--    with Windows line breaks.
+INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH, ZTEMPHIGH, ZTEMPLOW, ZRATING, ZRELATIONSHIPDIVESITE, ZCOMPUTER, ZRAWDATA, ZNOTES)
+  VALUES (1, 'UUID-A', 12, 771586200, 2130.0, 18.4, 26.0, 24.0, 4.0, 1, 'Mares Genius', x'00112233',
+          '  Turtle at the wall.' || char(13) || char(10) || 'Second line  ');
 
 -- 2: cold dive, negative temperature, GPS 0/0 = missing, unrated,
 --    raw data from a computer libdivecomputer does not know.
@@ -33,9 +35,10 @@ INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH
 INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH, ZTEMPHIGH, ZTEMPLOW, ZRATING, ZRELATIONSHIPDIVESITE, ZCOMPUTER, ZRAWDATA)
   VALUES (3, NULL, NULL, 757381200, NULL, NULL, NULL, NULL, NULL, NULL, 'No Computer', NULL);
 
--- 4: blank site fields are treated as missing; known computer, no raw data.
-INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZRELATIONSHIPDIVESITE, ZCOMPUTER)
-  VALUES (4, 'UUID-D', 14, 757381200, 60.0, 3, 'Shearwater Perdix 2');
+-- 4: blank site fields and notes are treated as missing; known computer,
+--    no raw data.
+INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZRELATIONSHIPDIVESITE, ZCOMPUTER, ZNOTES)
+  VALUES (4, 'UUID-D', 14, 757381200, 60.0, 3, 'Shearwater Perdix 2', '  ');
 "#;
 
 fn fixture() -> (TempDir, MacDive) {
@@ -67,6 +70,7 @@ fn reads_a_full_dive() {
     assert_eq!(dives.len(), 4);
     let d = by_id(&dives, "UUID-A");
     assert_eq!(d.number, Some(12));
+    assert_eq!(d.notes.as_deref(), Some("Turtle at the wall.\nSecond line"));
     assert_eq!(d.start, at(2025, 6, 14, 9, 30, 0));
     assert_eq!(d.end, at(2025, 6, 14, 10, 5, 30));
     assert_eq!(d.duration_s, 2130);
@@ -116,6 +120,7 @@ fn blank_site_fields_are_missing() {
     let d = by_id(&dives, "UUID-D");
     assert_eq!(d.site, Site::default());
     assert!(!d.has_profile, "no raw data");
+    assert_eq!(d.notes, None, "blank notes");
 }
 
 #[test]
