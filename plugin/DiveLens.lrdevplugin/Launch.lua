@@ -59,7 +59,7 @@ local function command(app, screen)
     return "open -a " .. shellQuote(app) .. " --args --screen " .. screen
 end
 
---- Opens the app on `screen` ("dives", "collections" or "tag").
+--- Opens the app on `screen` ("collections" or "tag").
 function Launch.open(screen)
     LrTasks.startAsyncTask(function()
         if Link.show(screen) then return end

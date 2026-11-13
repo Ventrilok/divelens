@@ -4,7 +4,6 @@
 export type Lang = "en" | "fr";
 
 const en = {
-  "nav.dives": "Dives",
   "nav.collections": "Create Collections",
   "nav.tag": "Tag Selection",
   "nav.settings": "Settings",
@@ -20,7 +19,6 @@ const en = {
   "source.dives_one": "{n} dive",
   "source.dives_other": "{n} dives",
 
-  "dives.title": "Dives",
   "dives.withProfile": "{n} with dive profile",
   "dives.loading": "Loading dives…",
   "dives.shown": "{shown} of {total}",
@@ -88,7 +86,8 @@ const en = {
   "sel.hidden_one": "including {n} hidden by the filters",
   "sel.hidden_other": "including {n} hidden by the filters",
   "sel.clear": "Deselect all",
-  "sel.create": "Create Collections",
+  "sel.next": "Next",
+  "sel.none": "Check one or more dives",
 
   "err.notFound.title": "MacDive database not found",
   "err.notFound.text": "There is no database at this location. It may have been moved, for example to iCloud.",
@@ -167,6 +166,10 @@ const en = {
   "tag.err.other": "Nothing was written: {detail}",
 
   "coll.title": "Create Collections",
+  "steps.dives": "Select Dives",
+  "steps.adjust": "Adjust & Review",
+  "steps.summary": "Summary",
+  "coll.back": "Back",
   "coll.dives_one": "{n} dive",
   "coll.dives_other": "{n} dives",
   "coll.photos_one": "{n} photo",
@@ -174,10 +177,6 @@ const en = {
   "coll.cameras_one": "{n} camera",
   "coll.cameras_other": "{n} cameras",
   "coll.period": "{photos} from {cameras} between {from} and {to}",
-  "coll.changeDives": "Change dives",
-  "coll.empty.title": "No dive chosen",
-  "coll.empty.text": "Choose one or more dives on the Dives screen, then Create Collections.",
-  "coll.empty.choose": "Choose dives",
   "coll.disconnected": "Lightroom not connected: photos cannot be found or written.",
   "coll.searching": "Looking for the photos in Lightroom…",
   "coll.retry": "Try again",
@@ -308,7 +307,6 @@ const en = {
 export type Key = keyof typeof en;
 
 const fr: Record<Key, string> = {
-  "nav.dives": "Plongées",
   "nav.collections": "Créer les collections",
   "nav.tag": "Tagger la sélection",
   "nav.settings": "Réglages",
@@ -324,7 +322,6 @@ const fr: Record<Key, string> = {
   "source.dives_one": "{n} plongée",
   "source.dives_other": "{n} plongées",
 
-  "dives.title": "Plongées",
   "dives.withProfile": "{n} avec courbe de plongée",
   "dives.loading": "Chargement des plongées…",
   "dives.shown": "{shown} sur {total}",
@@ -392,7 +389,8 @@ const fr: Record<Key, string> = {
   "sel.hidden_one": "dont {n} masquée par les filtres",
   "sel.hidden_other": "dont {n} masquées par les filtres",
   "sel.clear": "Tout désélectionner",
-  "sel.create": "Créer les collections",
+  "sel.next": "Suivant",
+  "sel.none": "Cochez une ou plusieurs plongées",
 
   "err.notFound.title": "Base MacDive introuvable",
   "err.notFound.text": "Aucune base à l'emplacement indiqué. Elle a peut-être été déplacée, par exemple dans iCloud.",
@@ -471,6 +469,10 @@ const fr: Record<Key, string> = {
   "tag.err.other": "Rien n'a été écrit : {detail}",
 
   "coll.title": "Créer les collections",
+  "steps.dives": "Choisir les plongées",
+  "steps.adjust": "Ajuster et vérifier",
+  "steps.summary": "Récapitulatif",
+  "coll.back": "Précédent",
   "coll.dives_one": "{n} plongée",
   "coll.dives_other": "{n} plongées",
   "coll.photos_one": "{n} photo",
@@ -478,10 +480,6 @@ const fr: Record<Key, string> = {
   "coll.cameras_one": "{n} appareil",
   "coll.cameras_other": "{n} appareils",
   "coll.period": "{photos} de {cameras} entre le {from} et le {to}",
-  "coll.changeDives": "Modifier les plongées",
-  "coll.empty.title": "Aucune plongée choisie",
-  "coll.empty.text": "Choisissez une ou plusieurs plongées sur l'écran Plongées, puis « Créer les collections ».",
-  "coll.empty.choose": "Choisir les plongées",
   "coll.disconnected": "Lightroom non connecté : impossible de chercher ou d'écrire les photos.",
   "coll.searching": "Recherche des photos dans Lightroom…",
   "coll.retry": "Réessayer",

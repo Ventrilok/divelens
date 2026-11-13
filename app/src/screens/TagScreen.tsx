@@ -54,7 +54,7 @@ export function TagScreen({
 }: {
   log: DiveLog;
   lr: LightroomStatus;
-  /** Same order as the Dives screen (one list everywhere). */
+  /** Same order as the dive list of Create Collections (one list everywhere). */
   sort: Sort;
   onCancel: () => void;
 }) {
@@ -334,7 +334,7 @@ export function TagScreen({
           </span>
         )}
         <div className="selection-actions">
-          <button type="button" className="btn btn-g" onClick={onCancel} disabled={writing}>
+          <button type="button" className="btn btn-s" onClick={onCancel} disabled={writing}>
             {t("tag.cancel")}
           </button>
           <button type="button" className="btn btn-p" disabled={blocker !== null || writing} onClick={apply}>

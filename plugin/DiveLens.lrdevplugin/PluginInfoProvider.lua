@@ -23,7 +23,7 @@ return {
                     },
                     f:push_button {
                         title = LOC "$$$/DiveLens/PluginManager/Open=Open DiveLens",
-                        action = function() Launch.open("dives") end,
+                        action = function() Launch.open("collections") end,
                     },
                 },
             },

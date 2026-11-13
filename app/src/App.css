@@ -83,6 +83,24 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .screen-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
 .screen-head h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
 .sort { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+
+/* Create Collections: the three steps, joined by a line like a checkout */
+.flow-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+.flow-head h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+.flow { display: flex; align-items: center; width: 100%; list-style: none; margin: 0; padding: 14px 20px; font-size: 13px; }
+.flow-step { display: flex; align-items: center; color: var(--muted); }
+.flow-step:not(:last-child) { flex: 1; }
+.flow-step:not(:last-child)::after { content: ""; flex: 1; min-width: 24px; height: 2px; margin: 0 12px; border-radius: 1px; background: var(--line-strong); }
+.flow-done::after { background: var(--accent) !important; }
+.flow-link { display: flex; align-items: center; gap: 8px; padding: 0; background: none; border: 0; color: inherit; font: inherit; white-space: nowrap; }
+button.flow-link { cursor: pointer; }
+button.flow-link:hover .flow-label { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+.flow-n { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--line-strong); font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.flow-on { color: var(--text); font-weight: 600; }
+.flow-on .flow-n { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.flow-done { color: var(--text-3); }
+.flow-done .flow-n { border-color: var(--accent); color: var(--accent); }
 .sort .inp { min-width: 190px; }
 
 /* Filters */
@@ -194,7 +212,7 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 10px; font-size: 13px; }
 .notice-ok { background: var(--accent-soft); color: #e6f5fc; }
 .notice-warn { background: rgba(240, 164, 67, 0.12); color: #f3b866; }
-.apply-bar { position: sticky; bottom: 0; z-index: 2; }
+.apply-bar { position: sticky; bottom: 0; z-index: 2; margin-top: auto; }
 .apply-progress { flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px; }
 .apply-progress-text { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
 .bar { height: 6px; border-radius: 3px; background: #2c2e33; }
@@ -251,9 +269,9 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .coll-table .tbl th:last-child, .coll-table .tbl td:last-child { padding-right: 20px; }
 .tbl tr.row-warn td { background: rgba(240, 164, 67, 0.07); }
 .coll-total { padding: 14px 20px; }
-.result { width: 100%; max-width: 680px; margin: 32px auto; display: flex; flex-direction: column; gap: 20px; }
+.result { width: 100%; display: flex; flex-direction: column; gap: 20px; }
 .result-head { display: flex; align-items: center; gap: 16px; }
-.result-head h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+.result-head h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
 .result-icon { width: 52px; height: 52px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: flex; align-items: center; justify-content: center; flex: none; }
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .stat { padding: 16px; }

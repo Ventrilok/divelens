@@ -1,10 +1,11 @@
-// Dives screen: browse, filter and select dives from the dive log.
+// Create Collections, step 1: browse, filter and check the dives, then Next.
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { DiveDetail } from "../components/DiveDetail";
 import { DiveList } from "../components/DiveList";
 import { FilterBar } from "../components/FilterBar";
 import { Icon } from "../components/Icon";
+import { Steps } from "../components/Steps";
 import { formatRange } from "../format";
 import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters, type Sort } from "../filters";
 import { formatInt, t, tn } from "../i18n";
@@ -17,7 +18,7 @@ export function DivesScreen({
   onSelect: setSelected,
   sort,
   onSort: setSort,
-  onCreate,
+  onNext,
 }: {
   log: DiveLog;
   selected: Set<string>;
@@ -25,7 +26,7 @@ export function DivesScreen({
   /** Remembered between launches (Settings). */
   sort: Sort;
   onSort: (s: Sort) => void;
-  onCreate: () => void;
+  onNext: () => void;
 }) {
   const units = log.units;
   const { dives, capabilities } = log;
@@ -78,9 +79,9 @@ export function DivesScreen({
 
   return (
     <main className="screen">
+      <Steps current={1} />
       <header className="screen-head">
         <div>
-          <h1>{t("dives.title")}</h1>
           <p className="muted">
             {sourceName(log.source.kind)} · {tn("source.dives", dives.length)}
             {capabilities.profile && <> · {t("dives.withProfile", { n: formatInt(withProfile) })}</>}
@@ -132,8 +133,8 @@ export function DivesScreen({
         <DiveDetail dive={focused} units={units} capabilities={capabilities} />
       </div>
 
-      {selectedDives.length > 0 && (
-        <div className="card selection-bar">
+      <div className="card selection-bar">
+        {selectedDives.length > 0 ? (
           <div className="selection-text">
             <span className="strong">
               {tn("sel.count", selectedDives.length)}
@@ -141,17 +142,21 @@ export function DivesScreen({
             </span>
             <span className="muted small">{span}</span>
           </div>
-          <div className="selection-actions">
-            <button type="button" className="btn btn-g" onClick={() => setSelected(new Set())}>
+        ) : (
+          <span className="muted">{t("sel.none")}</span>
+        )}
+        <div className="selection-actions">
+          {selectedDives.length > 0 && (
+            <button type="button" className="btn btn-s" onClick={() => setSelected(new Set())}>
               {t("sel.clear")}
             </button>
-            <button type="button" className="btn btn-p" onClick={onCreate}>
-              {t("sel.create")}
-              <Icon name="arrow" />
-            </button>
-          </div>
+          )}
+          <button type="button" className="btn btn-p" onClick={onNext} disabled={selectedDives.length === 0}>
+            {t("sel.next")}
+            <Icon name="arrow" />
+          </button>
         </div>
-      )}
+      </div>
     </main>
   );
 }

@@ -29,6 +29,7 @@ const paths = {
   noCurve: <path d="M3 12h4M10 12h4M17 12h4" />,
   check: <path d="M20 6L9 17l-5-5" />,
   arrow: <path d="M5 12h14M13 6l6 6-6 6" />,
+  back: <path d="M19 12H5M11 6l-6 6 6 6" />,
   warn: (
     <>
       <path d="M12 3l9.5 17H2.5z" />

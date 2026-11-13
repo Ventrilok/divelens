@@ -1,4 +1,4 @@
-// Dive detail card. Shared by the Dives screen and (later) Tag Selection.
+// Dive detail card. Shared by Create Collections (step 1) and Tag Selection.
 
 import { useEffect, useState } from "react";
 import { diveProfile } from "../api";

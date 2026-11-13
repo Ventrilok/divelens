@@ -4,10 +4,9 @@ import type { DiveLog, LightroomStatus } from "../types";
 import logo from "../../icon-source/logo-color.svg";
 import { Icon, type IconName } from "./Icon";
 
-export type Screen = "dives" | "collections" | "tag" | "settings";
+export type Screen = "collections" | "tag" | "settings";
 
 const items: { id: Screen; icon: IconName; label: () => string; ready: boolean }[] = [
-  { id: "dives", icon: "list", label: () => t("nav.dives"), ready: true },
   { id: "collections", icon: "folder", label: () => t("nav.collections"), ready: true },
   { id: "tag", icon: "tag", label: () => t("nav.tag"), ready: true },
 ];
