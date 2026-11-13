@@ -109,7 +109,7 @@ Au premier lancement, l'application reprend automatiquement les réglages exista
   - Sous l'emplacement : état de la base (« Base valide · N plongées · N sites », ou le problème rencontré), « Choisir… » et, si l'emplacement n'est pas le standard, « Emplacement standard ». **[Décidé, 2026-11-12]**
   - **Subsurface [Décidé, 2026-11-12]** : un carnet Subsurface est soit un fichier (`.xml` ou `.ssrf`), soit un dossier (stockage git). Deux boutons, « Choisir un fichier… » et « Choisir un dossier… » ; l'état indique le format reconnu (« Fichier XML · N plongées · N sites » ou « Stockage git · N plongées · N sites »). Emplacement pré-rempli : le fichier standard de Subsurface, `<utilisateur>.xml` dans son dossier (`~/Library/Application Support/Subsurface/` sur Mac, `%APPDATA%\Subsurface\` sur Windows). Le « fichier par défaut » réglé dans Subsurface n'est pas lu.
   - **Un emplacement mémorisé par application [Décidé, 2026-11-12]** : passer de MacDive à Subsurface puis revenir retrouve l'emplacement MacDive choisi.
-- **Ordre d'affichage des plongées** : pas de ligne dans Réglages. La liste mémorise le dernier ordre choisi (récentes, anciennes, profondeur) et le retrouve au lancement suivant ; il vaut pour Plongées et Tagger la sélection, qui partagent la même liste. L'ancien réglage (croissant / décroissant) sert de valeur de départ. **[Décidé, 2026-11-12]**
+- **Ordre d'affichage des plongées** : pas de ligne dans Réglages. La liste mémorise le dernier ordre choisi (récentes, anciennes, profondeur) et le retrouve au lancement suivant ; il vaut pour Créer les collections et Tagger la sélection, qui partagent la même liste. L'ancien réglage (croissant / décroissant) sert de valeur de départ. **[Décidé, 2026-11-12]**
 - **Niveau de journal** : « Normal » ou « Détaillé », et bouton « Afficher le journal » (F10). **[Décidé, 2026-11-12]**
 - **Profondeur copiée dans l'altitude** (voir F7), désactivée par défaut. **[Décidé]**
 - « Inclure les photos prises en surface » (marge) : **pas de ligne dans Réglages**. Elle se règle sur l'écran « Créer les collections » (F5), repart de **0 min** à chaque fois et n'est pas mémorisée : une marge oubliée ferait entrer en silence des photos du bateau dans les collections. **[Décidé, 2026-11-12]**
@@ -160,7 +160,9 @@ C'est l'usage principal, issu de « Create Collection » actuel.
 
 Parcours :
 1. L'utilisateur sélectionne une ou plusieurs plongées à la main, comme aujourd'hui. **Pas de notion de voyage.** **[Décidé]**
-   - Les plongées se choisissent sur l'écran Plongées (sélection multiple), puis « Créer les collections ». « Modifier les plongées » y revient en gardant la sélection. Ouvert depuis le menu Lightroom sans plongée choisie, l'écran est vide, avec un bouton « Choisir les plongées » vers l'écran Plongées. **[Décidé, 2026-11-12]**
+   - **Parcours en trois étapes, rappelées en haut de chaque écran [Décidé, 2026-11-13]** : choisir les plongées › ajuster et vérifier › récapitulatif. L'étape 1 est la liste des plongées (F4) en sélection multiple, « Suivant » mène à l'étape 2. Le menu Lightroom « Créer les collections… » ouvre toujours l'étape 1, avec les plongées déjà cochées. Plus d'écran « Plongées » séparé : la barre latérale ne contient que Créer les collections, Tagger la sélection et Réglages.
+   - **Navigation [Décidé, 2026-11-13]** : chaque étape a ses boutons « ← Précédent » et « Suivant → » (pas de Précédent à l'étape 1). L'indicateur d'étapes, sous le titre, est une ligne qui relie les trois étapes, comme un tunnel d'achat, sans allure de bouton, dans un cadre sur toute la largeur ; cliquer sur une étape déjà faite y revient, comme « Précédent », sauf depuis le récapitulatif, d'où le bandeau ne ramène plus en arrière. Pas de bouton « Modifier les plongées ». Dans la barre du bas, le texte est à gauche et tous les boutons à droite, « Précédent » à côté du bouton d'avancée : le texte ne se décale jamais d'une étape à l'autre. Le récapitulatif prend toute la largeur ; « Retour aux plongées », à droite et sans flèche, ramène à l'étape 1 sans aucune plongée cochée.
+   - **Détails [Proposé]** : libellés « Choisir les plongées » / « Ajuster et vérifier » / « Récapitulatif » (EN « Select Dives » / « Adjust & Review » / « Summary ») ; à l'étape 2, le bouton d'avancée reste « Appliquer à N photos → », car il écrit dans le catalogue ; ordre « ← Précédent » puis le bouton d'avancée ; « Retour aux plongées » en bouton principal, le dernier à droite ; quitter le récapitulatif par un menu ou la barre latérale décoche aussi les plongées ; « Suivant » grisé, avec une invite, tant qu'aucune plongée n'est cochée ; l'application s'ouvre sur l'étape 1, y compris depuis le bouton « Ouvrir DiveLens » du gestionnaire de modules externes ; pendant l'écriture, aucun menu ne quitte l'écran, pour que le récapitulatif s'affiche.
 2. L'application repère les appareils photo présents parmi les photos de la période couverte. Les photos sont cherchées **dans tout le catalogue**, sur la période des plongées choisies, élargie de la marge et des décalages. **[Décidé, 2026-11-12]** Un appareil est identifié par son modèle **et son numéro de série** quand la photo le contient, sinon par le modèle seul. Deux boîtiers du même modèle ont donc chacun leur décalage. **[Décidé, 2026-11-12]**
 3. **Pour chaque appareil**, l'utilisateur règle **un seul décalage d'horloge**, qui remplace les deux curseurs début et fin actuels. **[Décidé]**
    - Plage : ±24 h, au pas de la minute (comme aujourd'hui).
@@ -247,7 +249,7 @@ Comportements **[Décidé, 2026-11-12]** :
 - Site sans pays, ville ou GPS : les valeurs déjà présentes sur la photo ne sont pas touchées (protège un GPS venu d'un téléphone). Les valeurs « <No Country> » de l'ancien plugin ne sont plus écrites.
 - Tant qu'aucune plongée n'est choisie, le lieu part sur « Autre site » ; il passe au site de la plongée dès qu'une plongée est choisie.
 - Liste : un clic sur une ligne choisit la plongée ; les flèches ne font que parcourir (la fiche suit la ligne parcourue).
-- « Annuler » revient à l'écran Plongées sans rien garder.
+- « Annuler » remet l'écran à zéro, sans rien garder (il n'y a plus d'écran Plongées où revenir). **[Proposé, 2026-11-13]**
 - Après l'écriture : bandeau avec le nombre de photos taguées et le rappel qu'« Annuler » dans Lightroom défait tout en une fois, sauf le GPS.
 
 Liste des plongées **[Décidé]** : **la même que dans F4** (mêmes colonnes, regroupement par mois, recherche et filtres), en choix unique.
@@ -320,7 +322,7 @@ Description fonctionnelle seulement. La mise en page est une décision du propri
 | Écran | Ce qu'il montre | Actions |
 |---|---|---|
 | **Accueil / état** | Liaison Lightroom, nombre de photos sélectionnées, source de plongée et nombre de plongées | Aller vers chaque usage, ouvrir les réglages |
-| **Liste des plongées** | Plongées (F4), indicateur de courbe | Rechercher, sélectionner une ou plusieurs plongées |
+| **Liste des plongées** | Plongées (F4), indicateur de courbe ; étape 1 de « Créer les collections », pas d'écran à part | Rechercher, sélectionner une ou plusieurs plongées |
 | **Créer les collections** (F5) | Plongées choisies avec compteur de photos chacune, appareils détectés, décalage et marge, total | Régler le décalage par appareil, « Suggérer », régler la marge, Appliquer |
 | **Tagger la sélection** (F8) | Sélection Lightroom en direct (nombre, vignettes), plongée choisie, lieu (site de la plongée ou autre site : pays › lieu › site, GPS) | Cocher données de plongée et/ou lieu, choisir, Appliquer |
 | **Réglages** (F2, F3, F7, F10) | Source de plongée et état de la base, langue, unités, option altitude et son explication, emplacement des collections, journal, à propos | Modifier, afficher le journal ; F11 et F13 plus tard |
@@ -419,6 +421,7 @@ Aucune question ouverte à ce stade.
 
 ### Tranché
 
+- Parcours « Créer les collections » (2026-11-13) : trois étapes visibles, la liste des plongées en est la première ; plus d'écran « Plongées » séparé ; le menu Lightroom ouvre l'étape 1 (F5).
 - Subsurface (2026-11-12) : premier ordinateur, plongées sans ordinateur sans courbe, découpage « Pays / Lieu / Site », valeurs telles que Subsurface les affiche, choix d'un fichier ou d'un dossier, un emplacement et des décalages mémorisés par application, pastille « Invalide », pas de migration au changement d'application (F2, F4, F5, section 8).
 - Écran Réglages (2026-11-12) : unités « comme l'application de plongée » ou forcées ; Subsurface grisé « bientôt » ; journal de l'application à côté de celui du plugin ; ordre des plongées mémorisé sur la liste ; marge non mémorisée ; emplacement des collections au choix, « Dive Lens » par défaut ; export / import et mises à jour reportés (F2, F10, F11, F13).
 - Fuseau horaire des photos : non utilisé par « Suggérer » en V1 (F5).
