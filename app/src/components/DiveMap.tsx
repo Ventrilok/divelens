@@ -31,9 +31,8 @@ export default function DiveMap({ lat, lon }: { lat: number; lon: number }) {
       style: STYLE,
       center: [lon, lat],
       zoom: ZOOM,
-      // Map data credits only (no library link): shown, then folded into an
-      // "i" button once the map is moved.
-      attributionControl: { compact: true },
+      // Credits sit on a line under the map instead (below).
+      attributionControl: false,
       // The detail panel scrolls: the wheel scrolls it, the buttons zoom.
       scrollZoom: false,
       dragRotate: false,
@@ -59,18 +58,9 @@ export default function DiveMap({ lat, lon }: { lat: number; lon: number }) {
     m.on("load", () => fail(false));
     const retry = () => failed.current && m.setStyle(STYLE);
     window.addEventListener("online", retry);
-    // Credits link out to the browser, never inside the app's window.
-    const links = (e: MouseEvent) => {
-      const a = (e.target as Element).closest("a[href^='http']");
-      if (!a) return;
-      e.preventDefault();
-      void openUrl(a.getAttribute("href")!);
-    };
-    el.addEventListener("click", links);
     map.current = m;
     return () => {
       window.removeEventListener("online", retry);
-      el.removeEventListener("click", links);
       m.remove();
       map.current = null;
     };
@@ -86,9 +76,36 @@ export default function DiveMap({ lat, lon }: { lat: number; lon: number }) {
   }, [lat, lon]);
 
   return (
-    <div className="map">
-      <div ref={box} className="map-canvas" />
-      {offline && <p className="map-offline">{t("map.offline")}</p>}
+    <div className="map-block">
+      <div className="map">
+        <div ref={box} className="map-canvas" />
+        {offline && <p className="map-offline">{t("map.offline")}</p>}
+      </div>
+      {/* Map data credits, always visible: OpenStreetMap's rules do not allow
+          hiding them from the start. Not needed while no map shows. */}
+      {!offline && (
+        <p className="map-credits">
+          <Credit href="https://openfreemap.org">OpenFreeMap</Credit>{" "}
+          <Credit href="https://www.openmaptiles.org/">© OpenMapTiles</Credit>
+          {" · "}
+          {t("map.dataFrom")} <Credit href="https://www.openstreetmap.org/copyright">OpenStreetMap</Credit>
+        </p>
+      )}
     </div>
+  );
+}
+
+/** A credit link: opens in the browser, never inside the app's window. */
+function Credit({ href, children }: { href: string; children: string }) {
+  return (
+    <a
+      href={href}
+      onClick={(e) => {
+        e.preventDefault();
+        void openUrl(href);
+      }}
+    >
+      {children}
+    </a>
   );
 }

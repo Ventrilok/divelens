@@ -186,9 +186,11 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .map .maplibregl-ctrl-group { background: var(--btn); border: 1px solid var(--line-strong); box-shadow: none; }
 .map .maplibregl-ctrl-group button + button { border-top-color: var(--line-strong); }
 .map .maplibregl-ctrl-group button:not(:disabled):hover { background-color: var(--btn-hover); }
-.map .maplibregl-ctrl-icon, .map .maplibregl-ctrl-attrib-button { filter: invert(0.9); }
-.map .maplibregl-ctrl-attrib, .map .maplibregl-ctrl-attrib.maplibregl-compact { background: rgba(24, 25, 27, 0.8); color: var(--muted); font-size: 11px; }
-.map .maplibregl-ctrl-attrib a { color: var(--text-3); }
+.map .maplibregl-ctrl-icon { filter: invert(0.9); }
+.map-block { flex: none; display: flex; flex-direction: column; gap: 6px; }
+.map-credits { margin: 0; font-size: 11px; color: var(--muted); }
+.map-credits a { color: var(--text-3); text-decoration: none; }
+.map-credits a:hover { text-decoration: underline; }
 .notes { display: flex; flex-direction: column; gap: 6px; }
 .notes p { font-size: 14px; line-height: 1.5; color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 
