@@ -285,7 +285,7 @@ Chantier à part, fait après Subsurface (2026-11-13). Les réglages tiennent d�
   - Un fichier qui n'est pas un fichier de réglages Dive Lens (pas de numéro de version) est refusé avec un message ; rien n'est changé.
   - Carnet introuvable : l'emplacement du fichier est **gardé** (jamais de bascule silencieuse vers un autre carnet) ; la confirmation le dit déjà, puis la section affiche le problème avec « Choisir… » (ou « Choisir un fichier… » / « Choisir un dossier… » pour Subsurface).
   - Ensemble de collections absent de ce catalogue : même état que dans F2 (signalé, « Appliquer » désactivé jusqu'à un nouveau choix).
-  - Après un import, les réglages de l'ancien plugin ne sont plus jamais repris : le fichier importé est un choix de l'utilisateur.
+  - Après un import, les réglages de l'ancien plugin ne sont plus jamais repris : le fichier importé est un choix de l'utilisateur. **[Décidé, 2026-11-13]**
 - **Écran [Proposé, 2026-11-13]** : section « Sauvegarde des réglages » (EN « Settings backup ») entre Collections et Diagnostic, comme dans la maquette. Une ligne « Exporter ou importer » (« Pour retrouver vos réglages sur un autre ordinateur, ou après une réinstallation. ») avec « Exporter… » et « Importer… ».
   - Export : fenêtre d'enregistrement du système, nom proposé « Réglages Dive Lens.json » (EN « Dive Lens settings.json »), puis « Réglages exportés dans « … » ».
   - Import : fenêtre d'ouverture du système (fichiers `.json`), puis une confirmation dans la section : « Remplacer les réglages actuels par ceux de « … » ? — Tous les réglages de cet écran sont remplacés. », boutons « Remplacer » et « Annuler ».
