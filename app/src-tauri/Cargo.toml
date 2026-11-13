@@ -1,6 +1,6 @@
 [package]
 name = "divelens"
-description = "DiveLens desktop app"
+description = "Dive Lens desktop app"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

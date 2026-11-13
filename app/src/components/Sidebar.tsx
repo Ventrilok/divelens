@@ -68,10 +68,10 @@ export function Sidebar({
   lr: LightroomStatus;
 }) {
   return (
-    <nav className="sidebar" aria-label="DiveLens">
+    <nav className="sidebar" aria-label="Dive Lens">
       <div className="brand">
         <img src={logo} alt="" className="brand-logo" />
-        <span>DiveLens</span>
+        <span>Dive Lens</span>
       </div>
       {items.map((it) => (
         <NavItem key={it.id} {...it} current={current} onGo={onGo} />
