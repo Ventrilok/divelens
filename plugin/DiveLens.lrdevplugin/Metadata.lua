@@ -20,7 +20,7 @@ return {
         },
         {
             id = "StartDate",
-            title = LOC "$$$/DiveLens/Metadata/StartDate=Start Date",
+            title = LOC "$$$/DiveLens/Metadata/StartDate=Start Dive",
             dataType = "string",
             searchable = true,
             browsable = true,
@@ -28,7 +28,7 @@ return {
         },
         {
             id = "EndDate",
-            title = LOC "$$$/DiveLens/Metadata/EndDate=End Date",
+            title = LOC "$$$/DiveLens/Metadata/EndDate=End Dive",
             dataType = "string",
             searchable = true,
             browsable = true,
@@ -76,7 +76,7 @@ return {
         },
         {
             id = "PhotoDepth",
-            title = LOC "$$$/DiveLens/Metadata/PhotoDepth=Photo Depth",
+            title = LOC "$$$/DiveLens/Metadata/PhotoDepth=Depth",
             dataType = "string",
             searchable = true,
             browsable = true,
@@ -84,7 +84,7 @@ return {
         },
         {
             id = "PhotoTemp",
-            title = LOC "$$$/DiveLens/Metadata/PhotoTemp=Photo Temp.",
+            title = LOC "$$$/DiveLens/Metadata/PhotoTemp=Temperature",
             dataType = "string",
             searchable = true,
             browsable = true,
