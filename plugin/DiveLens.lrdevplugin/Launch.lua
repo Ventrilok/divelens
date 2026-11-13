@@ -28,13 +28,13 @@ local function candidates()
     local repo = LrPathUtils.parent(LrPathUtils.parent(plugin))
     if WIN_ENV then
         return {
-            childPath(plugin, "DiveLens.exe"),
+            childPath(plugin, "Dive Lens.exe"),
             childPath(repo, "target", "release", "divelens.exe"),
         }
     end
     return {
-        childPath(plugin, "DiveLens.app"),
-        childPath(repo, "target", "release", "bundle", "macos", "DiveLens.app"),
+        childPath(plugin, "Dive Lens.app"),
+        childPath(repo, "target", "release", "bundle", "macos", "Dive Lens.app"),
     }
 end
 
@@ -67,8 +67,8 @@ function Launch.open(screen)
         if not app then
             Log.error("app not found, expected at %s", expected)
             LrDialogs.message(
-                LOC "$$$/DiveLens/Launch/NotFound/Title=DiveLens app not found",
-                LOC("$$$/DiveLens/Launch/NotFound/Message=The DiveLens app should be in the plug-in folder: ^1. Please reinstall DiveLens.", expected),
+                LOC "$$$/DiveLens/Launch/NotFound/Title=Dive Lens app not found",
+                LOC("$$$/DiveLens/Launch/NotFound/Message=The Dive Lens app should be in the plug-in folder: ^1. Please reinstall Dive Lens.", expected),
                 "critical")
             return
         end
@@ -79,8 +79,8 @@ function Launch.open(screen)
         if status ~= 0 then
             Log.error("app launch failed with status %s", status)
             LrDialogs.message(
-                LOC "$$$/DiveLens/Launch/Failed/Title=Cannot open DiveLens",
-                LOC("$$$/DiveLens/Launch/Failed/Message=The DiveLens app could not be started (code ^1). See the DiveLens log.", tostring(status)),
+                LOC "$$$/DiveLens/Launch/Failed/Title=Cannot open Dive Lens",
+                LOC("$$$/DiveLens/Launch/Failed/Message=The Dive Lens app could not be started (code ^1). See the Dive Lens log.", tostring(status)),
                 "critical")
         end
     end, "DiveLens launch")

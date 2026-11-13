@@ -267,7 +267,7 @@ local function applyTags(s, message)
     local photos = catalog:getTargetPhotos()
     local total = #photos
     local ok, status = LrTasks.pcall(function()
-        return catalog:withWriteAccessDo(LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (DiveLens)", function()
+        return catalog:withWriteAccessDo(LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)", function()
             for i, photo in ipairs(photos) do
                 for _, change in ipairs(changes) do
                     if change.kind == "plugin" then
@@ -384,7 +384,7 @@ local function applyCollections(s, message)
     for _, g in ipairs(groups) do total = total + #g.photos end
     local results = {}
     local ok, status = LrTasks.pcall(function()
-        return catalog:withWriteAccessDo(LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (DiveLens)", function()
+        return catalog:withWriteAccessDo(LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)", function()
             local done = 0
             for gi, g in ipairs(groups) do
                 local photos = {}

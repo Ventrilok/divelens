@@ -837,7 +837,7 @@ pub fn run() {
             let log_path = app.path().home_dir().ok().map(|home| {
                 let path = applog::start(applog::folder(&home), settings.log_level);
                 log::info!(
-                    "DiveLens {} on {}, log {}",
+                    "Dive Lens {} on {}, log {}",
                     env!("CARGO_PKG_VERSION"),
                     std::env::consts::OS,
                     path.display()
