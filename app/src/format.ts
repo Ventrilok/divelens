@@ -9,7 +9,6 @@ const FT_PER_M = 3.28084;
 const oneDecimal = localized((l) => new Intl.NumberFormat(l, { maximumFractionDigits: 1, minimumFractionDigits: 1 }));
 const upToOneDecimal = localized((l) => new Intl.NumberFormat(l, { maximumFractionDigits: 1 }));
 const integer = localized((l) => new Intl.NumberFormat(l, { maximumFractionDigits: 0 }));
-const gps = new Intl.NumberFormat("en-US", { maximumFractionDigits: 4, useGrouping: false });
 
 export const DASH = "—";
 
@@ -70,10 +69,20 @@ export function formatDuration(seconds: number): string {
   return `${integer.format(Math.round(seconds / 60))} min`;
 }
 
-/** "3.5985, 73.5033" — GPS is never localised. */
+/** One coordinate as Lightroom shows it: degrees, minutes, seconds to the
+ *  tenth (about 3 m), then the hemisphere. Never localised. */
+function dms(v: number, positive: string, negative: string): string {
+  const tenths = Math.round(Math.abs(v) * 36000);
+  const deg = Math.floor(tenths / 36000);
+  const min = Math.floor((tenths % 36000) / 600);
+  const sec = ((tenths % 600) / 10).toFixed(1);
+  return `${deg}°${min}'${sec}" ${v < 0 && tenths > 0 ? negative : positive}`;
+}
+
+/** `20°15'11.2" S 57°30'45.0" E`, as in Lightroom's GPS field. */
 export function formatGps(lat: number | null, lon: number | null): string | null {
   if (lat === null || lon === null) return null;
-  return `${gps.format(lat)}, ${gps.format(lon)}`;
+  return `${dms(lat, "N", "S")} ${dms(lon, "E", "W")}`;
 }
 
 // --- Dates -----------------------------------------------------------------
