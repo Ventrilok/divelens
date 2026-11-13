@@ -55,7 +55,11 @@ describe("units", () => {
   it("formats duration and GPS", () => {
     expect(f.formatDuration(2110)).toBe("35 min");
     expect(f.formatDuration(0)).toBe("—");
-    expect(f.formatGps(3.5985166, 73.5032833)).toBe("3.5985, 73.5033");
+    expect(f.formatGps(3.5985166, 73.5032833)).toBe(`3°35'54.7" N 73°30'11.8" E`);
+    expect(f.formatGps(-20.2531, 57.5125)).toBe(`20°15'11.2" S 57°30'45.0" E`);
+    expect(f.formatGps(51.5, -0.1278)).toBe(`51°30'0.0" N 0°7'40.1" W`);
+    expect(f.formatGps(0.99999, 0)).toBe(`1°0'0.0" N 0°0'0.0" E`);
+    expect(f.formatGps(-0.00001, 0)).toBe(`0°0'0.0" N 0°0'0.0" E`);
     expect(f.formatGps(null, null)).toBeNull();
   });
 });

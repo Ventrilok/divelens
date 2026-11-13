@@ -154,6 +154,7 @@ Critères d'acceptation :
 - Une plongée marquée « invalide » dans Subsurface reste dans la liste, avec une pastille « Invalide » sur sa ligne et dans sa fiche, pour faire le lien avec Subsurface qui l'affiche barrée. **[Décidé, 2026-11-12]**
 - **Fiche de la plongée [Décidé, 2026-11-13]** :
   - Températures : la min en bleu, la max en orange, chacune avec son unité et, au-dessus à gauche, « min. » ou « max. » en petits caractères ; sans flèche entre les deux. Quand les deux sont égales, une seule valeur, sans couleur. **[Proposé]** pour ce dernier cas.
+  - **Coordonnées GPS** comme dans Lightroom : degrés, minutes, secondes au dixième (environ 3 m) et hémisphère, ex. `20°15'11.2" S 57°30'45.0" E`. Même présentation dans Tagger la sélection. La saisie d'un autre site (F8) reste en degrés décimaux. **[Décidé, 2026-11-13]**
   - Une **carte du site** sous les coordonnées GPS, quand la plongée en a. C'est une carte en ligne, avec les données OpenStreetMap servies gratuitement par OpenFreeMap, sans compte ni clé. Sans Internet, le message « Carte indisponible sans Internet » la remplace. L'application n'envoie à l'hébergeur que la zone de carte affichée, aucune donnée de plongée. Les crédits de la carte restent affichés, puis se replient dans un bouton « i » dès qu'on la déplace.
   - Détails de la carte **[Proposé]** : style sombre bleuté (« Fiord ») ; environ 20 km de large à l'ouverture ; repère cyan ; on la déplace à la souris et on zoome avec les boutons + / −, car la molette fait défiler la fiche ; pas de rotation.
   - Les **notes** saisies par le plongeur dans son carnet (MacDive et Subsurface), sous la carte, retours à la ligne conservés. Elles ne sont pas écrites dans Lightroom.
@@ -432,6 +433,7 @@ Aucune question ouverte à ce stade.
 
 ### Tranché
 
+- Coordonnées GPS (2026-11-13) : affichées comme dans Lightroom (degrés, minutes, secondes), saisie toujours en décimal (F4).
 - Carte du site (2026-11-13) : carte en ligne sous le GPS de la fiche, plutôt qu'une carte hors ligne grossière (F4).
 - Nom (2026-11-13) : « Dive Lens » en deux mots partout où il s'affiche (application, textes dans Lightroom, nom de l'application installée, documentation). Les identifiants techniques et les noms des fichiers journaux restent « DiveLens ».
 - Parcours « Créer les collections » (2026-11-13) : trois étapes visibles, la liste des plongées en est la première ; plus d'écran « Plongées » séparé ; le menu Lightroom ouvre l'étape 1 (F5).
