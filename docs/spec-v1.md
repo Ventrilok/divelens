@@ -334,7 +334,9 @@ Description fonctionnelle seulement. La mise en page est une décision du propri
 
 ## 7. Champs ajoutés
 
-**[Décidé, 2026-11-12]** — noms définitifs, jamais renommés (section 4). Ils s'ajoutent au panneau Dive Lens de Lightroom après les champs existants.
+**[Décidé, 2026-11-12]** — noms définitifs, jamais renommés (section 4).
+
+**Panneau Dive Lens de Lightroom [Décidé, 2026-11-13]** : quatre sections titrées, la photo d'abord. **Photo** (profondeur, température, temps écoulé) ; **Plongée** (n°, début, fin, durée, profondeur max, temp. min, temp. max, note) ; **Site** (lieu, ville, pays, GPS, champs standard de Lightroom) ; **Technique** (décalage d'horloge, source). Titres français « Photo », « Plongée », « Site », « Technique » **[Proposé]**. La vue « Toutes les métadonnées de plug-in » de Lightroom garde l'ordre de définition des champs, sans titres.
 
 | Champ | Contenu | Visible dans Lightroom |
 |---|---|---|

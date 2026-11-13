@@ -183,6 +183,33 @@ fn plugin_keeps_its_identifier_and_fields() {
     );
 }
 
+#[test]
+fn panel_shows_every_field_once_in_titled_sections() {
+    run(
+        &lua(),
+        r#"
+        local tagset = require "Tagset"
+        local seen, labels = {}, {}
+        for _, item in ipairs(tagset.items) do
+            if type(item) == "table" then
+                assert(item[1] == "com.adobe.label" and item.label ~= "", "bad section")
+                labels[#labels + 1] = item.label
+            else
+                local id = item:match("^com%.querton%.divelens%.(.+)$")
+                if id then
+                    assert(not seen[id], id .. " shown twice")
+                    seen[id] = true
+                end
+            end
+        end
+        for _, field in ipairs(require "Metadata".metadataFieldsForPhotos) do
+            assert(seen[field.id], field.id .. " missing from the panel")
+        end
+        assert(table.concat(labels, ",") == "Photo,Dive,Site,Technical", table.concat(labels, ","))
+        "#,
+    );
+}
+
 /// The plan the plugin makes from a request built by the app, as
 /// "kind field=value" lines (value "nil" clears the field).
 fn plan(request: &divelens_core::tags::TagRequest) -> Result<Vec<String>, String> {
