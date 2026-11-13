@@ -7,6 +7,8 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(() => ({
   plugins: [react()],
+  // The map library (about 1 MB) is its own chunk, loaded on demand.
+  build: { chunkSizeWarningLimit: 1200 },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //

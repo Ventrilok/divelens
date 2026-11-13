@@ -1,13 +1,16 @@
 // Dive detail card. Shared by Create Collections (step 1) and Tag Selection.
 
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { diveProfile } from "../api";
-import { formatDepth, formatDiveSpan, formatDuration, formatGps, formatTempRange } from "../format";
+import { formatDepth, formatDiveSpan, formatDuration, formatGps, formatTemps } from "../format";
 import { t } from "../i18n";
 import type { Capabilities, Dive, Sample, Units } from "../types";
 import { Icon } from "./Icon";
 import { ProfileChart } from "./ProfileChart";
 import { Stars } from "./Stars";
+
+// The map library is large: loaded the first time a dive with GPS shows.
+const DiveMap = lazy(() => import("./DiveMap"));
 
 // Profiles already loaded, by dive id (they never change while the app runs).
 const cache = new Map<string, Sample[]>();
@@ -72,6 +75,29 @@ function Profile({ dive, units }: { dive: Dive; units: Units }) {
   );
 }
 
+/** Coldest in blue, warmest in orange, each with its unit and a small
+ *  "min." / "max." above it. */
+function Temps({ low, high, units }: { low: number | null; high: number | null; units: Units }) {
+  const temps = formatTemps(low, high, units);
+  if (temps.same !== null) return <>{temps.same}</>;
+  return (
+    <span className="temps">
+      {temps.low && (
+        <span className="temp temp-low">
+          <small>{t("detail.tempLow")}</small>
+          {temps.low}
+        </span>
+      )}
+      {temps.high && (
+        <span className="temp temp-high">
+          <small>{t("detail.tempHigh")}</small>
+          {temps.high}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function DiveDetail({ dive, units, capabilities }: { dive: Dive | null; units: Units; capabilities: Capabilities }) {
   if (!dive) {
     return (
@@ -110,7 +136,9 @@ export function DiveDetail({ dive, units, capabilities }: { dive: Dive | null; u
         {capabilities.temperature && (
           <div>
             <dt className="lbl">{t("detail.temp")}</dt>
-            <dd>{formatTempRange(dive.tempLowC, dive.tempHighC, units)}</dd>
+            <dd>
+              <Temps low={dive.tempLowC} high={dive.tempHighC} units={units} />
+            </dd>
           </div>
         )}
         {capabilities.rating && (
@@ -128,6 +156,17 @@ export function DiveDetail({ dive, units, capabilities }: { dive: Dive | null; u
           </div>
         )}
       </dl>
+      {capabilities.gps && dive.site.lat !== null && dive.site.lon !== null && (
+        <Suspense fallback={<div className="map" />}>
+          <DiveMap lat={dive.site.lat} lon={dive.site.lon} />
+        </Suspense>
+      )}
+      {dive.notes && (
+        <section className="notes" aria-label={t("detail.notes")}>
+          <h3 className="lbl">{t("detail.notes")}</h3>
+          <p>{dive.notes}</p>
+        </section>
+      )}
     </aside>
   );
 }

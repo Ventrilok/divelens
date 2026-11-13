@@ -25,6 +25,8 @@ export interface Dive {
   hasProfile: boolean;
   /** Marked invalid in the dive log (Subsurface): listed with a badge. */
   invalid: boolean;
+  /** The diver's own notes, line breaks kept. */
+  notes: string | null;
 }
 
 export interface Sample {
