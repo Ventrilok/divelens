@@ -1,7 +1,7 @@
-// Create Collections screen (spec F5, F6): the dives chosen on the Dives
-// screen, the cameras found in Lightroom over their period with one clock
+// Create Collections, steps 2 and 3 (spec F5, F6): the dives checked in
+// step 1, the cameras found in Lightroom over their period with one clock
 // offset each, the surface margin, live counts per dive, then one write in
-// Lightroom and a result screen.
+// Lightroom and the summary. Only shown with at least one dive checked.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyCollections, collectionSets, collectionsPreview, findCollectionPhotos, onApplyProgress, suggestOffsets } from "../api";
@@ -18,6 +18,7 @@ import {
 } from "../cameras";
 import { placeLabel, setExists } from "../collectionPlace";
 import { Icon } from "../components/Icon";
+import { Steps } from "../components/Steps";
 import { formatDay, formatRange, formatRowSpan } from "../format";
 import { formatInt, t, tn } from "../i18n";
 import type {
@@ -38,6 +39,9 @@ type Search =
   | { state: "searching" }
   | { state: "ready"; period: Period }
   | { state: "failed"; message: string };
+
+/** Where step 2 stands, for the app around it. */
+export type Phase = "adjust" | "writing" | "summary";
 
 type Run =
   | { state: "idle" }
@@ -223,6 +227,7 @@ function ResultView({
   cameras: Camera[];
   /** Depth was copied to GPS altitude, which Lightroom's Undo does not revert. */
   altitude: boolean;
+  /** Back to step 1, with no dive checked. */
   onBack: () => void;
   onRetry: (ids: string[]) => void;
 }) {
@@ -235,18 +240,21 @@ function ResultView({
   const used = cameras.length - ignored.length;
   return (
     <main className="screen screen-scroll">
+      <Steps current={3} />
+      <header className="screen-head">
+        <div>
+          <p className="muted">
+            {start && formatRange(start, end)} · {tn("coll.cameras", used)}
+            {ignored.length > 0 && ` · ${t("coll.result.ignored", { names: ignored.map((c) => c.model ?? t("coll.unknownCamera")).join(", ") })}`}
+          </p>
+        </div>
+      </header>
       <div className="result">
         <div className="result-head">
           <div className="result-icon">
             <Icon name="check" size={26} />
           </div>
-          <div>
-            <h1>{t("coll.result.title")}</h1>
-            <p className="muted">
-              {start && formatRange(start, end)} · {tn("coll.cameras", used)}
-              {ignored.length > 0 && ` · ${t("coll.result.ignored", { names: ignored.map((c) => c.model ?? t("coll.unknownCamera")).join(", ") })}`}
-            </p>
-          </div>
+          <h2>{t("coll.result.title")}</h2>
         </div>
         <div className="stats">
           <div className="card stat">
@@ -280,16 +288,20 @@ function ResultView({
             <span>{t("coll.result.empty", { dive: diveName(d) })}</span>
           </div>
         ))}
-        <p className="muted small">{t(altitude ? "coll.undoHintAltitude" : "coll.undoHint")}</p>
-        <div className="actions">
-          <button type="button" className="btn btn-p" onClick={onBack}>
-            {t("coll.result.back")}
-          </button>
+      </div>
+      <div className="card selection-bar apply-bar">
+        <div className="selection-text">
+          <span className="muted small">{t(altitude ? "coll.undoHintAltitude" : "coll.undoHint")}</span>
+        </div>
+        <div className="selection-actions">
           {empty.length > 0 && (
             <button type="button" className="btn btn-s" onClick={() => onRetry(empty.map((d) => d.id))}>
               {empty.length === 1 ? t("coll.result.retryOne", { dive: diveName(empty[0]) }) : t("coll.result.retryMany")}
             </button>
           )}
+          <button type="button" className="btn btn-p" onClick={onBack}>
+            {t("coll.result.back")}
+          </button>
         </div>
       </div>
     </main>
@@ -302,16 +314,23 @@ export function CollectionsScreen({
   settings,
   chosen,
   onChooseDives,
+  onDone,
   onRetryDives,
   onOpenSettings,
+  onPhase,
 }: {
   log: DiveLog;
   lr: LightroomStatus;
   settings: Settings;
   chosen: Set<string>;
+  /** Back to step 1, the checked dives kept. */
   onChooseDives: () => void;
+  /** From the summary: back to step 1, with no dive checked. */
+  onDone: () => void;
   onRetryDives: (ids: string[]) => void;
   onOpenSettings: () => void;
+  /** Told when a write starts and when the summary shows. */
+  onPhase: (phase: Phase) => void;
 }) {
   const dives = useMemo(
     () => log.dives.filter((d) => chosen.has(d.id)).sort((a, b) => (a.start < b.start ? -1 : 1)),
@@ -401,6 +420,12 @@ export function CollectionsScreen({
     };
   }, []);
 
+  const phase: Phase = run.state === "writing" ? "writing" : run.state === "done" ? "summary" : "adjust";
+  useEffect(() => {
+    onPhase(phase);
+    return () => onPhase("adjust");
+  }, [phase, onPhase]);
+
   const period = search.state === "ready" ? search.period : null;
   const cameras = period?.cameras ?? [];
 
@@ -457,31 +482,12 @@ export function CollectionsScreen({
         choices={run.choices}
         cameras={run.cameras}
         altitude={settings.depthToAltitude}
-        onBack={onChooseDives}
+        onBack={onDone}
         onRetry={(ids) => {
           setRun({ state: "idle" });
           onRetryDives(ids);
         }}
       />
-    );
-  }
-
-  if (dives.length === 0) {
-    return (
-      <main className="screen screen-center">
-        <div className="card empty-state">
-          <div className="empty-icon">
-            <Icon name="folder" />
-          </div>
-          <h1>{t("coll.empty.title")}</h1>
-          <p className="muted">{t("coll.empty.text")}</p>
-          <div className="actions">
-            <button type="button" className="btn btn-p" onClick={onChooseDives}>
-              {t("coll.empty.choose")}
-            </button>
-          </div>
-        </div>
-      </main>
     );
   }
 
@@ -505,9 +511,9 @@ export function CollectionsScreen({
 
   return (
     <main className="screen screen-scroll">
+      <Steps current={2} onGo={writing ? undefined : onChooseDives} />
       <header className="screen-head">
         <div>
-          <h1>{t("coll.title")}</h1>
           <p className="muted">
             {tn("coll.dives", dives.length)} · {formatRange(start, end)}
             {period &&
@@ -519,9 +525,6 @@ export function CollectionsScreen({
               })}`}
           </p>
         </div>
-        <button type="button" className="btn btn-s" onClick={onChooseDives} disabled={writing}>
-          {t("coll.changeDives")}
-        </button>
       </header>
 
       {!lr.connected && (
@@ -705,8 +708,9 @@ export function CollectionsScreen({
               {t("coll.openSettings")}
             </button>
           )}
-          <button type="button" className="btn btn-g" onClick={onChooseDives} disabled={writing}>
-            {t("tag.cancel")}
+          <button type="button" className="btn btn-s" onClick={onChooseDives} disabled={writing}>
+            <Icon name="back" />
+            {t("coll.back")}
           </button>
           <button
             type="button"
@@ -715,6 +719,7 @@ export function CollectionsScreen({
             onClick={apply}
           >
             {tn("tag.apply", total)}
+            <Icon name="arrow" />
           </button>
         </div>
       </div>

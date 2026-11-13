@@ -1,6 +1,6 @@
 [package]
 name = "libdivecomputer-sys"
-description = "Builds libdivecomputer (LGPL-2.1, git submodule) and declares the few functions DiveLens uses to parse stored dive-computer data"
+description = "Builds libdivecomputer (LGPL-2.1, git submodule) and declares the few functions Dive Lens uses to parse stored dive-computer data"
 version.workspace = true
 edition.workspace = true
 license = "GPL-3.0-or-later AND LGPL-2.1-or-later"

@@ -4,10 +4,9 @@ import type { DiveLog, LightroomStatus } from "../types";
 import logo from "../../icon-source/logo-color.svg";
 import { Icon, type IconName } from "./Icon";
 
-export type Screen = "dives" | "collections" | "tag" | "settings";
+export type Screen = "collections" | "tag" | "settings";
 
 const items: { id: Screen; icon: IconName; label: () => string; ready: boolean }[] = [
-  { id: "dives", icon: "list", label: () => t("nav.dives"), ready: true },
   { id: "collections", icon: "folder", label: () => t("nav.collections"), ready: true },
   { id: "tag", icon: "tag", label: () => t("nav.tag"), ready: true },
 ];
@@ -69,10 +68,10 @@ export function Sidebar({
   lr: LightroomStatus;
 }) {
   return (
-    <nav className="sidebar" aria-label="DiveLens">
+    <nav className="sidebar" aria-label="Dive Lens">
       <div className="brand">
         <img src={logo} alt="" className="brand-logo" />
-        <span>DiveLens</span>
+        <span>Dive Lens</span>
       </div>
       {items.map((it) => (
         <NavItem key={it.id} {...it} current={current} onGo={onGo} />

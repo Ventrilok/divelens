@@ -4,7 +4,7 @@ Guidance for Claude Code in this repository.
 
 ## Project
 
-DiveLens 2: links underwater photos in Adobe Lightroom Classic with dive-log data. Free, open source, GPL-3.0. Public repository: never commit secrets, keys, certificates or real personal dive data.
+Dive Lens 2: links underwater photos in Adobe Lightroom Classic with dive-log data. Free, open source, GPL-3.0. Public repository: never commit secrets, keys, certificates or real personal dive data.
 
 The product specification is `docs/spec-v1.md` (French). It is the source of truth for scope and decisions; items are tagged Décidé / Proposé / À trancher.
 
@@ -35,7 +35,7 @@ App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where a
 - After cloning: `git submodule update --init` (the core does not build without libdivecomputer)
 - Core tests: `cargo test -p divelens-core`
 - App and plugin tests: `cargo test -p divelens` (needs `app/dist`, i.e. one front-end build)
-- Plugin in Lightroom (dev): Plug-in Manager › Add › `plugin/DiveLens.lrdevplugin`. Its menus launch `target/release/bundle/macos/DiveLens.app` (macOS) or `target/release/divelens.exe` (Windows) when no app ships in the plugin folder; a running dev window connects by itself. Plugin log: `DiveLens.log` in Lightroom's log folder (macOS `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/`).
+- Plugin in Lightroom (dev): Plug-in Manager › Add › `plugin/DiveLens.lrdevplugin`. Its menus launch `target/release/bundle/macos/Dive Lens.app` (macOS) or `target/release/divelens.exe` (Windows) when no app ships in the plugin folder; a running dev window connects by itself. Plugin log: `DiveLens.log` in Lightroom's log folder (macOS `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/`).
 - Lint: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` (the app crate needs `app/dist`; core only: `cargo clippy -p divelens-core -p libdivecomputer-sys --all-targets -- -D warnings`)
 - Front-end type check (from `app/`): `npm run build` (runs `tsc`, then produces `app/dist`)
 - Front-end tests (from `app/`): `npm test` (runs in a UTC+14 time zone on purpose: dive times are wall-clock and must never shift)
@@ -48,6 +48,7 @@ App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where a
 - Plugin identifier: `com.querton.divelens`.
 - Existing metadata field ids: `DiveId`, `StartDate`, `EndDate`, `Duration`, `MaxDepth`, `TempHigh`, `TempLow`, `Rating`. New fields are added, never renamed.
 - Collection set "Dive Lens", collections named "<dive number> - <site>".
+- Product name wherever a person reads it (app, Lightroom texts, bundle name, docs): "Dive Lens", two words. Identifiers keep "DiveLens" / "divelens": plugin id and folder, bundle identifier, translation keys, crate names, log file names.
 
 ## Rules
 

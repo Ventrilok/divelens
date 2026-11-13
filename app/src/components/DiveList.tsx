@@ -1,4 +1,4 @@
-// Dive list. Shared by the Dives screen (several dives can be ticked) and
+// Dive list. Shared by Create Collections, step 1 (several dives can be ticked) and
 // Tag Selection (one dive is chosen: mode "single", radio buttons). The
 // focused row (shown in the detail card, moved with the arrow keys) is not
 // the chosen dive: browsing never changes what gets written.

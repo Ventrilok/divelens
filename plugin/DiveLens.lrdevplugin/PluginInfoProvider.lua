@@ -11,19 +11,19 @@ local Link = require "Link"
 return {
     sectionsForTopOfDialog = function(f, _)
         local status = Link.isConnected()
-            and LOC "$$$/DiveLens/PluginManager/Connected=DiveLens app connected."
-            or LOC "$$$/DiveLens/PluginManager/NotConnected=DiveLens app not connected."
+            and LOC "$$$/DiveLens/PluginManager/Connected=Dive Lens app connected."
+            or LOC "$$$/DiveLens/PluginManager/NotConnected=Dive Lens app not connected."
         return {
             {
-                title = LOC "$$$/DiveLens/PluginManager/Title=DiveLens",
+                title = LOC "$$$/DiveLens/PluginManager/Title=Dive Lens",
                 f:row {
                     f:static_text {
-                        title = LOC "$$$/DiveLens/PluginManager/Text=All DiveLens settings are in the app." .. " " .. status,
+                        title = LOC "$$$/DiveLens/PluginManager/Text=All Dive Lens settings are in the app." .. " " .. status,
                         fill_horizontal = 1,
                     },
                     f:push_button {
-                        title = LOC "$$$/DiveLens/PluginManager/Open=Open DiveLens",
-                        action = function() Launch.open("dives") end,
+                        title = LOC "$$$/DiveLens/PluginManager/Open=Open Dive Lens",
+                        action = function() Launch.open("collections") end,
                     },
                 },
             },

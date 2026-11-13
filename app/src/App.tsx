@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   appInfo,
   initialScreen,
@@ -12,7 +12,7 @@ import {
 import { unitsInUse } from "./collectionPlace";
 import { isReadyScreen, Sidebar, type Screen } from "./components/Sidebar";
 import { lang, setLanguage, t } from "./i18n";
-import { CollectionsScreen } from "./screens/CollectionsScreen";
+import { CollectionsScreen, type Phase } from "./screens/CollectionsScreen";
 import { DivesScreen } from "./screens/DivesScreen";
 import { TagScreen } from "./screens/TagScreen";
 import { SettingsScreen, type LogState } from "./screens/SettingsScreen";
@@ -34,9 +34,29 @@ const offline: LightroomStatus = {
 };
 
 function App({ initialSettings }: { initialSettings: Settings }) {
-  const [screen, setScreen] = useState<Screen>("dives");
-  // Dives chosen on the Dives screen, kept when going to Create Collections and back.
+  const [screen, setScreen] = useState<Screen>("collections");
+  // Create Collections: step 1 checks the dives, step 2 adjusts and applies
+  // (its summary is step 3). The checked dives are kept between steps.
+  const [step, setStep] = useState<"dives" | "adjust">("dives");
   const [chosen, setChosen] = useState<Set<string>>(new Set());
+  // Tag Selection's Cancel starts it again from scratch.
+  const [tagRun, setTagRun] = useState(0);
+
+  // While collections are being written, the screen stays put so that the
+  // summary is seen. Leaving the summary, whichever way, unchecks the dives.
+  const phase = useRef<Phase>("adjust");
+  const onPhase = useCallback((p: Phase) => {
+    phase.current = p;
+  }, []);
+
+  // Entering Create Collections, from the sidebar or the Lightroom menu,
+  // always opens step 1, with the checked dives kept (none after a summary).
+  const open = useCallback((s: Screen) => {
+    if (phase.current === "writing") return;
+    if (phase.current === "summary") setChosen(new Set());
+    setScreen(s);
+    if (s === "collections") setStep("dives");
+  }, []);
   const [state, setState] = useState<LogState>({ status: "loading" });
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -84,12 +104,12 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   // Lightroom link: current state, then live updates; menus choose the screen.
   const [lr, setLr] = useState<LightroomStatus>(offline);
   useEffect(() => {
-    const go = (s: string | null) => s && isReadyScreen(s) && setScreen(s);
+    const go = (s: string | null) => s && isReadyScreen(s) && open(s);
     initialScreen().then(go);
     lightroomStatus().then(setLr);
     const stops = [onLightroomStatus(setLr), onShowScreen(go)];
     return () => stops.forEach((p) => p.then((stop) => stop()));
-  }, []);
+  }, [open]);
 
   // Units in use: the dive application's unless forced in Settings.
   const okLog = state.status === "ok" ? state.log : null;
@@ -98,9 +118,16 @@ function App({ initialSettings }: { initialSettings: Settings }) {
     [okLog, settings.units],
   );
 
+  // Step 2 needs checked dives of this log (another dive log may have been chosen meanwhile).
+  const hasChosen = useMemo(() => !!log && log.dives.some((d) => chosen.has(d.id)), [log, chosen]);
+  const adjusting = step === "adjust" && hasChosen;
+  useEffect(() => {
+    if (log && !hasChosen) setStep("dives");
+  }, [log, hasChosen]);
+
   return (
     <div className="app" key={lang}>
-      <Sidebar current={screen} onGo={setScreen} log={log} lr={lr} />
+      <Sidebar current={screen} onGo={(s) => s !== screen && open(s)} log={log} lr={lr} />
       {screen === "settings" && (
         <SettingsScreen
           settings={settings}
@@ -117,28 +144,35 @@ function App({ initialSettings }: { initialSettings: Settings }) {
         </main>
       )}
       {screen !== "settings" && state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
-      {log && screen === "dives" && (
+      {log && screen === "collections" && !adjusting && (
         <DivesScreen
           log={log}
           selected={chosen}
           onSelect={setChosen}
           sort={sort}
           onSort={onSort}
-          onCreate={() => setScreen("collections")}
+          onNext={() => setStep("adjust")}
         />
       )}
-      {log && screen === "collections" && (
+      {log && screen === "collections" && adjusting && (
         <CollectionsScreen
           log={log}
           lr={lr}
           settings={settings}
           chosen={chosen}
-          onChooseDives={() => setScreen("dives")}
+          onChooseDives={() => setStep("dives")}
+          onDone={() => {
+            setChosen(new Set());
+            setStep("dives");
+          }}
           onRetryDives={(ids) => setChosen(new Set(ids))}
           onOpenSettings={() => setScreen("settings")}
+          onPhase={onPhase}
         />
       )}
-      {log && screen === "tag" && <TagScreen log={log} lr={lr} sort={sort} onCancel={() => setScreen("dives")} />}
+      {log && screen === "tag" && (
+        <TagScreen key={tagRun} log={log} lr={lr} sort={sort} onCancel={() => setTagRun((n) => n + 1)} />
+      )}
     </div>
   );
 }
