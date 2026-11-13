@@ -15,7 +15,7 @@ use chrono::{DateTime, NaiveDateTime};
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Row};
 
 use crate::divecomputer::Catalog;
-use crate::model::{Capabilities, Dive, DiveSource, Site};
+use crate::model::{Capabilities, Dive, DiveSource, Site, clean_notes};
 use crate::profile::Sample;
 use crate::{Error, Result};
 
@@ -128,6 +128,7 @@ fn dive_from_row(r: &Row, computers: &Catalog) -> rusqlite::Result<Dive> {
         site: site_from_row(r)?,
         has_profile,
         invalid: false,
+        notes: clean_notes(r.get("notes")?),
     })
 }
 
@@ -152,6 +153,7 @@ impl DiveSource for MacDive {
                     D.ZTEMPLOW AS temp_low,
                     D.ZRATING AS rating,
                     D.ZCOMPUTER AS computer,
+                    D.ZNOTES AS notes,
                     D.ZRAWDATA IS NOT NULL AND length(D.ZRAWDATA) > 0 AS has_raw,
                     CASE WHEN S.Z_PK IS NULL THEN NULL
                          ELSE COALESCE(S.ZUUID, 'pk:' || S.Z_PK) END AS site_id,

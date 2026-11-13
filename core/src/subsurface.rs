@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 use chrono::NaiveDateTime;
 use serde::Serialize;
 
-use crate::model::{Capabilities, Dive, DiveSource, Site};
+use crate::model::{Capabilities, Dive, DiveSource, Site, clean_notes};
 use crate::profile::Sample;
 use crate::{Error, Result};
 
@@ -94,6 +94,7 @@ struct RawDive {
     duration_s: Option<u32>,
     rating: Option<u8>,
     invalid: bool,
+    notes: Option<String>,
     site: Option<u32>,
     /// Water temperature entered on the dive itself, which Subsurface shows
     /// instead of the computers'.
@@ -252,6 +253,7 @@ fn dive(id: String, d: RawDive, site: Site) -> (Dive, Vec<Sample>) {
         site,
         has_profile,
         invalid: d.invalid,
+        notes: clean_notes(d.notes),
     };
     (dive, if has_profile { samples } else { Vec::new() })
 }

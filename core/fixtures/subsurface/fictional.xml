@@ -21,7 +21,10 @@
 </divesites>
 <dives>
 <trip date='2025-06-14' time='09:30:00' location='Atlantis'>
+<notes>Trip notes, never shown on a dive</notes>
 <dive number='101' rating='4' divesiteid='c0ffee01' date='2025-06-14' time='09:30:00' duration='42:30 min'>
+  <notes>Turtle at the wall &amp; a &quot;reef&quot; shark.
+Second line</notes>
   <divecomputer model='Shearwater Perdix 2' deviceid='00000001'>
   <depth max='18.4 m' mean='11.0 m' />
   <temperature air='29.0 C' water='24.0 C' />
@@ -55,6 +58,8 @@
 </dive>
 </trip>
 <dive number='103' rating='2' divesiteid='c0ffee03' date='2025-06-15' time='08:00:00' duration='50:00 min'>
+  <notes>Entered
+by hand</notes>
   <divetemperature water='27.0 C'/>
   <divecomputer model='manually added dive'>
   <depth max='20.0 m' mean='12.0 m' />

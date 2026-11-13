@@ -47,6 +47,11 @@ pub(super) fn check_fictional(log: &Subsurface) {
     assert_eq!(d.rating, Some(4));
     assert!(d.has_profile && !d.invalid);
     assert_eq!(
+        d.notes.as_deref(),
+        Some("Turtle at the wall & a \"reef\" shark.\nSecond line"),
+        "the dive's notes, not the trip's"
+    );
+    assert_eq!(
         d.site,
         Site {
             id: Some("c0ffee01".into()),
@@ -76,6 +81,7 @@ pub(super) fn check_fictional(log: &Subsurface) {
     assert!(close(d.temp_low_c, 22.0));
     assert!(close(d.temp_high_c, 23.0));
     assert_eq!(d.rating, None);
+    assert_eq!(d.notes, None);
     let p = log.profile(&d.id).unwrap();
     assert_eq!(p.len(), 4, "first computer's samples");
     assert_eq!(d.site.name.as_deref(), Some("Glacier Wall"));
@@ -84,6 +90,7 @@ pub(super) fn check_fictional(log: &Subsurface) {
 
     // 103: entered by hand in Subsurface: no profile; temperature of the dive.
     let d = by_number(&dives, 103);
+    assert_eq!(d.notes.as_deref(), Some("Entered\nby hand"));
     assert!(!d.has_profile);
     assert!(log.profile(&d.id).unwrap().is_empty());
     assert!(close(d.temp_low_c, 27.0) && close(d.temp_high_c, 27.0));

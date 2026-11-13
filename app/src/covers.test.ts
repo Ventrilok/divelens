@@ -15,6 +15,7 @@ const dive = (id: string, start: string, end: string, durationS = 3000): Dive =>
   site: { id: null, name: null, location: null, country: null, lat: null, lon: null },
   hasProfile: false,
   invalid: false,
+  notes: null,
 });
 
 const dives = [

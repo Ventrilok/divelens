@@ -284,6 +284,7 @@ mod tests {
             },
             has_profile: true,
             invalid: false,
+            notes: None,
         }
     }
 

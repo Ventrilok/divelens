@@ -43,9 +43,11 @@ describe("units", () => {
     expect(f.formatTemp(0, metric)).toBe("0 °C");
     expect(f.formatTemp(-1.5, metric)).toBe("-1,5 °C");
     expect(f.formatTemp(25, imperial)).toBe("77 °F");
-    expect(f.formatTempRange(27, 28, metric)).toBe("27 → 28 °C");
-    expect(f.formatTempRange(27, 27, metric)).toBe("27 °C");
-    expect(f.formatTempRange(null, 28, metric)).toBe("28 °C");
+    expect(f.formatTemps(27, 28, metric)).toEqual({ low: "27 °C", high: "28 °C", same: null });
+    expect(f.formatTemps(27, 27.04, metric)).toEqual({ low: null, high: null, same: "27 °C" });
+    expect(f.formatTemps(null, 28, metric)).toEqual({ low: null, high: "28 °C", same: null });
+    expect(f.formatTemps(null, null, metric)).toEqual({ low: null, high: null, same: "—" });
+    expect(f.formatTemps(24, 26, imperial)).toEqual({ low: "75,2 °F", high: "78,8 °F", same: null });
   });
   it("converts filter depths back to metres", () => {
     expect(f.depthToMetres(f.depthValue(20, imperial), imperial)).toBeCloseTo(20);

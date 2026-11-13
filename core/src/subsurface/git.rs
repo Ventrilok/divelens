@@ -193,6 +193,7 @@ fn parse_dive(repo: &Repository, tree: ObjectId, start: NaiveDateTime) -> Result
         duration_s: None,
         rating: None,
         invalid: false,
+        notes: None,
         site: None,
         water_c: None,
         computers: Vec::new(),
@@ -213,6 +214,7 @@ fn parse_dive(repo: &Repository, tree: ObjectId, start: NaiveDateTime) -> Result
                     "duration" => dive.duration_s = duration(value),
                     "rating" => dive.rating = value.trim().parse().ok(),
                     "invalid" => dive.invalid = true,
+                    "notes" => dive.notes = quoted(value),
                     "divesiteid" => dive.site = uuid(value),
                     "watertemp" => dive.water_c = temperature(value),
                     _ => {}

@@ -48,6 +48,16 @@ pub struct Dive {
     /// The dive log marks the dive as invalid (Subsurface); it is still
     /// listed, with a badge.
     pub invalid: bool,
+    /// The diver's own notes on the dive, line breaks kept; `None` when the
+    /// log has none.
+    pub notes: Option<String>,
+}
+
+/// Notes as shown: line breaks as `\n`, blank notes as `None`.
+pub(crate) fn clean_notes(notes: Option<String>) -> Option<String> {
+    let notes = notes?.replace("\r\n", "\n").replace('\r', "\n");
+    let notes = notes.trim();
+    (!notes.is_empty()).then(|| notes.to_string())
 }
 
 /// What a source can provide; the UI hides what is missing.

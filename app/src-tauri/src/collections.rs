@@ -412,6 +412,7 @@ mod tests {
             },
             has_profile,
             invalid: false,
+            notes: None,
         }
     }
 

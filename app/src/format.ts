@@ -50,9 +50,18 @@ export function formatTemp(c: number | null, units: Units): string {
 }
 
 /** "27 → 28 °C", or a single value when both are equal or one is missing. */
-export function formatTempRange(low: number | null, high: number | null, units: Units): string {
-  if (low === null || high === null || low === high) return formatTemp(low ?? high, units);
-  return `${upToOneDecimal.format(tempValue(low, units))} → ${formatTemp(high, units)}`;
+/** Coldest and warmest temperatures, each with its unit. When both read the
+ *  same, only `same` is given. */
+export function formatTemps(
+  low: number | null,
+  high: number | null,
+  units: Units,
+): { low: string | null; high: string | null; same: string | null } {
+  const l = low === null ? null : formatTemp(low, units);
+  const h = high === null ? null : formatTemp(high, units);
+  if (l === null && h === null) return { low: null, high: null, same: DASH };
+  if (l === h) return { low: null, high: null, same: l };
+  return { low: l, high: h, same: null };
 }
 
 /** "35 min" (rounded to the minute). */
