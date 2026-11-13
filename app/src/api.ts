@@ -8,6 +8,7 @@ import type {
   CollectionsPreview,
   CollectionsResult,
   DiveLog,
+  ImportCheck,
   LightroomStatus,
   Period,
   Sample,
@@ -25,6 +26,12 @@ export const appInfo = () => invoke<AppInfo>("app_info");
 export const getSettings = () => invoke<Settings>("get_settings");
 /** Changes the settings named in `patch`; resolves with all of them. */
 export const updateSettings = (patch: Partial<Settings>) => invoke<Settings>("update_settings", { patch });
+/** Writes the current settings to `path`; rejects with the reason. */
+export const exportSettings = (path: string) => invoke<void>("export_settings", { path });
+/** Reads a settings file without importing it; rejects with an ImportError. */
+export const checkSettingsFile = (path: string) => invoke<ImportCheck>("check_settings_file", { path });
+/** Replaces every setting with those of the file; rejects with an ImportError. */
+export const importSettings = (path: string) => invoke<ImportCheck>("import_settings", { path });
 /** Calls `handler` whenever the settings change (here or in the app's back end). */
 export const onSettingsChanged = (handler: (s: Settings) => void): Promise<UnlistenFn> =>
   listen<Settings>("settings-changed", (e) => handler(e.payload));

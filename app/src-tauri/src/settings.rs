@@ -254,6 +254,18 @@ impl Default for Settings {
     }
 }
 
+/// Why a settings file chosen for import (spec F11) cannot be used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
+pub enum ImportError {
+    /// The file cannot be read (gone, no permission, not text).
+    Unreadable(String),
+    /// The file reads, but does not hold Dive Lens settings.
+    NotSettings,
+    /// The imported settings could not be saved.
+    NotSaved(String),
+}
+
 /// Settings of the previous plugin (Lightroom plug-in preferences), as the
 /// plugin passes them on.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
@@ -322,6 +334,57 @@ impl Settings {
             *self = next;
         }
     }
+    /// The settings as an export file (spec F11): the settings file itself,
+    /// readable, without what only concerns this computer (whether the
+    /// previous plugin's settings were taken over).
+    pub fn to_export(&self) -> String {
+        let mut value = serde_json::to_value(self).expect("settings serialize");
+        if let Some(fields) = value.as_object_mut() {
+            fields.remove("legacyImported");
+        }
+        serde_json::to_string_pretty(&value).expect("settings serialize")
+    }
+
+    /// Writes the export file at `path`.
+    pub fn export(&self, path: &Path) -> std::io::Result<()> {
+        std::fs::write(path, self.to_export())
+    }
+
+    /// Reads an export file, or a settings file copied from another
+    /// computer, of any version: unknown fields are ignored and a field that
+    /// does not read takes its default. A file without a version number is
+    /// not Dive Lens settings.
+    pub fn from_export(text: &str) -> Result<Self, ImportError> {
+        let value: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+            .map_err(|_| ImportError::NotSettings)?;
+        if !value.get("version").is_some_and(serde_json::Value::is_u64) {
+            return Err(ImportError::NotSettings);
+        }
+        let mut settings: Self =
+            serde_json::from_value(value).map_err(|_| ImportError::NotSettings)?;
+        settings.version = CURRENT_VERSION;
+        settings.legacy_imported = false;
+        Ok(settings)
+    }
+
+    /// Reads the export file at `path`.
+    pub fn read_export(path: &Path) -> Result<Self, ImportError> {
+        let text =
+            std::fs::read_to_string(path).map_err(|e| ImportError::Unreadable(e.to_string()))?;
+        Self::from_export(&text)
+    }
+
+    /// Replaces every setting with imported ones. The previous plugin's
+    /// settings are then never taken over: the imported file is the user's
+    /// choice, which the takeover must never replace.
+    pub fn replace_with(&mut self, imported: Settings) {
+        *self = Settings {
+            version: CURRENT_VERSION,
+            legacy_imported: true,
+            ..imported
+        };
+    }
+
     /// Takes over the previous plugin's settings, once: its dive-log location
     /// (when it is not the standard one and the file is still there) and its
     /// dive order. Never replaces a setting already chosen in the app.
@@ -536,6 +599,111 @@ mod tests {
         assert_eq!(place.group_name().as_deref(), Some("Plongées 2026"));
         place.group = "   ".into();
         assert_eq!(place.group_name(), None);
+    }
+
+    fn chosen() -> Settings {
+        Settings {
+            source: Source {
+                kind: SourceKind::Subsurface,
+                mac_dive_path: Some("/Dives/MacDive.sqlite".into()),
+                subsurface_path: Some("/Dives/diver.ssrf".into()),
+            },
+            units: UnitChoices {
+                depth: DepthChoice::Feet,
+                temp: TempChoice::Celsius,
+            },
+            language: Language::Fr,
+            depth_to_altitude: true,
+            collections: CollectionsPlace {
+                parent: vec!["Trips".into(), "2026".into()],
+                group: "Plongées".into(),
+            },
+            log_level: LogLevel::Detailed,
+            dive_sort: Some(DiveSort::Depth),
+            legacy_imported: true,
+            ..Settings::default()
+        }
+    }
+
+    #[test]
+    fn export_round_trips_without_machine_state() {
+        let dir = dir("export");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("Dive Lens settings.json");
+        let settings = chosen();
+        settings.export(&file).unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.contains("\"version\""), "readable, versioned: {text}");
+        assert!(!text.contains("legacyImported"), "{text}");
+        let read = Settings::read_export(&file).unwrap();
+        assert_eq!(
+            read,
+            Settings {
+                legacy_imported: false,
+                ..settings.clone()
+            }
+        );
+        // Imported, the settings are the file's, and the previous plugin's
+        // settings are never taken over afterwards.
+        let mut current = Settings::default();
+        current.replace_with(read);
+        assert_eq!(current, settings);
+        current.take_over(
+            &legacy(Some("/Other.sqlite"), Some("asc")),
+            Path::new(HOME),
+            Path::new(STANDARD),
+        );
+        assert_eq!(current, settings);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn imports_older_and_newer_files() {
+        // Version 2: MacDive was the only application, its location `path`.
+        let s = Settings::from_export(
+            r#"{"version":2,"source":{"kind":"macDive","path":"/Dives/MacDive.sqlite"},
+                "units":{"depth":"ft","temp":"source"},"legacyImported":true}"#,
+        )
+        .unwrap();
+        assert_eq!(s.version, CURRENT_VERSION);
+        assert_eq!(
+            s.source.mac_dive_path.as_deref(),
+            Some(Path::new("/Dives/MacDive.sqlite"))
+        );
+        assert_eq!(s.units.depth, DepthChoice::Feet);
+        assert_eq!(s.collections, CollectionsPlace::default());
+        assert!(!s.legacy_imported, "machine state is never imported");
+        // A newer version: unknown settings are ignored, the rest is kept.
+        let s = Settings::from_export(
+            r#"{"version":7,"language":"fr","trips":{"on":true},"logLevel":"verbose"}"#,
+        )
+        .unwrap();
+        assert_eq!(s.language, Language::Fr);
+        assert_eq!(s.log_level, LogLevel::Normal);
+        // A byte-order mark (file saved by a Windows editor) is fine.
+        assert!(Settings::from_export("\u{feff}{\"version\":3}").is_ok());
+    }
+
+    #[test]
+    fn refuses_what_is_not_settings() {
+        for text in [
+            "",
+            "not json",
+            "[1, 2]",
+            r#"{"name":"divelens-app"}"#,
+            r#"{"version":"3"}"#,
+        ] {
+            assert_eq!(
+                Settings::from_export(text),
+                Err(ImportError::NotSettings),
+                "{text}"
+            );
+        }
+        let gone = dir("gone").join("settings.json");
+        assert!(matches!(
+            Settings::read_export(&gone),
+            Err(ImportError::Unreadable(_))
+        ));
     }
 
     const HOME: &str = "/Users/diver";

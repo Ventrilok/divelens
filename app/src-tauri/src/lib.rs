@@ -23,7 +23,7 @@ use lightroom::{
     ApplyOutcome, CollectionSet, Command, End, Event, LinkFile, Status, Timing, WrittenCollection,
 };
 use offsets::Offsets;
-use settings::{Settings, SourceKind};
+use settings::{ImportError, Settings, SourceKind};
 
 /// Where the app writes its log (`None`: no home folder).
 struct LogFile(Option<PathBuf>);
@@ -57,6 +57,58 @@ fn get_settings(app: AppHandle) -> Settings {
 #[tauri::command]
 fn update_settings(app: AppHandle, patch: serde_json::Value) -> Result<Settings, String> {
     change_settings(&app, |s| s.patch(&patch))
+}
+
+/// Writes the current settings to the file the user chose (spec F11).
+#[tauri::command]
+fn export_settings(app: AppHandle, path: PathBuf) -> Result<(), String> {
+    Settings::load(&config_dir(&app))
+        .export(&path)
+        .map_err(|e| {
+            log::error!("settings not exported to {}: {e}", path.display());
+            e.to_string()
+        })?;
+    log::info!("settings exported to {}", path.display());
+    Ok(())
+}
+
+/// A settings file's dive log: the application it means on this computer,
+/// where the log is, and whether it is there.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportCheck {
+    source: SourceInfo,
+    found: bool,
+}
+
+fn import_check(app: &AppHandle, settings: &Settings) -> ImportCheck {
+    let source = source_info_of(app, settings);
+    ImportCheck {
+        found: source.path.exists(),
+        source,
+    }
+}
+
+/// Reads a settings file before importing it, so the user can confirm
+/// knowing whether its dive log is on this computer.
+#[tauri::command]
+fn check_settings_file(app: AppHandle, path: PathBuf) -> Result<ImportCheck, ImportError> {
+    let settings = Settings::read_export(&path).inspect_err(|e| {
+        log::warn!("settings file {} not usable: {e:?}", path.display());
+    })?;
+    Ok(import_check(&app, &settings))
+}
+
+/// Replaces every setting with those of the file, once the user confirmed.
+/// A dive log missing on this computer is kept and reported: the user then
+/// chooses where it is (never a silent switch to another log).
+#[tauri::command]
+fn import_settings(app: AppHandle, path: PathBuf) -> Result<ImportCheck, ImportError> {
+    let imported = Settings::read_export(&path)?;
+    let after =
+        change_settings(&app, |s| s.replace_with(imported)).map_err(ImportError::NotSaved)?;
+    log::info!("settings imported from {}", path.display());
+    Ok(import_check(&app, &after))
 }
 
 fn change_settings(
@@ -144,7 +196,12 @@ fn standard_path(app: &AppHandle, kind: SourceKind) -> PathBuf {
 }
 
 fn source_info(app: &AppHandle) -> SourceInfo {
-    let settings = Settings::load(&config_dir(app));
+    source_info_of(app, &Settings::load(&config_dir(app)))
+}
+
+/// The dive log `settings` point at: the application in use on this
+/// computer and its location.
+fn source_info_of(app: &AppHandle, settings: &Settings) -> SourceInfo {
     let kind = settings.source.kind();
     match settings.source.path(kind) {
         Some(path) => SourceInfo {
@@ -819,6 +876,9 @@ pub fn run() {
             app_info,
             get_settings,
             update_settings,
+            export_settings,
+            check_settings_file,
+            import_settings,
             load_dives,
             dive_profile,
             set_source_path,
