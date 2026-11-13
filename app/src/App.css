@@ -66,6 +66,12 @@ button { font: inherit; }
 .inp { min-height: 40px; padding: 0 12px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--line-strong); color: var(--text); font: inherit; }
 .inp:focus-visible, .btn:focus-visible, .chip button:focus-visible, .nav:focus-visible, .list-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .inp-num { width: 90px; }
+/* Dropdowns: drawn like the other fields on macOS and Windows; the open list
+   stays the system's menu. */
+select.inp { appearance: none; -webkit-appearance: none; padding-right: 36px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%2369b7bf' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 16px; cursor: pointer; }
+select.inp:hover:not(:disabled) { border-color: #4a4e55; }
+select.inp:disabled { opacity: 0.5; cursor: not-allowed; }
+select.inp option { background: var(--card); color: var(--text); }
 input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
 
 /* Layout */

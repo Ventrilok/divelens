@@ -337,6 +337,8 @@ Description fonctionnelle seulement. La mise en page est une décision du propri
 
 États à couvrir dans les maquettes : liaison perdue, base introuvable, plongée sans courbe, aucune photo trouvée, écriture en cours avec progression **[Décidé]**.
 
+**Listes déroulantes [Décidé, 2026-11-13]** : fermées, elles ont l'aspect des autres champs (fond sombre, bord fin, flèche cyan), identique sur Mac et Windows ; ouvertes, c'est le menu du système.
+
 ## 7. Champs ajoutés
 
 **[Décidé, 2026-11-12]** — noms définitifs, jamais renommés (section 4).
