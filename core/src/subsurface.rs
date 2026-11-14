@@ -392,4 +392,4 @@ fn too_old(path: &Path, version: Option<u32>) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

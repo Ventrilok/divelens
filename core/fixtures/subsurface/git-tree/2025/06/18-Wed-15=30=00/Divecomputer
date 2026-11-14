@@ -1,0 +1,8 @@
+model "Mares Genius"
+deviceid 00000002
+maxdepth 16.0m
+meandepth 9.0m
+  0:10 2.0m 26.0°C
+  8:00 16.0m 25.0°C
+ 20:00 5.0m
+ 24:00 0.0m 25.5°C
