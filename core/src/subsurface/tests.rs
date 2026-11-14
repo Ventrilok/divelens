@@ -1,5 +1,5 @@
-//! Tests against fictional Subsurface logs (`core/fixtures/subsurface`). No
-//! personal data.
+//! Tests against fictional Subsurface logs (`core/fixtures/subsurface`): the
+//! reference log in both storage formats. No personal data.
 
 use super::*;
 use chrono::NaiveDate;
@@ -26,10 +26,18 @@ fn close(a: Option<f64>, b: f64) -> bool {
     a.is_some_and(|a| (a - b).abs() < 1e-9)
 }
 
-/// Everything the fictional log must give, whatever its storage format.
+/// How Subsurface's reading rules apply to the fictional log, whatever its
+/// storage format. The values every reader shares are checked by the
+/// conformance tests (`crate::conformance`).
 pub(super) fn check_fictional(log: &Subsurface) {
     let dives = log.dives().unwrap();
-    assert_eq!(dives.len(), 7);
+    assert_eq!(dives.len(), 10);
+
+    // 100: a dive computer but no samples: no profile; the water temperature
+    // is both the low and the high.
+    let d = by_number(&dives, 100);
+    assert!(!d.has_profile);
+    assert!(close(d.temp_low_c, 21.0) && close(d.temp_high_c, 21.0));
 
     // 101: in a trip, one computer, site split from "Country / Location / Site".
     let d = by_number(&dives, 101);
@@ -125,7 +133,7 @@ pub(super) fn check_fictional(log: &Subsurface) {
     assert_eq!(d.id, "2025-06-16T07:00:00");
     assert!(d.invalid && d.has_profile);
     assert_eq!(d.site, Site::default());
-    assert!(close(d.temp_low_c, -1.5) && close(d.temp_high_c, -1.0));
+    assert!(close(d.temp_low_c, -1.5) && close(d.temp_high_c, 0.0));
 
     // 106 and 107 start at the same second: ordered by number.
     assert_eq!(by_number(&dives, 106).id, "2025-06-17T10:00:00");
@@ -138,9 +146,30 @@ pub(super) fn check_fictional(log: &Subsurface) {
         "town as city"
     );
 
+    // 108: accents and an escaped apostrophe, split from the name.
+    let reef = &by_number(&dives, 108).site;
+    assert_eq!(
+        (
+            reef.name.as_deref(),
+            reef.location.as_deref(),
+            reef.country.as_deref()
+        ),
+        (
+            Some("Récif d'Émeraude"),
+            Some("Île Verte"),
+            Some("Atlantide")
+        )
+    );
+
+    // 109: a site with GPS and no name.
+    let gps_only = &by_number(&dives, 109).site;
+    assert_eq!(gps_only.id.as_deref(), Some("c0ffee08"));
+    assert_eq!(gps_only.name, None);
+    assert_eq!((gps_only.lat, gps_only.lon), (Some(25.0), Some(-77.5)));
+
     // Sites: every named one, including a site with no dive.
     let sites = log.sites().unwrap();
-    assert_eq!(sites.len(), 6);
+    assert_eq!(sites.len(), 7, "the site with no name left out");
     let lagoon = sites
         .iter()
         .find(|s| s.name.as_deref() == Some("Blue Lagoon"))
@@ -318,13 +347,29 @@ fn copy_tree(from: &Path, to: &Path) {
 
 /// A repository holding the fictional log on `branch`, the current branch.
 fn git_log(dir: &TempDir, branch: &str) -> PathBuf {
-    let work = dir.path().join("log");
+    git_log_in(dir.path(), branch)
+}
+
+fn git_log_in(dir: &Path, branch: &str) -> PathBuf {
+    let work = dir.join("log");
     copy_tree(&fixture("git-tree"), &work);
     git(&work, &["init", "-q"]);
     git(&work, &["checkout", "-q", "-b", branch]);
     git(&work, &["add", "-A"]);
     git(&work, &["commit", "-q", "-m", "Subsurface log"]);
     work
+}
+
+/// The reference log as an XML file, for the conformance tests.
+pub(crate) fn reference_xml_log(dir: &Path) -> PathBuf {
+    let path = dir.join("diver.xml");
+    std::fs::copy(fixture("fictional.xml"), &path).unwrap();
+    path
+}
+
+/// The reference log in git storage, for the conformance tests.
+pub(crate) fn reference_git_log(dir: &Path) -> PathBuf {
+    git_log_in(dir, "main")
 }
 
 #[test]
@@ -384,7 +429,7 @@ fn picks_the_only_log_when_head_has_none() {
             branch: "diver@example.invalid".into()
         }
     );
-    assert_eq!(log.dives().unwrap().len(), 7);
+    assert_eq!(log.dives().unwrap().len(), 10);
 }
 
 #[test]

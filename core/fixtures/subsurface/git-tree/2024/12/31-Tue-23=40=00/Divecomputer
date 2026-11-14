@@ -1,0 +1,5 @@
+model "Suunto Vyper"
+deviceid 00000004
+maxdepth 14.2m
+meandepth 9.0m
+watertemp 21.0°C
