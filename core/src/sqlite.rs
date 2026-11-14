@@ -28,18 +28,20 @@ pub(crate) fn open_read_only(path: &Path, tables: &[&str]) -> Result<Connection>
         None => Connection::open_with_flags(path, flags),
     }
     .map_err(not_a_log)?;
-    // Any file opens; a file that is not a database fails on the first query.
-    for table in tables {
-        let found: bool = conn
-            .query_row(
-                "SELECT count(*) = 1 FROM sqlite_master WHERE type = 'table' AND name = ?1",
-                [table],
-                |r| r.get(0),
-            )
-            .map_err(not_a_log)?;
-        if !found {
-            return Err(Error::NotADiveLog(path.to_path_buf()));
-        }
+    // Any file opens; a file that is not a database fails on the first
+    // query, run even when `tables` is empty.
+    let marks = vec!["?"; tables.len()].join(", ");
+    let found: i64 = conn
+        .query_row(
+            &format!(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ({marks})"
+            ),
+            rusqlite::params_from_iter(tables),
+            |r| r.get(0),
+        )
+        .map_err(not_a_log)?;
+    if usize::try_from(found) != Ok(tables.len()) {
+        return Err(Error::NotADiveLog(path.to_path_buf()));
     }
     Ok(conn)
 }
@@ -97,6 +99,98 @@ fn immutable_uri(path: &Path) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::TempDir;
+
+    /// Names of the files in `dir`.
+    fn files(dir: &Path) -> Vec<String> {
+        let mut names: Vec<_> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        names
+    }
+
+    fn dives(conn: &Connection) -> i64 {
+        conn.query_row("SELECT count(*) FROM dives", [], |r| r.get(0))
+            .unwrap()
+    }
+
+    #[test]
+    fn opens_a_closed_wal_database_immutable_and_an_open_one_normally() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("log.sqlite");
+        Connection::open(&path)
+            .unwrap()
+            .execute_batch(
+                "PRAGMA journal_mode = WAL;
+                 CREATE TABLE dives (n);
+                 INSERT INTO dives VALUES (1);",
+            )
+            .unwrap();
+        // Closed: no -wal file. Read immutable, creating none.
+        assert!(is_closed_wal(&path));
+        let before = files(dir.path());
+        assert_eq!(before.len(), 1, "{before:?}");
+        let log = open_read_only(&path, &["dives"]).unwrap();
+        assert_eq!(dives(&log), 1);
+        drop(log);
+        assert_eq!(files(dir.path()), before, "file created next to it");
+
+        // The application open, a dive still in its -wal file only: read
+        // normally, so that the dive is there.
+        let app = Connection::open(&path).unwrap();
+        app.execute_batch(
+            "PRAGMA wal_autocheckpoint = 0;
+             INSERT INTO dives VALUES (2);",
+        )
+        .unwrap();
+        assert!(!is_closed_wal(&path));
+        let log = open_read_only(&path, &["dives"]).unwrap();
+        assert_eq!(dives(&log), 2);
+        drop(log);
+        drop(app);
+
+        // Not in WAL mode: opened normally.
+        let journal = dir.path().join("journal.sqlite");
+        Connection::open(&journal)
+            .unwrap()
+            .execute_batch("CREATE TABLE dives (n);")
+            .unwrap();
+        assert!(!is_closed_wal(&journal));
+        assert_eq!(dives(&open_read_only(&journal, &["dives"]).unwrap()), 0);
+    }
+
+    #[test]
+    fn needs_every_table_and_a_database_even_without_tables() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("log.sqlite");
+        Connection::open(&path)
+            .unwrap()
+            .execute_batch("CREATE TABLE dives (n); CREATE TABLE sites (n);")
+            .unwrap();
+        assert!(open_read_only(&path, &["dives", "sites"]).is_ok());
+        assert!(open_read_only(&path, &[]).is_ok());
+        assert!(matches!(
+            open_read_only(&path, &["dives", "samples"]),
+            Err(Error::NotADiveLog(_))
+        ));
+
+        let text = dir.path().join("notes.txt");
+        std::fs::write(
+            &text,
+            "not a database, but long enough to look like a header",
+        )
+        .unwrap();
+        assert!(matches!(
+            open_read_only(&text, &[]),
+            Err(Error::NotADiveLog(_))
+        ));
+        assert!(matches!(
+            open_read_only(&dir.path().join("none.sqlite"), &[]),
+            Err(Error::NotFound(_))
+        ));
+    }
 
     #[test]
     #[cfg(not(windows))]
