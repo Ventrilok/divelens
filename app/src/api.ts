@@ -8,6 +8,7 @@ import type {
   CollectionChoices,
   CollectionsPreview,
   CollectionsResult,
+  DiveApp,
   DiveLog,
   ImportCheck,
   LightroomStatus,
@@ -41,6 +42,8 @@ export const diveProfile = (log: LogRef, id: string) => onLog(invoke<Sample[]>("
 /** Points DiveLens at another dive log; null: the application's standard location. Rejects with a ChangeError. */
 export const setSourcePath = (path: string | null) => invoke<Settings>("set_source_path", { path });
 export const appInfo = () => invoke<AppInfo>("app_info");
+/** The dive applications available on this system, in the order Settings lists them. */
+export const diveApps = () => invoke<DiveApp[]>("dive_apps");
 
 export const getSettings = () => invoke<Settings>("get_settings");
 /** Changes the settings named in `patch`; resolves with all of them, rejects with a ChangeError. */

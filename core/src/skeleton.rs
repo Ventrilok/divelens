@@ -18,25 +18,28 @@
 //! Missing values are NULL or blank text, except the rating (0). Example has
 //! no notion of an invalid dive.
 //!
-//! To read another application, copy this reader; each place to change is
-//! marked `ADAPT:`. The steps, detailed in
+//! To read another application, copy this reader, its description and its
+//! tests; each place to change is marked `ADAPT:`. The steps, detailed in
 //! `docs/contributing/reference-log.md` ("Adding a reader"):
 //!
-//! 1. Copy this file and `skeleton/tests.rs` to `<application>.rs` and
+//! 1. Copy this file, `skeleton/app.rs` and `skeleton/tests.rs` to
+//!    `<application>.rs`, `<application>/app.rs` and
 //!    `<application>/tests.rs`, rename `Example`, and declare the module in
 //!    `lib.rs` as `pub mod <application>;` (this one is `#[cfg(test)]`).
 //! 2. Read the application's own tables and translate its values: stable
 //!    ids, wall-clock times, metres, °C, its way of storing missing values.
 //!    Declare what it provides in `capabilities`.
-//! 3. In the tests, write the reference log as the application stores it.
-//! 4. Add the application's run at the bottom of `core/src/conformance.rs`,
-//!    then run `cargo test -p divelens-core` until it passes.
-//! 5. Register the application in `core/examples/verify_log.rs` and check
+//! 3. Describe the application in `app.rs` (`APP`: name, systems, standard
+//!    location, texts in English and French…) and make it `pub static`.
+//! 4. In the tests, write the reference log as the application stores it;
+//!    its runs of the common tests go in the description.
+//! 5. Add `APP` to `crate::apps::ALL`, then run `cargo test -p
+//!    divelens-core` until it passes. The app then offers the application
+//!    in Settings, and `core/examples/verify_log.rs` reads its logs: check
 //!    the reader against a real log on your own computer.
 //!
-//! The app side (the application's descriptor, which offers it in Settings)
-//! is added separately. A log that is not a SQLite database: see the
-//! Subsurface reader for files and folders.
+//! A log that is not a SQLite database: see the Subsurface reader for files
+//! and folders.
 
 use std::path::Path;
 
@@ -48,6 +51,11 @@ use crate::model::{Capabilities, Dive, DiveSource, Site, clean_notes};
 use crate::profile::Sample;
 use crate::sqlite;
 use crate::{Error, Result};
+
+// ADAPT: `mod app; pub use app::APP;` once the description is `pub static`.
+mod app;
+
+pub(crate) use app::APP;
 
 /// How Example writes times: the wall clock, as the dive computer showed it.
 // ADAPT: the application's own format.

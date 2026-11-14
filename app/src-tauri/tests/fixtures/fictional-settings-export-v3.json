@@ -1,0 +1,23 @@
+{
+  "collections": {
+    "group": "Plongées",
+    "parent": [
+      "Trips",
+      "2026"
+    ]
+  },
+  "depthToAltitude": true,
+  "diveSort": "depth",
+  "language": "fr",
+  "logLevel": "detailed",
+  "source": {
+    "kind": "subsurface",
+    "macDivePath": "/Dives/MacDive.sqlite",
+    "subsurfacePath": "/Dives/diver.ssrf"
+  },
+  "units": {
+    "depth": "ft",
+    "temp": "c"
+  },
+  "version": 3
+}

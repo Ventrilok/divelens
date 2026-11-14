@@ -7,15 +7,15 @@ mod settings;
 mod units;
 
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use divelens_core::macdive::MacDive;
+use divelens_core::apps::{self, DiveApp, Kept, Opened, Os, Places};
+use divelens_core::macdive;
 use divelens_core::profile::Sample;
-use divelens_core::subsurface::{self, Storage, Subsurface};
 use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
-use divelens_core::{Capabilities, Dive, DiveSource, Error, Site};
+use divelens_core::{Capabilities, Dive, Error, Site};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -25,7 +25,7 @@ use lightroom::{
     ApplyOutcome, CollectionSet, Command, End, Event, LinkFile, Status, Timing, WrittenCollection,
 };
 use offsets::Offsets;
-use settings::{ImportError, Settings, SourceKind};
+use settings::{ImportError, Settings};
 
 /// Where the app writes its log (`None`: no home folder).
 struct LogFile(Option<PathBuf>);
@@ -36,6 +36,13 @@ struct AppInfo {
     version: String,
     os: &'static str,
     log_path: Option<PathBuf>,
+}
+
+/// The dive applications of this system, in the order Settings lists
+/// them, with what the screens show of each.
+#[tauri::command]
+fn dive_apps() -> Vec<&'static DiveApp> {
+    apps::available(Os::current()).collect()
 }
 
 /// Version (app/package.json, through tauri.conf.json), system and log file,
@@ -183,8 +190,9 @@ fn change_unless_writing(
 #[serde(rename_all = "camelCase")]
 struct DiveLog {
     source: SourceInfo,
-    /// How a Subsurface log is stored (file or git); `None` for MacDive.
-    storage: Option<Storage>,
+    /// How the log is stored, as its reader tells: what Settings says once
+    /// it is read (a key of the application's texts).
+    format: &'static str,
     capabilities: Capabilities,
     dives: Vec<Dive>,
     /// Every named site of the log (Tag Selection › other site).
@@ -214,33 +222,34 @@ fn login_name() -> String {
         .unwrap_or_else(|| "username".into())
 }
 
-/// Standard location of each application's log.
-fn standard_path(app: &AppHandle, kind: SourceKind) -> PathBuf {
-    match kind {
-        SourceKind::MacDive => app
-            .path()
-            .home_dir()
-            .map(|h| MacDive::default_path(&h))
-            .unwrap_or_default(),
-        // ~/Library/Application Support/Subsurface on macOS,
-        // %APPDATA%\Subsurface on Windows.
-        SourceKind::Subsurface => app
-            .path()
-            .data_dir()
-            .map(|d| subsurface::default_path(&d.join("Subsurface"), &login_name()))
-            .unwrap_or_default(),
-    }
+/// Standard location of an application's log on this computer.
+fn standard_path(app: &AppHandle, dive_app: &DiveApp) -> PathBuf {
+    let home = app.path().home_dir().ok();
+    // ~/Library/Application Support on macOS, %APPDATA% on Windows.
+    let data = app.path().data_dir().ok();
+    let user = login_name();
+    let places = Places {
+        os: Os::current(),
+        home: home.as_deref(),
+        data: data.as_deref(),
+        user: &user,
+    };
+    (dive_app.standard_location)(&places).unwrap_or_default()
 }
 
 /// The configured dive log, as every action checks it.
 fn source_info(app: &AppHandle) -> SourceInfo {
-    dive_log::configured(&config_dir(app), |kind| standard_path(app, kind))
+    dive_log::configured(&config_dir(app), Os::current(), |dive_app| {
+        standard_path(app, dive_app)
+    })
 }
 
 /// The dive log `settings` point at: the application in use on this
 /// computer and its location.
 fn source_info_of(app: &AppHandle, settings: &Settings) -> SourceInfo {
-    SourceInfo::of(settings, |kind| standard_path(app, kind))
+    SourceInfo::of(settings, Os::current(), |dive_app| {
+        standard_path(app, dive_app)
+    })
 }
 
 /// Units of the dive application the log belongs to, from its preferences.
@@ -248,10 +257,7 @@ fn source_units(app: &AppHandle, info: &SourceInfo) -> Units {
     let Ok(home) = app.path().home_dir() else {
         return Units::default();
     };
-    match info.kind {
-        SourceKind::MacDive => units::read_macdive(&home),
-        SourceKind::Subsurface => units::read_subsurface(&home),
-    }
+    units::read(&info.app.preferences, &home)
 }
 
 /// Units in use (spec F2): the dive application's, unless forced in the
@@ -262,75 +268,11 @@ fn units_in_use(app: &AppHandle, info: &SourceInfo) -> Units {
         .resolve(source_units(app, info))
 }
 
-/// An opened dive log.
-enum Source {
-    MacDive(MacDive),
-    Subsurface(Arc<Subsurface>),
-}
-
-impl Source {
-    fn storage(&self) -> Option<Storage> {
-        match self {
-            Source::MacDive(_) => None,
-            Source::Subsurface(s) => Some(s.storage().clone()),
-        }
-    }
-}
-
-impl DiveSource for Source {
-    fn capabilities(&self) -> Capabilities {
-        match self {
-            Source::MacDive(s) => s.capabilities(),
-            Source::Subsurface(s) => s.capabilities(),
-        }
-    }
-    fn dives(&self) -> Result<Vec<Dive>, Error> {
-        match self {
-            Source::MacDive(s) => s.dives(),
-            Source::Subsurface(s) => s.dives(),
-        }
-    }
-    fn profile(&self, dive_id: &str) -> Result<Vec<Sample>, Error> {
-        match self {
-            Source::MacDive(s) => s.profile(dive_id),
-            Source::Subsurface(s) => s.profile(dive_id),
-        }
-    }
-    fn sites(&self) -> Result<Vec<Site>, Error> {
-        match self {
-            Source::MacDive(s) => s.sites(),
-            Source::Subsurface(s) => s.sites(),
-        }
-    }
-}
-
-/// The last Subsurface log read, kept while it does not change on disk:
-/// Subsurface logs are read whole (profiles included), so reading one again
-/// for every profile shown would be slow.
-#[derive(Default)]
-struct SubsurfaceCache(Mutex<Option<(PathBuf, String, Arc<Subsurface>)>>);
-
-fn open_subsurface(app: &AppHandle, path: &Path) -> Result<Arc<Subsurface>, Error> {
-    let state = app.state::<SubsurfaceCache>();
-    let fingerprint = Subsurface::fingerprint(path);
-    if let Some(f) = &fingerprint
-        && let Some((p, cached, log)) = state.0.lock().expect("subsurface cache").as_ref()
-        && p == path
-        && cached == f
-    {
-        return Ok(log.clone());
-    }
-    let log = Arc::new(Subsurface::open(path)?);
-    *state.0.lock().expect("subsurface cache") =
-        fingerprint.map(|f| (path.to_path_buf(), f, log.clone()));
-    Ok(log)
-}
-
-fn open(app: &AppHandle, info: &SourceInfo) -> Result<Source, Error> {
-    match info.kind {
-        SourceKind::MacDive => MacDive::open(&info.path).map(Source::MacDive),
-        SourceKind::Subsurface => open_subsurface(app, &info.path).map(Source::Subsurface),
-    }
+/// Opens the dive log `info` names with its application's reader. A log
+/// its reader reads whole is kept between requests while it does not change
+/// on disk (the last one only).
+fn open(app: &AppHandle, info: &SourceInfo) -> Result<Opened, Error> {
+    (info.app.open)(&info.path, &app.state::<Kept>())
 }
 
 /// Loads every dive of the configured dive log (off the UI thread: a dive log
@@ -339,8 +281,10 @@ fn open(app: &AppHandle, info: &SourceInfo) -> Result<Source, Error> {
 async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
     tauri::async_runtime::spawn_blocking(move || {
         let source = source_info(&app);
-        let result = open(&app, &source)
-            .and_then(|s| Ok((s.storage(), s.capabilities(), s.dives()?, s.sites()?)));
+        let result = open(&app, &source).and_then(|o| {
+            let log = &o.log;
+            Ok((o.format, log.capabilities(), log.dives()?, log.sites()?))
+        });
         match &result {
             Ok((_, _, dives, sites)) => log::info!(
                 "dive log {}: {} dives, {} sites",
@@ -351,10 +295,10 @@ async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
             Err(e) => log::warn!("dive log {} not read: {e:?}", source.path.display()),
         }
         match result {
-            Ok((storage, capabilities, dives, sites)) => Ok(DiveLog {
+            Ok((format, capabilities, dives, sites)) => Ok(DiveLog {
                 source_units: source_units(&app, &source).into(),
                 source,
-                storage,
+                format,
                 capabilities,
                 dives,
                 sites,
@@ -391,7 +335,7 @@ async fn dive_profile(app: AppHandle, log: LogId, id: String) -> Result<Vec<Samp
         let info = source_info(&app);
         log.check(&info)?;
         open(&app, &info)
-            .and_then(|s| s.profile(&id))
+            .and_then(|o| o.log.profile(&id))
             .map_err(|detail| ProfileError::Source { detail })
     })
     .await
@@ -402,8 +346,8 @@ async fn dive_profile(app: AppHandle, log: LogId, id: String) -> Result<Vec<Samp
 #[tauri::command]
 fn set_source_path(app: AppHandle, path: Option<PathBuf>) -> Result<Settings, ChangeError> {
     change_settings(&app, |s| {
-        let kind = s.source.kind();
-        s.source.set_path(kind, path);
+        let dive_app = s.source.app(Os::current());
+        s.source.set_location(dive_app, path);
     })
 }
 
@@ -507,7 +451,9 @@ fn tag_request(
     info: &SourceInfo,
     choice: &TagChoice,
 ) -> Result<TagRequest, TagError> {
-    let source = open(app, info).map_err(|detail| TagError::Source { detail })?;
+    let source = open(app, info)
+        .map_err(|detail| TagError::Source { detail })?
+        .log;
     let units = units_in_use(app, info);
     let dive = match &choice.dive_id {
         Some(id) => Some(
@@ -545,7 +491,7 @@ fn tag_request(
         return Err(TagError::NothingChosen);
     }
     Ok(TagRequest {
-        dive: dive.map(|d| DiveTags::new(&d, units, info.kind.name())),
+        dive: dive.map(|d| DiveTags::new(&d, units, info.app.name)),
         location,
     })
 }
@@ -708,7 +654,9 @@ async fn find_collection_photos(
         };
         let info = source_info(&app);
         log.check(&info)?;
-        let source = open(&app, &info).map_err(|detail| CollectionsError::Source { detail })?;
+        let source = open(&app, &info)
+            .map_err(|detail| CollectionsError::Source { detail })?
+            .log;
         let dives: Vec<Dive> = source
             .dives()
             .map_err(|detail| CollectionsError::Source { detail })?
@@ -745,7 +693,7 @@ async fn find_collection_photos(
             )?;
         }
         let found = answer.recv().map_err(|_| CollectionsError::LinkLost)??;
-        let offsets = Offsets::load(&config_dir(&app), info.kind);
+        let offsets = Offsets::load(&config_dir(&app), info.app);
         let session = Session::new(found.search, dives, found.photos, &offsets)
             .read_from(log.clone(), profiles);
         let period = session.period(number, from, to);
@@ -858,7 +806,7 @@ async fn apply_collections(
             written.iter().map(|c| c.count).sum::<usize>()
         );
         let dir = config_dir(&app);
-        let mut offsets = Offsets::load(&dir, log.kind);
+        let mut offsets = Offsets::load(&dir, log.app);
         if let Some(session) = app
             .state::<CollectionsState>()
             .searches
@@ -868,7 +816,7 @@ async fn apply_collections(
         {
             session.remember(&choices, &mut offsets);
         }
-        if let Err(e) = offsets.save(&dir, log.kind) {
+        if let Err(e) = offsets.save(&dir, log.app) {
             log::error!("clock offsets not saved: {e}");
         }
         Ok(CollectionsResult {
@@ -965,8 +913,9 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                                 (key, c.from.clone(), c.to.clone())
                             })
                             .collect();
-                        let kind = source_info(&app).kind;
-                        let cover = offsets::corrected_range(&Offsets::load(&dir, kind), &ranges);
+                        let dive_app = source_info(&app).app;
+                        let cover =
+                            offsets::corrected_range(&Offsets::load(&dir, dive_app), &ranges);
                         (status.cover_from, status.cover_to) = cover.unzip();
                         *app.state::<Lightroom>()
                             .status
@@ -980,8 +929,9 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                         // dive log: nothing is saved, not even that it was
                         // looked at, so it is tried again at the next
                         // connection.
+                        // The previous plugin only read MacDive.
                         if let Ok(home) = app.path().home_dir() {
-                            let standard = MacDive::default_path(&home);
+                            let standard = standard_path(&app, &macdive::APP);
                             let taken =
                                 change_settings(&app, |s| s.take_over(&legacy, &home, &standard));
                             if let Err(e) = taken {
@@ -1041,6 +991,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            dive_apps,
             app_info,
             get_settings,
             update_settings,
@@ -1082,7 +1033,7 @@ pub fn run() {
                 preview: Mutex::new(SelectionPreview::default()),
             });
             app.manage(CollectionsState::default());
-            app.manage(SubsurfaceCache::default());
+            app.manage(Kept::default());
             // Writes are told to the UI from a thread of their own, in order:
             // never from under the lock that settings changes wait on.
             let (writing, told) = mpsc::channel::<bool>();
@@ -1111,10 +1062,11 @@ pub fn run() {
 mod tests {
     use super::screen_arg;
     use super::{
-        ChangeError, CollectionsError, Offsets, Searches, Session, Settings, SourceKind, Writes,
+        ChangeError, CollectionsError, DiveApp, Offsets, Os, Searches, Session, Settings, Writes,
         change_unless_writing, dive_log, keep_search,
     };
     use crate::settings::DepthChoice;
+    use divelens_core::subsurface;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
 
@@ -1122,7 +1074,7 @@ mod tests {
     fn a_search_is_kept_only_for_the_log_still_configured_and_if_newest() {
         let searches = Mutex::new(Searches::default());
         let at = |path: &str| dive_log::SourceInfo {
-            kind: SourceKind::Subsurface,
+            app: &subsurface::APP,
             path: path.into(),
             is_default_path: false,
         };
@@ -1158,20 +1110,24 @@ mod tests {
         dir
     }
 
-    fn standard(kind: SourceKind) -> PathBuf {
-        match kind {
-            SourceKind::MacDive => "/Users/diver/MacDive.sqlite".into(),
-            SourceKind::Subsurface => "/Users/diver/diver.xml".into(),
+    /// The system the tests run as: both applications are available.
+    const OS: Os = Os::MacOs;
+
+    fn standard(app: &DiveApp) -> PathBuf {
+        match app.id {
+            "macDive" => "/Users/diver/MacDive.sqlite".into(),
+            _ => "/Users/diver/diver.xml".into(),
         }
     }
 
     fn log_of(s: &Settings) -> dive_log::LogId {
-        dive_log::SourceInfo::of(s, standard).id()
+        dive_log::SourceInfo::of(s, OS, standard).id()
     }
 
     fn on_file(s: &mut Settings, path: &Path) {
-        s.source.kind = SourceKind::Subsurface;
-        s.source.subsurface_path = Some(path.to_path_buf());
+        s.source.kind = subsurface::APP.id.into();
+        s.source
+            .set_location(&subsurface::APP, Some(path.to_path_buf()));
     }
 
     #[test]
@@ -1180,14 +1136,20 @@ mod tests {
         let (a, b) = (dir.join("a.xml"), dir.join("b.xml"));
         let writes = Writes::new(|_| {});
         change_unless_writing(&writes, &dir, log_of, |s| on_file(s, &a)).unwrap();
-        let shown = dive_log::configured(&dir, standard).id();
+        let shown = dive_log::configured(&dir, OS, standard).id();
         let (writing, _) = writes
-            .begin(&shown, || dive_log::configured(&dir, standard))
+            .begin(&shown, || dive_log::configured(&dir, OS, standard))
             .unwrap();
 
         let refused = change_unless_writing(&writes, &dir, log_of, |s| on_file(s, &b));
         assert!(matches!(refused, Err(ChangeError::WriteInProgress)));
-        assert_eq!(Settings::load(&dir).source.subsurface_path, Some(a.clone()));
+        let location = |dir: &Path| {
+            Settings::load(dir)
+                .source
+                .location(&subsurface::APP)
+                .cloned()
+        };
+        assert_eq!(location(&dir), Some(a.clone()));
         // An import naming another log is refused whole: units untouched.
         let mut imported = Settings::default();
         on_file(&mut imported, &b);
@@ -1202,7 +1164,7 @@ mod tests {
 
         drop(writing);
         change_unless_writing(&writes, &dir, log_of, |s| on_file(s, &b)).unwrap();
-        assert_eq!(Settings::load(&dir).source.subsurface_path, Some(b));
+        assert_eq!(location(&dir), Some(b));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

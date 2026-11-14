@@ -117,8 +117,10 @@ describe("one dive log at a time", () => {
   it("reads nothing again when only the other application's location changed", () => {
     const source = (kind: SourceKind, macDivePath: string | null, subsurfacePath: string | null): Settings["source"] => ({
       kind,
-      macDivePath,
-      subsurfacePath,
+      locations: {
+        ...(macDivePath === null ? {} : { macDive: macDivePath }),
+        ...(subsurfacePath === null ? {} : { subsurface: subsurfacePath }),
+      },
     });
     const before = source("subsurface", null, "/Logs/diver.xml");
     expect(sameLogSetting(before, source("subsurface", "/Old/MacDive.sqlite", "/Logs/diver.xml"), "subsurface")).toBe(true);

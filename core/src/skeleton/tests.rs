@@ -97,6 +97,25 @@ pub(crate) fn reference_log(dir: &Path) -> PathBuf {
     database(dir, "")
 }
 
+/// Example's runs of the common tests (`crate::conformance`): its copy of
+/// the reference log, opened as the app opens it. One run per way the log
+/// can be stored (Subsurface has two: XML file and git storage).
+// ADAPT: the capabilities the reader declares, and `marks_invalid: true`
+// when the application can mark a dive invalid.
+pub(crate) fn conformance() -> Vec<crate::conformance::Run> {
+    vec![crate::conformance::Run {
+        write_log: reference_log,
+        open: |path| Ok((APP.open)(path, &crate::apps::Kept::default())?.log),
+        capabilities: Capabilities {
+            temperature: true,
+            rating: true,
+            gps: true,
+            profile: true,
+        },
+        marks_invalid: false,
+    }]
+}
+
 #[test]
 fn a_single_coordinate_is_no_position() {
     let dir = TempDir::new().unwrap();

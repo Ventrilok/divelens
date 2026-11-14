@@ -18,7 +18,9 @@
 //! The common reader interface is [`DiveSource`] plus the reader's own
 //! `open(path)`. To add a reader: write the reference log in the
 //! application's format (a function of the reader's tests that writes it into
-//! a folder), then add a test at the bottom of this file that calls [`check`].
+//! a folder), then give the application's description (`crate::apps`) its
+//! runs of [`check`]: every registered application is run at the bottom of
+//! this file.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -26,9 +28,7 @@ use std::ptr;
 
 use tempfile::TempDir;
 
-use crate::macdive::MacDive;
 use crate::profile::{self, Sample};
-use crate::subsurface::Subsurface;
 use crate::{Capabilities, Dive, DiveSource, Error, Result, Site};
 
 pub(crate) mod reference;
@@ -414,74 +414,54 @@ fn snapshot(root: &Path, contents: bool) -> BTreeMap<String, Option<Vec<u8>>> {
     out
 }
 
-fn boxed(source: Result<impl DiveSource + 'static>) -> Result<Box<dyn DiveSource>> {
-    Ok(Box::new(source?))
-}
-
 // ---------------------------------------------------------------------------
-// One test per reader, and per storage format.
+// Every registered application (`crate::apps::ALL`), each of its runs: one
+// per storage format it reads.
 
-#[test]
-fn macdive() {
-    check(&Run {
-        write_log: crate::macdive::tests::reference_log,
-        open: |path| boxed(MacDive::open(path)),
-        capabilities: Capabilities {
-            temperature: true,
-            rating: true,
-            gps: true,
-            profile: true,
-        },
-        marks_invalid: false,
-    });
+/// Every run of `app`'s description; what failed, by run.
+fn check_app(app: &crate::apps::DiveApp) -> Vec<String> {
+    let mut failures = Vec::new();
+    let runs = (app.conformance)();
+    if runs.is_empty() {
+        failures.push(format!("{}: no run of the common tests", app.name));
+    }
+    for (i, run) in runs.iter().enumerate() {
+        let what = format!("{}, run {} of {}", app.name, i + 1, runs.len());
+        if let Err(panic) = std::panic::catch_unwind(|| check(run)) {
+            let message = panic
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| panic.downcast_ref::<&str>().copied())
+                .unwrap_or("panicked");
+            failures.push(format!("{what}: {message}"));
+        }
+        // What Settings says once the log is read.
+        let dir = TempDir::new().unwrap();
+        let path = (run.write_log)(dir.path());
+        match (app.open)(&path, &crate::apps::Kept::default()) {
+            Ok(opened) if !app.texts.en.read.iter().any(|(f, _)| *f == opened.format) => {
+                failures.push(format!("{what}: no text for format {:?}", opened.format));
+            }
+            Ok(_) => {}
+            Err(e) => failures.push(format!("{what}: not opened: {e}")),
+        }
+    }
+    failures
 }
 
 #[test]
-fn subsurface_xml() {
-    check(&Run {
-        write_log: crate::subsurface::tests::reference_xml_log,
-        open: |path| boxed(Subsurface::open(path)),
-        capabilities: Capabilities {
-            temperature: true,
-            rating: true,
-            gps: true,
-            profile: true,
-        },
-        marks_invalid: true,
-    });
+fn every_registered_application() {
+    let failures: Vec<String> = crate::apps::ALL.iter().flat_map(|a| check_app(a)).collect();
+    assert!(failures.is_empty(), "\n{}", failures.join("\n\n"));
 }
 
-#[test]
-fn subsurface_git() {
-    check(&Run {
-        write_log: crate::subsurface::tests::reference_git_log,
-        open: |path| boxed(Subsurface::open(path)),
-        capabilities: Capabilities {
-            temperature: true,
-            rating: true,
-            gps: true,
-            profile: true,
-        },
-        marks_invalid: true,
-    });
-}
-
-/// The example reader every new reader starts from (`crate::skeleton`):
-/// not offered in the app, kept passing so that a copy starts from code that
-/// works.
+/// The example reader every new reader starts from (`crate::skeleton`), run
+/// through its description like a registered one: not offered in the app,
+/// kept passing so that a copy starts from code that works.
 #[test]
 fn skeleton() {
-    check(&Run {
-        write_log: crate::skeleton::tests::reference_log,
-        open: |path| boxed(crate::skeleton::Example::open(path)),
-        capabilities: Capabilities {
-            temperature: true,
-            rating: true,
-            gps: true,
-            profile: true,
-        },
-        marks_invalid: false,
-    });
+    let failures = check_app(&crate::skeleton::APP);
+    assert!(failures.is_empty(), "\n{}", failures.join("\n\n"));
 }
 
 /// The tests above again, in a child process whose time zone is 14 hours

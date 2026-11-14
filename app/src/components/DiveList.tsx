@@ -27,9 +27,11 @@ interface Props {
   onChoose?: (id: string) => void;
   capabilities: Capabilities;
   units: Units;
+  /** Name of the dive application the dives come from. */
+  source: string;
 }
 
-export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, onToggle, onToggleAll, chosenId, onChoose, mark, capabilities, units }: Props) {
+export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, onToggle, onToggleAll, chosenId, onChoose, mark, capabilities, units, source }: Props) {
   const multi = mode === "multi";
   const bodyRef = useRef<HTMLTableSectionElement>(null);
 
@@ -144,7 +146,7 @@ export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, o
                     <span className="site-name">{d.site.name ?? t("detail.unknownSite")}</span>
                     {d.site.location && <span className="muted"> · {d.site.location}</span>}
                     {d.invalid && (
-                      <span className="badge badge-invalid" title={t("list.invalidHint")}>
+                      <span className="badge badge-invalid" title={t("list.invalidHint", { source })}>
                         {t("list.invalid")}
                       </span>
                     )}

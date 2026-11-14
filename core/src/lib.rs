@@ -8,6 +8,7 @@
 //! This crate has no UI or Tauri dependency so it can be tested on every
 //! platform in CI.
 
+pub mod apps;
 pub mod collections;
 #[cfg(test)]
 mod conformance;

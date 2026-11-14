@@ -3,15 +3,19 @@
 //! its default, so older and newer files both load without losing the rest
 //! (spec F11: a file from another version stays usable).
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use divelens_core::apps::{self, DiveApp, Os};
+use divelens_core::macdive;
 use divelens_core::tags::{DepthUnit, TempUnit, Units};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 
 pub const FILE_NAME: &str = "settings.json";
-const CURRENT_VERSION: u32 = 3;
+/// 4: one location per application, in `source.locations`.
+const CURRENT_VERSION: u32 = 4;
 
 /// Name of the collection set "Create Collections" uses by default
 /// (compatibility contract: never translated, never renamed).
@@ -31,76 +35,86 @@ where
     Ok(T::deserialize(value).unwrap_or_default())
 }
 
-/// Dive application whose log is read. MacDive exists on macOS only.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// The dive application chosen, and the log location chosen for each
+/// application (spec F2: switching back finds the previous location again).
+/// Applications are those of `divelens_core::apps`, named by their id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum SourceKind {
-    MacDive,
-    Subsurface,
+pub struct Source {
+    /// Id of the application chosen. Kept as it is when this computer lacks
+    /// it (settings from a Mac on Windows) or this version does not know it:
+    /// the application in use is then another one ([`Source::app`]).
+    pub kind: String,
+    /// Location chosen for each application, by id; an application without
+    /// one uses its standard location. Those of applications this version
+    /// does not know are kept.
+    pub locations: BTreeMap<String, PathBuf>,
 }
 
-impl Default for SourceKind {
+/// Where versions 1 to 3 of the file kept each application's location, one
+/// field per application (`path`: version 2, when MacDive was the only
+/// application). Read, never written; never grows: applications added later
+/// only exist in `locations`.
+const OLD_LOCATIONS: [(&str, &str); 3] = [
+    ("macDivePath", "macDive"),
+    ("path", "macDive"),
+    ("subsurfacePath", "subsurface"),
+];
+
+impl Default for Source {
     fn default() -> Self {
-        if cfg!(windows) {
-            SourceKind::Subsurface
-        } else {
-            SourceKind::MacDive
+        Source {
+            kind: apps::in_use("", Os::current()).id.into(),
+            locations: BTreeMap::new(),
         }
     }
 }
 
-/// The dive application and the log location chosen for each application
-/// (spec F2: switching back finds the previous location again).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase", default)]
-pub struct Source {
-    #[serde(deserialize_with = "lenient")]
-    pub kind: SourceKind,
-    /// `None` means MacDive's standard location. Version 2 of the file
-    /// called it `path` (MacDive was the only application).
-    #[serde(deserialize_with = "lenient", alias = "path")]
-    pub mac_dive_path: Option<PathBuf>,
-    /// A file (XML) or a folder (git storage); `None`: Subsurface's standard
-    /// file.
-    #[serde(deserialize_with = "lenient")]
-    pub subsurface_path: Option<PathBuf>,
-}
-
-impl SourceKind {
-    /// The application's name, as written in the photos' Source field
-    /// (never translated).
-    pub fn name(self) -> &'static str {
-        match self {
-            SourceKind::MacDive => "MacDive",
-            SourceKind::Subsurface => "Subsurface",
+/// Reads every version of the file. A value that does not read takes its
+/// default without losing the others: a location that is not a path (`null`
+/// included) is the standard one, the other locations stay.
+impl<'de> Deserialize<'de> for Source {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use serde_json::Value;
+        let value = Value::deserialize(d)?;
+        let field = |name: &str| value.get(name);
+        let kind = match field("kind").and_then(Value::as_str) {
+            Some(kind) => kind.to_string(),
+            None => Source::default().kind,
+        };
+        let mut locations: BTreeMap<String, PathBuf> = field("locations")
+            .and_then(Value::as_object)
+            .into_iter()
+            .flatten()
+            .filter_map(|(id, path)| Some((id.clone(), PathBuf::from(path.as_str()?))))
+            .collect();
+        for (name, id) in OLD_LOCATIONS {
+            if let Some(path) = field(name).and_then(Value::as_str) {
+                locations.entry(id.into()).or_insert_with(|| path.into());
+            }
         }
+        Ok(Source { kind, locations })
     }
 }
 
 impl Source {
-    /// Application in use: Subsurface on Windows, whatever the file says
-    /// (settings copied from a Mac).
-    pub fn kind(&self) -> SourceKind {
-        if cfg!(windows) {
-            SourceKind::Subsurface
-        } else {
-            self.kind
-        }
+    /// Application in use on `os`: the one chosen, unless `os` lacks it or
+    /// this version does not know it; then the first one available.
+    pub fn app(&self, os: Os) -> &'static DiveApp {
+        apps::in_use(&self.kind, os)
     }
 
-    /// Location chosen for `kind`; `None`: its standard location.
-    pub fn path(&self, kind: SourceKind) -> Option<&PathBuf> {
-        match kind {
-            SourceKind::MacDive => self.mac_dive_path.as_ref(),
-            SourceKind::Subsurface => self.subsurface_path.as_ref(),
-        }
+    /// Location chosen for `app`; `None`: its standard location.
+    pub fn location(&self, app: &DiveApp) -> Option<&PathBuf> {
+        self.locations.get(app.id)
     }
 
-    pub fn set_path(&mut self, kind: SourceKind, path: Option<PathBuf>) {
-        match kind {
-            SourceKind::MacDive => self.mac_dive_path = path,
-            SourceKind::Subsurface => self.subsurface_path = path,
-        }
+    /// Chooses `app`'s location; `None`: its standard location.
+    pub fn set_location(&mut self, app: &DiveApp, path: Option<PathBuf>) {
+        match path {
+            Some(path) => self.locations.insert(app.id.into(), path),
+            None => self.locations.remove(app.id),
+        };
     }
 }
 
@@ -390,13 +404,14 @@ impl Settings {
 
     /// Takes over the previous plugin's settings, once: its dive-log location
     /// (when it is not the standard one and the file is still there) and its
-    /// dive order. Never replaces a setting already chosen in the app.
+    /// dive order. Never replaces a setting already chosen in the app. The
+    /// previous plugin only read MacDive.
     pub fn take_over(&mut self, legacy: &Legacy, home: &Path, standard_path: &Path) {
         if self.legacy_imported {
             return;
         }
         self.legacy_imported = true;
-        if self.source.mac_dive_path.is_none()
+        if self.source.location(&macdive::APP).is_none()
             && let Some(path) = legacy.mac_dive_path.as_deref().map(str::trim)
             && !path.is_empty()
         {
@@ -405,7 +420,7 @@ impl Settings {
                 None => PathBuf::from(path),
             };
             if path != standard_path && path.is_file() {
-                self.source.mac_dive_path = Some(path);
+                self.source.set_location(&macdive::APP, Some(path));
             }
         }
         if self.dive_sort.is_none() {
@@ -421,6 +436,7 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use divelens_core::subsurface;
 
     fn dir(name: &str) -> PathBuf {
         let dir =
@@ -468,11 +484,47 @@ mod tests {
         let s = Settings::load(&dir);
         assert_eq!(s.version, CURRENT_VERSION);
         assert_eq!(
-            s.source.mac_dive_path.as_deref(),
+            s.source.location(&macdive::APP).map(PathBuf::as_path),
             Some(Path::new("/Dives/MacDive.sqlite"))
         );
         assert_eq!(s.collections.group, "Dive Lens");
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn version_3_file_keeps_both_locations_and_is_saved_as_version_4() {
+        let dir = dir("v3");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(FILE_NAME),
+            r#"{"version":3,"source":{"kind":"subsurface","macDivePath":"/A.sqlite",
+                "subsurfacePath":"/Logs/diver.ssrf"},"language":"fr"}"#,
+        )
+        .unwrap();
+        let s = Settings::load(&dir);
+        assert_eq!(s.source.kind, "subsurface");
+        assert_eq!(
+            s.source.locations,
+            locations(&[("macDive", "/A.sqlite"), ("subsurface", "/Logs/diver.ssrf")])
+        );
+        // Saved in today's form: one list of locations, nothing else.
+        Settings::update(&dir, |s| s.depth_to_altitude = true).unwrap();
+        let file: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join(FILE_NAME)).unwrap()).unwrap();
+        assert_eq!(file["version"], 4);
+        assert_eq!(
+            file["source"],
+            serde_json::json!({"kind": "subsurface",
+                "locations": {"macDive": "/A.sqlite", "subsurface": "/Logs/diver.ssrf"}})
+        );
+        assert_eq!(Settings::load(&dir).source, s.source);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn locations(list: &[(&str, &str)]) -> BTreeMap<String, PathBuf> {
+        list.iter()
+            .map(|(id, p)| (id.to_string(), PathBuf::from(p)))
+            .collect()
     }
 
     #[test]
@@ -482,38 +534,94 @@ mod tests {
                 "subsurfacePath":"/Logs/diver.ssrf"}}"#,
         )
         .unwrap();
+        let (md, ss) = (&macdive::APP, &subsurface::APP);
+        assert_eq!(s.source.location(md), Some(&PathBuf::from("/A.sqlite")));
         assert_eq!(
-            s.source.path(SourceKind::MacDive),
-            Some(&PathBuf::from("/A.sqlite"))
-        );
-        assert_eq!(
-            s.source.path(SourceKind::Subsurface),
+            s.source.location(ss),
             Some(&PathBuf::from("/Logs/diver.ssrf"))
         );
-        s.source.set_path(SourceKind::Subsurface, None);
-        assert_eq!(s.source.path(SourceKind::Subsurface), None);
+        s.source.set_location(ss, None);
+        assert_eq!(s.source.location(ss), None);
+        assert_eq!(s.source.location(md), Some(&PathBuf::from("/A.sqlite")));
+        // The application in use on each system.
+        assert_eq!(s.source.app(Os::MacOs), ss);
+        assert_eq!(s.source.app(Os::Windows), ss);
+        s.source.kind = "macDive".into();
+        assert_eq!(s.source.app(Os::MacOs), md);
+        assert_eq!(s.source.app(Os::Windows), ss, "no MacDive on Windows");
         assert_eq!(
-            s.source.path(SourceKind::MacDive),
-            Some(&PathBuf::from("/A.sqlite"))
+            s.source.location(md),
+            Some(&PathBuf::from("/A.sqlite")),
+            "the MacDive location stays"
         );
-        if cfg!(windows) {
-            assert_eq!(Source::default().kind(), SourceKind::Subsurface);
-            s.source.kind = SourceKind::MacDive;
-            assert_eq!(
-                s.source.kind(),
-                SourceKind::Subsurface,
-                "no MacDive on Windows"
-            );
-        } else {
-            assert_eq!(Source::default().kind(), SourceKind::MacDive);
-            assert_eq!(s.source.kind(), SourceKind::Subsurface);
-        }
+        assert_eq!(
+            Source::default().app(Os::current()).id,
+            if cfg!(windows) {
+                "subsurface"
+            } else {
+                "macDive"
+            }
+        );
         // A kind this version does not know keeps the locations.
         let s: Settings =
             serde_json::from_str(r#"{"source":{"kind":"blueDive","macDivePath":"/A.sqlite"}}"#)
                 .unwrap();
-        assert_eq!(s.source.kind, SourceKind::default());
-        assert_eq!(s.source.mac_dive_path, Some(PathBuf::from("/A.sqlite")));
+        assert_eq!(s.source.app(Os::MacOs), md);
+        assert_eq!(s.source.app(Os::Windows), ss);
+        assert_eq!(s.source.location(md), Some(&PathBuf::from("/A.sqlite")));
+    }
+
+    #[test]
+    fn each_location_reads_on_its_own() {
+        // Standard (null), a newer version's application, a value that is
+        // not a path: the other locations stay.
+        let s: Settings = serde_json::from_str(
+            r#"{"version":5,"source":{"kind":"blueDive","locations":{"macDive":null,
+                "subsurface":"/Logs/diver.xml","blueDive":"/Logs/blue.db","oops":3}}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            s.source.locations,
+            locations(&[
+                ("blueDive", "/Logs/blue.db"),
+                ("subsurface", "/Logs/diver.xml")
+            ])
+        );
+        assert_eq!(s.source.kind, "blueDive", "kept for the newer version");
+        // Kept through a save.
+        let dir = dir("each-location");
+        Settings::update(&dir, |t| *t = s.clone()).unwrap();
+        assert_eq!(Settings::load(&dir).source, s.source);
+        std::fs::remove_dir_all(dir).unwrap();
+        // Locations not a list: none, the application stays.
+        let s: Settings =
+            serde_json::from_str(r#"{"source":{"kind":"subsurface","locations":"/x"}}"#).unwrap();
+        assert_eq!(s.source.kind, "subsurface");
+        assert!(s.source.locations.is_empty());
+        // When both are there, the list wins over a field of versions 1 to 3.
+        let s: Settings = serde_json::from_str(
+            r#"{"source":{"kind":"macDive","macDivePath":"/Old.sqlite",
+                "locations":{"macDive":"/New.sqlite"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(s.source.locations, locations(&[("macDive", "/New.sqlite")]));
+        for (_, id) in OLD_LOCATIONS {
+            assert!(apps::by_id(id).is_some(), "{id}");
+        }
+    }
+
+    #[test]
+    fn patch_changes_one_location() {
+        let mut s: Settings = serde_json::from_str(
+            r#"{"source":{"kind":"subsurface","locations":{"macDive":"/A.sqlite","subsurface":"/x.xml"}}}"#,
+        )
+        .unwrap();
+        // As the Settings screen sends it: "Standard location" for MacDive.
+        s.patch(&serde_json::json!({"source": {"kind": "subsurface",
+            "locations": {"macDive": null, "subsurface": "/y.xml"}}}));
+        assert_eq!(s.source.locations, locations(&[("subsurface", "/y.xml")]));
+        s.patch(&serde_json::json!({"source": {"kind": "subsurface", "locations": {}}}));
+        assert!(s.source.locations.is_empty());
     }
 
     #[test]
@@ -607,9 +715,11 @@ mod tests {
     fn chosen() -> Settings {
         Settings {
             source: Source {
-                kind: SourceKind::Subsurface,
-                mac_dive_path: Some("/Dives/MacDive.sqlite".into()),
-                subsurface_path: Some("/Dives/diver.ssrf".into()),
+                kind: "subsurface".into(),
+                locations: locations(&[
+                    ("macDive", "/Dives/MacDive.sqlite"),
+                    ("subsurface", "/Dives/diver.ssrf"),
+                ]),
             },
             units: UnitChoices {
                 depth: DepthChoice::Feet,
@@ -670,7 +780,7 @@ mod tests {
         .unwrap();
         assert_eq!(s.version, CURRENT_VERSION);
         assert_eq!(
-            s.source.mac_dive_path.as_deref(),
+            s.source.location(&macdive::APP).map(PathBuf::as_path),
             Some(Path::new("/Dives/MacDive.sqlite"))
         );
         assert_eq!(s.units.depth, DepthChoice::Feet);
@@ -685,6 +795,34 @@ mod tests {
         assert_eq!(s.log_level, LogLevel::Normal);
         // A byte-order mark (file saved by a Windows editor) is fine.
         assert!(Settings::from_export("\u{feff}{\"version\":3}").is_ok());
+    }
+
+    /// A file exported by the version before one list of locations (version
+    /// 3, written by that version's export), imported now.
+    #[test]
+    fn imports_a_version_3_export() {
+        let text = include_str!("../tests/fixtures/fictional-settings-export-v3.json");
+        assert!(text.contains("\"macDivePath\""), "today's format: {text}");
+        let s = Settings::from_export(text).unwrap();
+        assert_eq!(
+            s,
+            Settings {
+                legacy_imported: false,
+                ..chosen()
+            }
+        );
+        // Exported again: today's form, which reads back the same.
+        let again = s.to_export();
+        assert!(!again.contains("macDivePath"), "{again}");
+        assert_eq!(Settings::from_export(&again).unwrap(), s);
+        // On Windows, the MacDive location of a Mac's file stays saved.
+        let mut on_mac = s.clone();
+        on_mac.source.kind = "macDive".into();
+        assert_eq!(on_mac.source.app(Os::Windows), &subsurface::APP);
+        assert_eq!(
+            on_mac.source.location(&macdive::APP),
+            Some(&PathBuf::from("/Dives/MacDive.sqlite"))
+        );
     }
 
     #[test]
@@ -731,19 +869,19 @@ mod tests {
             Path::new(STANDARD),
         );
         assert_eq!(
-            s.source.mac_dive_path.as_deref(),
+            s.source.location(&macdive::APP).map(PathBuf::as_path),
             Some(home.join("Dropbox/MacDive.sqlite").as_path())
         );
         assert_eq!(s.dive_sort, Some(DiveSort::Oldest));
         assert!(s.legacy_imported);
         // Done once: later values are ignored.
-        s.source.mac_dive_path = None;
+        s.source.set_location(&macdive::APP, None);
         s.take_over(
             &legacy(Some("/Other.sqlite"), Some("desc")),
             Path::new(HOME),
             Path::new(STANDARD),
         );
-        assert_eq!(s.source.mac_dive_path, None);
+        assert_eq!(s.source.location(&macdive::APP), None);
         assert_eq!(s.dive_sort, Some(DiveSort::Oldest));
         std::fs::remove_dir_all(home).unwrap();
     }
@@ -752,9 +890,8 @@ mod tests {
     fn take_over_never_replaces_app_choices() {
         let mut s = Settings {
             source: Source {
-                kind: SourceKind::MacDive,
-                mac_dive_path: Some("/Chosen.sqlite".into()),
-                subsurface_path: None,
+                kind: "macDive".into(),
+                locations: locations(&[("macDive", "/Chosen.sqlite")]),
             },
             dive_sort: Some(DiveSort::Depth),
             ..Settings::default()
@@ -765,7 +902,7 @@ mod tests {
             Path::new(STANDARD),
         );
         assert_eq!(
-            s.source.mac_dive_path.as_deref(),
+            s.source.location(&macdive::APP).map(PathBuf::as_path),
             Some(Path::new("/Chosen.sqlite"))
         );
         assert_eq!(s.dive_sort, Some(DiveSort::Depth));
@@ -785,7 +922,7 @@ mod tests {
         ] {
             let mut s = Settings::default();
             s.take_over(&legacy(path, order), Path::new(HOME), Path::new(STANDARD));
-            assert_eq!(s.source.mac_dive_path, None, "{path:?}");
+            assert_eq!(s.source.location(&macdive::APP), None, "{path:?}");
             assert!(s.legacy_imported);
         }
         let mut s = Settings::default();

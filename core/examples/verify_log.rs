@@ -19,7 +19,10 @@
 //! removed a file of the log (the folder for git storage, the files beside a
 //! database or XML file), compared by size and hash.
 //!
-//! To add an application: add it to `APPS`, `open` and `guess`.
+//! It reads every application of `divelens_core::apps::ALL`, opened as the
+//! app opens it: `--app` takes its name, and without it the log goes to the
+//! first application whose logs are folders (for a folder) or have its
+//! extension, else to the first application.
 //!
 //! **The output is personal data** (dates, places, positions, notes). It stays
 //! on this computer: never put it, even in part, in the repository, an issue
@@ -34,8 +37,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Instant;
 
-use divelens_core::macdive::MacDive;
-use divelens_core::subsurface::Subsurface;
+use divelens_core::apps::{self, DiveApp, Kept};
 use divelens_core::{Dive, DiveSource};
 
 const HELP: &str = "\
@@ -50,14 +52,11 @@ Usage: cargo run --release -p divelens-core --example verify_log -- [--app <appl
 The output is personal data: keep it on this computer. Never put it, even in
 part, in the repository, an issue or a pull request.";
 
-/// The applications this tool reads.
-const APPS: [&str; 2] = ["MacDive", "Subsurface"];
-
 /// At most this many dives listed per problem.
 const LISTED: usize = 20;
 
 struct Args {
-    app: &'static str,
+    app: &'static DiveApp,
     path: PathBuf,
     number: Option<u32>,
 }
@@ -75,10 +74,13 @@ fn args() -> std::result::Result<Args, String> {
             }
             "--app" => {
                 let name = it.next().ok_or("--app needs an application")?;
-                let known = APPS.iter().find(|n| n.eq_ignore_ascii_case(&name));
+                let known = apps::ALL
+                    .iter()
+                    .find(|a| a.name.eq_ignore_ascii_case(&name));
+                let names: Vec<_> = apps::ALL.iter().map(|a| a.name).collect();
                 app = Some(*known.ok_or(format!(
                     "unknown application {name:?}: {}",
-                    APPS.join(" or ")
+                    names.join(" or ")
                 ))?);
             }
             _ if path.is_none() => path = Some(PathBuf::from(a)),
@@ -96,31 +98,35 @@ fn args() -> std::result::Result<Args, String> {
     })
 }
 
-fn guess(path: &Path) -> &'static str {
+/// The application whose logs look like `path`.
+fn guess(path: &Path) -> &'static DiveApp {
     let ext = path.extension().and_then(|e| e.to_str());
-    let xml = ext.is_some_and(|e| e.eq_ignore_ascii_case("xml") || e.eq_ignore_ascii_case("ssrf"));
-    if path.is_dir() || xml {
-        "Subsurface"
-    } else {
-        "MacDive"
-    }
+    let reads = |app: &DiveApp| {
+        if path.is_dir() {
+            app.choose.folder
+        } else {
+            let file = app.choose.file.unwrap_or_default();
+            ext.is_some_and(|ext| file.iter().any(|e| e.eq_ignore_ascii_case(ext)))
+        }
+    };
+    apps::ALL
+        .iter()
+        .copied()
+        .find(|a| reads(a))
+        .unwrap_or(apps::ALL[0])
 }
 
-/// Opens the log, with a word on how it is stored when the reader tells.
-fn open(app: &str, path: &Path) -> Result<(Box<dyn DiveSource>, String), String> {
-    let not_read = |e: divelens_core::Error| format!("{app} log {} not read: {e}", path.display());
-    match app {
-        "MacDive" => Ok((
-            Box::new(MacDive::open(path).map_err(not_read)?),
-            String::new(),
-        )),
-        "Subsurface" => {
-            let log = Subsurface::open(path).map_err(not_read)?;
-            let storage = format!(" ({:?})", log.storage());
-            Ok((Box::new(log), storage))
-        }
-        _ => Err(format!("no reader for {app}")),
-    }
+/// Opens the log as the app does, with a word on how it is stored when the
+/// application has several formats.
+fn open(app: &DiveApp, path: &Path) -> Result<(Box<dyn DiveSource>, String), String> {
+    let opened = (app.open)(path, &Kept::default())
+        .map_err(|e| format!("{} log {} not read: {e}", app.name, path.display()))?;
+    let storage = if app.texts.en.read.len() > 1 {
+        format!(" ({})", opened.format)
+    } else {
+        String::new()
+    };
+    Ok((opened.log, storage))
 }
 
 /// Size and hash of every file of the log: everything inside a folder log,
@@ -235,12 +241,12 @@ fn run(args: &Args) -> Result<(), String> {
 fn read(args: &Args) -> Result<(), String> {
     let t = Instant::now();
     let (log, storage) = open(args.app, &args.path)?;
-    let not_read = |e: divelens_core::Error| format!("{} log not read: {e}", args.app);
+    let not_read = |e: divelens_core::Error| format!("{} log not read: {e}", args.app.name);
     let dives = log.dives().map_err(not_read)?;
     let sites = log.sites().map_err(not_read)?;
     println!(
         "{}{storage}: {} dives ({} with a profile, {} invalid, {} without number), {} sites, read in {:?}",
-        args.app,
+        args.app.name,
         dives.len(),
         dives.iter().filter(|d| d.has_profile).count(),
         dives.iter().filter(|d| d.invalid).count(),
