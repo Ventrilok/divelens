@@ -218,6 +218,9 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .blk-sep { border-top: 1px solid var(--line-soft); }
 .chk { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: var(--text); cursor: pointer; }
 .tag-dives { flex: none; height: 420px; }
+.tag-clock { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+.tag-clock-head { display: flex; flex-direction: column; gap: 4px; }
+.tag-clock h2 { font-size: 15px; font-weight: 700; }
 .opts { display: flex; flex-wrap: wrap; gap: 8px; }
 .opt { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; border: 1px solid #2c2e33; background: var(--bg); font-size: 14px; cursor: pointer; flex: 0 1 220px; }
 .opt-wide { flex: 1 1 320px; }

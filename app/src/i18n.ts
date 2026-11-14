@@ -117,6 +117,15 @@ const en = {
   "tag.diveData": "Dive data",
   "tag.diveDataOff": "Not written. Tick to choose a dive in the list.",
   "tag.diveDataWrites": "Written: dive number, start, end, duration, max depth, temperatures, rating.",
+  "tag.diveDataWritesPerPhoto":
+    "Written: dive number, start, end, duration, max depth, temperatures, rating; on the photos taken during the dive, also depth · temperature · time and the clock offset.",
+  "tag.perPhoto.count_one": "Per-photo data: {n} photo of {total} in the dive",
+  "tag.perPhoto.count_other": "Per-photo data: {n} photos of {total} in the dive",
+  "tag.perPhoto.noProfile": "No profile: no per-photo data",
+  "tag.perPhoto.inDive": "{n} in the dive",
+  "tag.perPhoto.noSuggestion": "No offset puts a photo of this camera in the dive.",
+  "tag.perPhoto.reading": "Reading the selection in Lightroom…",
+  "tag.perPhoto.failed": "The selection could not be read in Lightroom: {detail}",
   "tag.location": "Location",
   "tag.locationOff": "Not written.",
   "tag.diveSite": "Dive site",
@@ -155,6 +164,8 @@ const en = {
   "tag.err.linkLost": "The link with Lightroom was lost during the write. Check the photos in Lightroom: if needed, Edit › Undo reverts it in one step.",
   "tag.err.notConnected": "Lightroom is not connected. Nothing was written.",
   "tag.err.other": "Nothing was written: {detail}",
+  "tag.err.selectionChanged":
+    "The selection changed in Lightroom. Nothing was written: check the per-photo data, then apply again.",
 
   "coll.title": "Create Collections",
   "steps.dives": "Select Dives",
@@ -422,6 +433,15 @@ const fr: Record<Key, string> = {
   "tag.diveData": "Données de plongée",
   "tag.diveDataOff": "Non écrites. Cochez pour choisir une plongée dans la liste.",
   "tag.diveDataWrites": "Écrit : n° de plongée, début, fin, durée, profondeur max, températures, note.",
+  "tag.diveDataWritesPerPhoto":
+    "Écrit : n° de plongée, début, fin, durée, profondeur max, températures, note ; sur les photos prises pendant la plongée, aussi profondeur · température · temps et le décalage d'horloge.",
+  "tag.perPhoto.count_one": "Données par photo : {n} photo sur {total} dans la plongée",
+  "tag.perPhoto.count_other": "Données par photo : {n} photos sur {total} dans la plongée",
+  "tag.perPhoto.noProfile": "Pas de courbe : pas de données par photo",
+  "tag.perPhoto.inDive": "{n} dans la plongée",
+  "tag.perPhoto.noSuggestion": "Aucun décalage ne place de photo de cet appareil dans la plongée.",
+  "tag.perPhoto.reading": "Lecture de la sélection dans Lightroom…",
+  "tag.perPhoto.failed": "La sélection n'a pas pu être lue dans Lightroom : {detail}",
   "tag.location": "Lieu",
   "tag.locationOff": "Non écrit.",
   "tag.diveSite": "Site de la plongée",
@@ -460,6 +480,8 @@ const fr: Record<Key, string> = {
   "tag.err.linkLost": "La liaison avec Lightroom a été perdue pendant l'écriture. Vérifiez les photos dans Lightroom : au besoin, Édition › Annuler revient en arrière en une fois.",
   "tag.err.notConnected": "Lightroom n'est pas connecté. Rien n'a été écrit.",
   "tag.err.other": "Rien n'a été écrit : {detail}",
+  "tag.err.selectionChanged":
+    "La sélection a changé dans Lightroom. Rien n'a été écrit : vérifiez les données par photo, puis appliquez à nouveau.",
 
   "coll.title": "Créer les collections",
   "steps.dives": "Choisir les plongées",

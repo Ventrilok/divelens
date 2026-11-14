@@ -10,14 +10,17 @@ import type {
   CollectionsResult,
   DiveApp,
   DiveLog,
+  DiveSpan,
   ImportCheck,
   LightroomStatus,
   LogRef,
   Period,
   Sample,
+  SelectionPhotos,
   SelectionPreview,
   Settings,
   TagChoice,
+  TagPreview,
 } from "./types";
 
 let logChanged = (_applied: boolean) => {};
@@ -77,6 +80,20 @@ export const onShowScreen = (handler: (screen: string) => void): Promise<Unliste
 /** Tags the photos selected in Lightroom with data of `log`; rejects with a TagError. */
 export const tagSelection = (log: LogRef, choice: TagChoice) =>
   onLog(invoke<ApplyOutcome>("tag_selection", { log, choice }), true);
+
+/**
+ * Describes the photos selected in Lightroom now, with the offsets
+ * remembered for the application of `log`; `search` numbers it, higher than
+ * any asked for before. Rejects with a CollectionsError.
+ */
+export const findSelectionPhotos = (log: LogRef, search: number) =>
+  onLog(invoke<SelectionPhotos>("find_selection_photos", { log, search }));
+/** Tag Selection's live counts for description `search`; rejects with noPhotos once a newer one replaced it. */
+export const tagPreview = (search: number, dive: DiveSpan | null, offsets: Record<string, number>) =>
+  invoke<TagPreview>("tag_preview", { search, dive, offsets });
+/** Suggested offset (minutes) per camera key of description `search`, for `dive`; null when no offset fits. */
+export const suggestTagOffsets = (search: number, dive: DiveSpan, cameras: string[]) =>
+  invoke<Record<string, number | null>>("suggest_tag_offsets", { search, dive, cameras });
 
 /** Progress of a catalog write: (photos done, total). */
 export const onApplyProgress = (handler: (done: number, total: number) => void): Promise<UnlistenFn> =>

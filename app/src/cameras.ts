@@ -27,6 +27,15 @@ export function initialOffsets(cameras: Camera[]): Record<string, number> {
   return Object.fromEntries(cameras.map((c) => [c.key, c.remembered ?? 0]));
 }
 
+/**
+ * Offsets once the cameras change (Tag Selection, a new selection): a
+ * camera still there keeps the offset shown, a new one starts from the
+ * offset last applied to it, else none.
+ */
+export function keepOffsets(shown: Record<string, number>, cameras: Camera[]): Record<string, number> {
+  return Object.fromEntries(cameras.map((c) => [c.key, shown[c.key] ?? c.remembered ?? 0]));
+}
+
 /** Offset as typed in its field: "+4:01", "0:00", "−0:30". */
 export function offsetField(min: number): string {
   const sign = min < 0 ? MINUS : min > 0 ? "+" : "";

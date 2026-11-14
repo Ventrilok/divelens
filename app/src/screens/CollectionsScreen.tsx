@@ -6,19 +6,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyCollections, collectionSets, collectionsPreview, findCollectionPhotos, onApplyProgress, suggestOffsets } from "../api";
-import {
-  clampMargin,
-  clampOffset,
-  initialOffsets,
-  MARGIN_STEP_MIN,
-  MAX_MARGIN_MIN,
-  offsetField,
-  parseOffset,
-  SLIDER_RANGE_MIN,
-  SLIDER_STEP_MIN,
-} from "../cameras";
+import { clampMargin, clampOffset, initialOffsets, MARGIN_STEP_MIN, MAX_MARGIN_MIN } from "../cameras";
 import { placeLabel, setExists } from "../collectionPlace";
 import { logRef, nextSearchNumber } from "../diveLog";
+import { CameraCard } from "../components/CameraCard";
 import { Icon } from "../components/Icon";
 import { Steps } from "../components/Steps";
 import { formatDay, formatRange, formatRowSpan } from "../format";
@@ -86,138 +77,6 @@ function pick(o: Record<string, number>, keys: Set<string>): Record<string, numb
 
 function diveName(d: Dive): string {
   return [d.number !== null ? String(d.number) : null, d.site.name].filter(Boolean).join(" ");
-}
-
-/** Offset typed to the minute; arrows add or remove a minute. */
-function OffsetField({ offset, label, onOffset }: { offset: number; label: string; onOffset: (min: number) => void }) {
-  const [text, setText] = useState(offsetField(offset));
-  const [editing, setEditing] = useState(false);
-  useEffect(() => {
-    if (!editing) setText(offsetField(offset));
-  }, [offset, editing]);
-  const commit = () => {
-    const value = parseOffset(text);
-    if (value !== null) onOffset(value);
-    else setText(offsetField(offset));
-    setEditing(false);
-  };
-  const bad = editing && parseOffset(text) === null;
-  return (
-    <input
-      className="inp off-field"
-      aria-label={label}
-      aria-invalid={bad}
-      value={text}
-      onFocus={() => setEditing(true)}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") e.currentTarget.blur();
-        else if (e.key === "Escape") {
-          setText(offsetField(offset));
-          setEditing(false);
-          e.currentTarget.blur();
-        } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-          e.preventDefault();
-          const next = offset + (e.key === "ArrowUp" ? 1 : -1);
-          onOffset(next);
-          setText(offsetField(clampOffset(next)));
-        }
-      }}
-    />
-  );
-}
-
-function CameraCard({
-  camera,
-  offset,
-  ignored,
-  remembered,
-  inDives,
-  outside,
-  note,
-  onOffset,
-  onIgnore,
-  onSuggest,
-}: {
-  camera: Camera;
-  offset: number;
-  ignored: boolean;
-  remembered: boolean;
-  inDives: number;
-  outside: number;
-  note: string | null;
-  onOffset: (min: number) => void;
-  onIgnore: (ignored: boolean) => void;
-  onSuggest: () => void;
-}) {
-  const warn = !ignored && inDives === 0;
-  const name = camera.model ?? t("coll.unknownCamera");
-  const total = inDives + outside;
-  return (
-    <div className={`cam ${warn ? "cam-warn" : ""} ${ignored ? "cam-off" : ""}`}>
-      <div className="cam-h">
-        {warn ? (
-          <Icon name="warn" className="warn" />
-        ) : ignored ? (
-          <Icon name="close" className="muted" />
-        ) : (
-          <Icon name="check" className="accent" />
-        )}
-        <div className="cam-n">
-          <b>{name}</b>
-          <span>
-            {camera.serial && `${t("coll.serial", { n: camera.serial })} · `}
-            {tn("coll.photos", camera.photos)}
-          </span>
-        </div>
-        <label className="ign">
-          <input type="checkbox" checked={ignored} onChange={(e) => onIgnore(e.target.checked)} />
-          {t("coll.ignore")}
-        </label>
-      </div>
-      {ignored ? (
-        <p className="muted small">{t("coll.ignored")}</p>
-      ) : (
-        <>
-          <div className="cam-c">
-            <div className="slider">
-              <input
-                type="range"
-                min={-SLIDER_RANGE_MIN}
-                max={SLIDER_RANGE_MIN}
-                step={SLIDER_STEP_MIN}
-                value={Math.max(-SLIDER_RANGE_MIN, Math.min(SLIDER_RANGE_MIN, offset))}
-                aria-label={t("coll.offset", { camera: name })}
-                aria-valuetext={offsetField(offset)}
-                onChange={(e) => onOffset(Number(e.target.value))}
-              />
-              <div className="slider-scale" aria-hidden="true">
-                <span>−14 h</span>
-                <span>0</span>
-                <span>+14 h</span>
-              </div>
-            </div>
-            <OffsetField offset={offset} label={t("coll.offsetField", { camera: name })} onOffset={onOffset} />
-            <button type="button" className="mini" onClick={onSuggest}>
-              <Icon name="spark" size={15} />
-              {t("coll.suggest")}
-            </button>
-          </div>
-          {remembered && <span className="cam-tag">{t("coll.remembered")}</span>}
-          <div className={`cam-f ${warn ? "warn" : ""}`}>
-            <span className="bar">
-              <span className="bar-fill" style={{ width: `${total > 0 ? (100 * inDives) / total : 0}%` }} />
-            </span>
-            <span>
-              {inDives === 0 ? t("coll.noneInDives") : t("coll.inDives", { n: formatInt(inDives), out: formatInt(outside) })}
-            </span>
-          </div>
-          {note && <p className="muted small">{note}</p>}
-        </>
-      )}
-    </div>
-  );
 }
 
 function ResultView({
@@ -568,21 +427,30 @@ export function CollectionsScreen({
               <p className="muted">{t("coll.noPhotos")}</p>
             ) : (
               <div className="cams">
-                {cameras.map((c) => (
-                  <CameraCard
-                    key={c.key}
-                    camera={c}
-                    offset={offsets[c.key] ?? 0}
-                    ignored={ignored.has(c.key)}
-                    remembered={c.remembered !== null && offsets[c.key] === c.remembered && !touched.has(c.key)}
-                    inDives={camCounts.get(c.key)?.inDives ?? 0}
-                    outside={camCounts.get(c.key)?.outside ?? 0}
-                    note={notes[c.key] || null}
-                    onOffset={(m) => setOffset(c.key, m)}
-                    onIgnore={(on) => setIgnoredCamera(c.key, on)}
-                    onSuggest={() => suggest([c.key])}
-                  />
-                ))}
+                {cameras.map((c) => {
+                  const inDives = camCounts.get(c.key)?.inDives ?? 0;
+                  const outside = camCounts.get(c.key)?.outside ?? 0;
+                  return (
+                    <CameraCard
+                      key={c.key}
+                      camera={c}
+                      offset={offsets[c.key] ?? 0}
+                      ignored={ignored.has(c.key)}
+                      remembered={c.remembered !== null && offsets[c.key] === c.remembered && !touched.has(c.key)}
+                      inDives={inDives}
+                      outside={outside}
+                      gauge={
+                        inDives === 0
+                          ? t("coll.noneInDives")
+                          : t("coll.inDives", { n: formatInt(inDives), out: formatInt(outside) })
+                      }
+                      note={notes[c.key] || null}
+                      onOffset={(m) => setOffset(c.key, m)}
+                      onIgnore={(on) => setIgnoredCamera(c.key, on)}
+                      onSuggest={() => suggest([c.key])}
+                    />
+                  );
+                })}
               </div>
             )}
           </section>
