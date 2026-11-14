@@ -495,12 +495,19 @@ mod tests {
         out
     }
 
+    /// Every description the tests check: the registered ones, and the
+    /// example reader's, which is never registered.
+    fn described() -> Vec<&'static DiveApp> {
+        ALL.iter().copied().chain([&crate::skeleton::APP]).collect()
+    }
+
     #[test]
     fn every_application_is_fully_described_in_both_languages() {
         assert!(!ALL.is_empty());
-        let mut problems: Vec<String> = ALL.iter().flat_map(|a| problems_of(a)).collect();
-        for (i, app) in ALL.iter().enumerate() {
-            for other in &ALL[..i] {
+        let all = described();
+        let mut problems: Vec<String> = all.iter().flat_map(|a| problems_of(a)).collect();
+        for (i, app) in all.iter().enumerate() {
+            for other in &all[..i] {
                 if app.id == other.id || app.name == other.name {
                     problems.push(format!("{} and {}: same id or name", app.id, other.id));
                 }
@@ -593,33 +600,39 @@ mod tests {
 
     #[test]
     fn the_first_application_available_is_the_default() {
+        for os in [Os::MacOs, Os::Windows] {
+            // Settings lists the applications of the system in ALL's order.
+            let here: Vec<_> = ALL.iter().copied().filter(|a| a.runs_on(os)).collect();
+            assert!(!here.is_empty(), "no application on {os:?}");
+            assert_eq!(available(os).collect::<Vec<_>>(), here, "{os:?}");
+            assert_eq!(in_use("", os), here[0], "default on {os:?}");
+            // Settings from a newer version.
+            assert_eq!(in_use("blueDive", os), here[0], "unknown on {os:?}");
+            for app in ALL {
+                // Settings from another system: the default there.
+                let expected = if app.runs_on(os) { *app } else { here[0] };
+                assert_eq!(in_use(app.id, os), expected, "{} on {os:?}", app.id);
+            }
+        }
+        // Spec F2: MacDive by default on macOS; on Windows, MacDive is not
+        // offered and Subsurface is the default.
         assert_eq!(in_use("", Os::MacOs).id, "macDive");
+        assert!(!crate::macdive::APP.runs_on(Os::Windows));
         assert_eq!(in_use("", Os::Windows).id, "subsurface");
-        assert_eq!(in_use("subsurface", Os::MacOs).id, "subsurface");
-        // Settings from a Mac on Windows, or from a newer version.
-        assert_eq!(in_use("macDive", Os::Windows).id, "subsurface");
-        assert_eq!(in_use("blueDive", Os::MacOs).id, "macDive");
-        let windows: Vec<_> = available(Os::Windows).map(|a| a.id).collect();
-        assert_eq!(windows, ["subsurface"], "no MacDive on Windows");
-        let mac: Vec<_> = available(Os::MacOs).map(|a| a.id).collect();
-        assert_eq!(
-            mac,
-            ["macDive", "subsurface"],
-            "Settings lists them in this order"
-        );
+        assert!(crate::subsurface::APP.runs_on(Os::MacOs));
     }
 
     /// Settings files, photos and remembered offsets already hold these.
     #[test]
     fn ids_names_and_offsets_files_never_change() {
-        let frozen: Vec<_> = ALL.iter().map(|a| (a.id, a.name, a.offsets_file)).collect();
-        assert_eq!(
-            frozen[..2],
-            [
-                ("macDive", "MacDive", "clock-offsets.json"),
-                ("subsurface", "Subsurface", "clock-offsets-subsurface.json"),
-            ]
-        );
+        for (id, name, offsets) in [
+            ("macDive", "MacDive", "clock-offsets.json"),
+            ("subsurface", "Subsurface", "clock-offsets-subsurface.json"),
+        ] {
+            let app = by_id(id).unwrap_or_else(|| panic!("{id} is no longer registered"));
+            assert_eq!((app.name, app.offsets_file), (name, offsets), "{id}");
+        }
+        assert!(by_id(crate::skeleton::APP.id).is_none(), "never offered");
     }
 
     #[test]
@@ -665,7 +678,7 @@ mod tests {
             data: None,
             ..mac
         };
-        for app in ALL {
+        for app in described() {
             assert_eq!((app.standard_location)(&nowhere), None, "{}", app.id);
         }
     }
