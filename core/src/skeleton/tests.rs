@@ -1,5 +1,6 @@
 //! The reference log as Example stores it, built on the fly (fictional data
-//! only), and the errors of `open`, which the common tests do not cover.
+//! only), plus what the common tests do not cover: a case the reference log
+//! leaves out, and the errors of `open`.
 
 use std::path::PathBuf;
 
@@ -55,9 +56,16 @@ INSERT INTO dives (id, number, start, duration_s, max_depth_m, temp_min_c, temp_
   ('dive-109', 109, '2025-06-18 15:30:00', 1440, 16.0, 25.0, 26.0, 0, NULL, 'site-8');
 "#;
 
-/// The reference log, for the conformance tests. Its name holds what a
+// ADAPT: the application's own cases, kept out of the reference log because
+// another application cannot store them.
+const EXTRA: &str = "
+-- A latitude without a longitude: no position.
+INSERT INTO sites (id, name, latitude) VALUES ('site-9', 'Half Mapped Reef', 33.75);
+";
+
+/// A database holding the reference log, then `sql`. Its name holds what a
 /// `file:` URI must escape.
-pub(crate) fn reference_log(dir: &Path) -> PathBuf {
+fn database(dir: &Path, sql: &str) -> PathBuf {
     let path = dir.join("Example log #1 été.sqlite");
     let conn = Connection::open(&path).unwrap();
     // ADAPT: the journal mode the application uses. A log in WAL mode, closed,
@@ -79,8 +87,27 @@ pub(crate) fn reference_log(dir: &Path) -> PathBuf {
             assert_eq!(added, 1, "dive {:?}", d.number);
         }
     }
+    conn.execute_batch(sql).unwrap();
     drop(conn);
     path
+}
+
+/// The reference log, for the conformance tests.
+pub(crate) fn reference_log(dir: &Path) -> PathBuf {
+    database(dir, "")
+}
+
+#[test]
+fn a_single_coordinate_is_no_position() {
+    let dir = TempDir::new().unwrap();
+    let log = Example::open(&database(dir.path(), EXTRA)).unwrap();
+    let sites = log.sites().unwrap();
+    let reef = sites
+        .iter()
+        .find(|s| s.id.as_deref() == Some("site-9"))
+        .unwrap();
+    assert_eq!(reef.name.as_deref(), Some("Half Mapped Reef"));
+    assert_eq!((reef.lat, reef.lon), (None, None));
 }
 
 #[test]

@@ -203,6 +203,10 @@ SQLite database that no real application writes):
   `-wal` and `-shm` files behind;
 - Example has no "invalid" dives.
 
+Example's own tests add a site the reference log leaves out, because
+Subsurface cannot store it: a latitude without a longitude, which is no
+position at all.
+
 ## Adding a reader
 
 1. Write the reader in `core/src/<application>.rs`: it implements
