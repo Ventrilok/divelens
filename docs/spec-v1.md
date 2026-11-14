@@ -222,7 +222,7 @@ Critères d'acceptation :
 - La profondeur est **toujours** écrite dans le champ Dive Lens dédié.
 - Une option permet de la **copier aussi dans le champ altitude GPS**, en valeur négative, en mètres. Désactivée par défaut. **[Décidé]**
 - Comportements **[Décidé, 2026-11-12]** :
-  - seul « Créer les collections » écrit l'altitude : « Tagger la sélection » n'écrit pas de profondeur par photo ;
+  - seul « Créer les collections » écrit l'altitude : « Tagger la sélection » n'écrit pas de profondeur par photo. Il peut seulement **effacer** l'altitude tirée de la profondeur d'une autre plongée, quand il rattache la photo à une nouvelle plongée (F8) **[Décidé, 2026-11-14]** ;
   - une photo sans profondeur (prise dans la marge, plongée sans courbe) garde l'altitude qu'elle a déjà ;
   - désactiver l'option plus tard n'efface pas les altitudes déjà copiées ;
   - « Annuler » dans Lightroom **ne défait pas l'altitude**, comme pour le GPS (constaté le 2026-11-12). Accepté ; l'explication de l'option et le rappel après écriture le disent.
@@ -248,7 +248,7 @@ Sélection **[Décidé]** :
 - Sans sélection, le bouton est désactivé avec le message « Sélectionnez des photos dans Lightroom ».
 
 Ce qui est écrit **[Décidé : comportement actuel en V1]** :
-- Données de plongée : n° de plongée, début, fin, durée, profondeur max, températures, note, et l'application source (section 7). Pas de données par photo, pas de collection.
+- Données de plongée : n° de plongée, début, fin, durée, profondeur max, températures, note, et l'application source (section 7). Pas de données par photo, pas de collection. Celles d'une autre plongée déjà sur la photo sont effacées (voir « Photo déjà rattachée à une autre plongée » plus bas).
 - Lieu : pays, ville, lieu, GPS (section 4).
 - Évolution envisagée : calculer les données par photo et alimenter la collection de la plongée.
 - Annulation : « Annuler » dans Lightroom défait l'écriture, **sauf le GPS**, que Lightroom ne remet pas (constaté le 2026-11-12). Accepté tel quel. **[Décidé]**
@@ -260,7 +260,20 @@ Comportements **[Décidé, 2026-11-12]** :
 - Tant qu'aucune plongée n'est choisie, le lieu part sur « Autre site » ; il passe au site de la plongée dès qu'une plongée est choisie.
 - Liste : un clic sur une ligne choisit la plongée ; les flèches ne font que parcourir (la fiche suit la ligne parcourue).
 - « Annuler » remet l'écran à zéro, sans rien garder (il n'y a plus d'écran Plongées où revenir). **[Proposé, 2026-11-13]**
-- Après l'écriture : bandeau avec le nombre de photos taguées et le rappel qu'« Annuler » dans Lightroom défait tout en une fois, sauf le GPS.
+- Après l'écriture : bandeau avec le nombre de photos taguées et le rappel qu'« Annuler » dans Lightroom défait tout en une fois, sauf le GPS (et l'altitude quand une altitude a été effacée, voir plus bas).
+
+Photo déjà rattachée à une autre plongée **[Décidé, 2026-11-14]** :
+- Quand « Données de plongée » est cochée et qu'une photo porte déjà une **autre** plongée, ses valeurs par photo sont effacées : profondeur, température, temps écoulé et décalage d'horloge (F6, section 7). Elles décrivaient l'ancienne plongée.
+- L'altitude GPS n'est effacée que si elle vaut **exactement** celle que Dive Lens a tirée de l'ancienne profondeur (F7), au décimètre près. Sinon elle reste : ce champ Lightroom est partagé avec l'appareil photo et l'utilisateur, et « Annuler » ne le remet pas. Dans le doute, on la garde.
+  - En pieds, la profondeur écrite est arrondie au pied : l'altitude tirée de la profondeur exacte ne se retrouve souvent pas, et elle est alors gardée.
+  - Profondeur absente ou illisible : l'altitude est gardée.
+- **Même plongée** : application source, début et n° de plongée identiques tous les trois. Un n° vide des deux côtés compte comme identique. Rien d'autre n'est alors touché.
+- Une photo sans données de plongée n'a rien à effacer. Le lieu seul (« Données de plongée » décochée) ne touche à rien d'autre.
+- La vérification se fait au moment de l'écriture, d'après la plongée que porte la photo, dans la même écriture (une seule étape d'annulation).
+- « Annuler » dans Lightroom remet les valeurs par photo effacées, pas l'altitude. En application de F7 (le rappel après écriture le dit), quand l'écriture a effacé au moins une altitude, le bandeau reprend le rappel de « Créer les collections » avec altitude : « sauf le GPS et l'altitude ».
+- Si Lightroom refuse d'effacer une altitude, elle reste et le reste de l'écriture se fait.
+- La photo reste dans la collection de l'ancienne plongée : c'est à l'utilisateur de la déplacer. Pas de changement de collection automatique.
+- Détails **[Proposé]** : « sans données de plongée » = ni source, ni début, ni n° ; un champ vidé à la main dans Lightroom compte comme vide ; une profondeur sans unité (format d'avant les unités) se lit en mètres.
 
 Liste des plongées **[Décidé]** : **la même que dans F4** (mêmes colonnes, regroupement par mois, recherche et filtres), en choix unique.
 
@@ -314,6 +327,8 @@ Diffusion **[Décidé]** : un seul texte source, publié à deux endroits :
 - **publié sur le site du plugin** (querton.com), pour les futurs utilisateurs et les moteurs de recherche.
 
 **Texte source [2026-11-13]** : premier jet dans `docs/user/en.md` et `docs/user/fr.md`, un fichier par langue, à relire par le propriétaire. Il reprend les libellés exacts de l'application et de Lightroom, et ajoute au contenu ci-dessus le premier lancement d'une version non signée (Mac : « Ouvrir quand même » ; Windows : « Exécuter quand même », WebView2) et les champs Dive Lens dans Lightroom. L'export des réglages n'y figure pas tant que F11 n'est pas livré. Restent à faire : l'embarquer dans l'application, le publier sur querton.com et les liens « ? ».
+
+**Sauvegarde des réglages [2026-11-14]** : F11 étant livré, le guide la décrit dans la section Réglages (contenu, export, import, carnet introuvable, fin de la reprise de l'ancien module après un import).
 
 ### F13 — Mises à jour automatiques
 
