@@ -1,7 +1,7 @@
 // Tag Selection screen (spec F8): writes a dive's data and/or a location on
 // the photos selected in Lightroom, whatever their time. The selection is
 // made in Lightroom and followed live; Lightroom resolves it again at the
-// moment of Apply, in one undoable step.
+// moment of Apply, in one Undo step.
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { onApplyProgress, onSelectionPreview, selectionPreview, tagSelection } from "../api";
@@ -24,7 +24,7 @@ const THUMBNAILS = 6;
 type Run =
   | { state: "idle" }
   | { state: "writing"; done: number; total: number }
-  | { state: "done"; count: number; altitudesCleared: number }
+  | { state: "done"; count: number }
   | { state: "failed"; message: string };
 
 function siteLine(site: Site): string {
@@ -38,6 +38,9 @@ function failure(e: ApplyOutcome | TagError): string {
       return t("tag.err.noSelection");
     case "busy":
       return t("tag.err.busy");
+    case "gpsNotWritten":
+      // Written but for the GPS and altitude: Undo, then apply again.
+      return t("tag.err.gpsNotWritten");
     case "linkLost":
       return t("tag.err.linkLost");
     case "notConnected":
@@ -166,7 +169,7 @@ export function TagScreen({
       .then((outcome) =>
         setRun(
           outcome.outcome === "applied"
-            ? { state: "done", count: outcome.count, altitudesCleared: outcome.altitudesCleared }
+            ? { state: "done", count: outcome.count }
             : { state: "failed", message: failure(outcome) },
         ),
       )
@@ -308,8 +311,7 @@ export function TagScreen({
         <div className="notice notice-ok" role="status">
           <span>
             <span className="strong">{tn("tag.done", run.count)}</span>{" "}
-            {/* Undo does not restore an altitude cleared from another dive's depth (spec F7, F8). */}
-            {t(run.altitudesCleared > 0 ? "coll.undoHintAltitude" : "tag.undoHint")}
+            {t("tag.undoHint")}
           </span>
           <button type="button" className="btn btn-g" onClick={() => setRun({ state: "idle" })}>
             {t("tag.dismiss")}

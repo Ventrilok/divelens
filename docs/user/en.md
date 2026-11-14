@@ -98,7 +98,7 @@ Good to know:
 - A photo that would fall in two dives goes to the closer one.
 - Running a group of dives again only adds: photos already filed stay where they are (correct them by hand if needed), and photos found again get their values rewritten.
 
-**Undo.** **Edit › Undo** in Lightroom reverts everything in one step, except the GPS (and the altitude, if you copy the depth into it): Lightroom does not restore those.
+**Undo.** **Edit › Undo** in Lightroom reverts everything in one step, GPS and altitude included.
 
 ---
 
@@ -117,7 +117,7 @@ What is written: with **Dive data**, the dive number, start, end, duration, max 
 - A value the chosen dive does not have (temperature, rating…) clears the old Dive Lens value on the photo, so the fields always describe a single dive.
 - A site without country, city or GPS leaves the values already on the photo untouched (a GPS position from a phone stays).
 - With **Dive data**, a photo that already carries a **different** dive loses that dive's own values: depth, temperature, elapsed time and clock offset. Its GPS altitude is cleared only if it is the one Dive Lens copied from the old depth; any other altitude stays. The photo stays in its collection: move it yourself if needed.
-- **Edit › Undo** in Lightroom reverts it in one step, except the GPS (and the altitude, when one was cleared): Lightroom does not restore those.
+- **Edit › Undo** in Lightroom reverts everything in one step, GPS and altitude included.
 
 ---
 
@@ -140,7 +140,7 @@ Every change is saved at once.
 - **Copy depth to GPS altitude** (off by default): also writes each photo's depth as a negative altitude, in metres.
   - The Dive Lens depth field only exists in Lightroom: it is lost on export.
   - The GPS altitude travels with exported photos and shows in other software.
-  - The copy replaces a GPS altitude already on the photo, and Lightroom's Undo does not bring it back. Photos without a depth keep theirs.
+  - The copy replaces a GPS altitude already on the photo; **Edit › Undo** in Lightroom brings it back. Photos without a depth keep theirs.
 
 **Collections**
 - **Place in**: the catalog root or an existing collection set (Lightroom must be connected to browse them).

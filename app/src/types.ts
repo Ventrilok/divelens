@@ -158,8 +158,13 @@ export interface TagChoice {
 }
 
 export type ApplyOutcome =
-  | { outcome: "applied"; count: number; altitudesCleared: number }
-  | { outcome: "failed"; reason: "noSelection" | "busy" | "badRequest" | "error" | string; detail: string | null };
+  | { outcome: "applied"; count: number }
+  | {
+      outcome: "failed";
+      /** "gpsNotWritten": all written but the GPS and altitude (the plugin's second write did not happen). */
+      reason: "noSelection" | "busy" | "badRequest" | "gpsNotWritten" | "error" | string;
+      detail: string | null;
+    };
 
 export type TagError =
   | { error: "nothingChosen" | "notConnected" | "linkLost" | "badGps" | "unknownDive" | "unknownSite" | "logChanged" }
