@@ -828,8 +828,15 @@ mod tests {
                 .join("../../plugin/DiveLens.lrdevplugin/Link.lua"),
         )
         .unwrap();
-        assert!(
-            link.contains(&format!("\nlocal PROTOCOL = {PROTOCOL}\n")),
+        // Line by line: a Windows checkout may end lines with CRLF.
+        let declared: Vec<&str> = link
+            .lines()
+            .map(str::trim)
+            .filter(|l| l.starts_with("local PROTOCOL ="))
+            .collect();
+        assert_eq!(
+            declared,
+            [format!("local PROTOCOL = {PROTOCOL}")],
             "raise PROTOCOL in Link.lua and lightroom.rs together"
         );
     }
