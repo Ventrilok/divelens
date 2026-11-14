@@ -10,8 +10,10 @@
 //!   shows them;
 //! - gives profiles sorted by time;
 //! - reports a dive without a profile as having none, with no samples;
-//! - never modifies the log: no file changed, created or removed next to it;
-//! - leaves out what its [`Capabilities`] do not declare.
+//! - never modifies the log: no file changed, created or removed next to it,
+//!   whether looked at while the log is open or after;
+//! - declares the [`Capabilities`] its run states, and leaves out what they
+//!   do not cover.
 //!
 //! The common reader interface is [`DiveSource`] plus the reader's own
 //! `open(path)`. To add a reader: write the reference log in the
@@ -46,6 +48,9 @@ pub(crate) struct Run {
     pub write_log: fn(&Path) -> PathBuf,
     /// Opens a log read-only: the reader's `open`.
     pub open: fn(&Path) -> Result<Box<dyn DiveSource>>,
+    /// What the reader must declare it provides. Values it does not provide
+    /// must be absent; the reader cannot lower the bar by declaring less.
+    pub capabilities: Capabilities,
     /// The application can mark a dive invalid (Subsurface).
     pub marks_invalid: bool,
 }
@@ -55,14 +60,15 @@ pub(crate) struct Run {
 pub(crate) fn check(run: &Run) {
     let dir = TempDir::new().unwrap();
     let path = (run.write_log)(dir.path());
-    let before = snapshot(dir.path());
+    let before = snapshot(dir.path(), true);
     let mut problems = Problems::default();
     {
         let open = || (run.open)(&path).unwrap_or_else(|e| panic!("reference log not read: {e}"));
         let log = open();
         let again = open();
+        problems.same("capabilities", log.capabilities(), run.capabilities);
         check_dives(log.as_ref(), run, &mut problems);
-        check_sites(log.as_ref(), &mut problems);
+        check_sites(log.as_ref(), run.capabilities, &mut problems);
         check_ids(log.as_ref(), again.as_ref(), &mut problems);
         match log.profile("no such dive") {
             Err(Error::UnknownDive(_)) => {}
@@ -70,10 +76,16 @@ pub(crate) fn check(run: &Run) {
                 "profile of an unknown dive: {other:?}, expected Error::UnknownDive"
             )),
         }
-        // Closed before looking at the folder again (Windows keeps open
-        // files busy).
+        // While the log is open: a reader that opens it for writing may
+        // create files that disappear once it is closed (SQLite's -wal and
+        // -shm). Names only: Windows keeps open files busy.
+        for name in snapshot(dir.path(), false).keys() {
+            if !before.contains_key(name) {
+                problems.add(format!("log modified: {name} created while reading"));
+            }
+        }
     }
-    let after = snapshot(dir.path());
+    let after = snapshot(dir.path(), true);
     for (name, contents) in &after {
         match before.get(name) {
             None => problems.add(format!("log modified: {name} created")),
@@ -129,7 +141,7 @@ fn declared<T>(capable: bool, value: Option<T>) -> Option<T> {
 }
 
 fn check_dives(log: &dyn DiveSource, run: &Run, p: &mut Problems) {
-    let caps = log.capabilities();
+    let caps = run.capabilities;
     let dives = log
         .dives()
         .unwrap_or_else(|e| panic!("dives not read: {e}"));
@@ -263,8 +275,7 @@ fn check_profile(
     }
 }
 
-fn check_sites(log: &dyn DiveSource, p: &mut Problems) {
-    let caps = log.capabilities();
+fn check_sites(log: &dyn DiveSource, caps: Capabilities, p: &mut Problems) {
     let sites = log
         .sites()
         .unwrap_or_else(|e| panic!("sites not read: {e}"));
@@ -378,9 +389,9 @@ fn check_ids(log: &dyn DiveSource, again: &dyn DiveSource, p: &mut Problems) {
 }
 
 /// Every file and folder under `root`, by path relative to it with `/`
-/// separators: the contents of files, nothing for folders.
-fn snapshot(root: &Path) -> BTreeMap<String, Option<Vec<u8>>> {
-    fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<String, Option<Vec<u8>>>) {
+/// separators: the contents of files when `contents`, nothing for folders.
+fn snapshot(root: &Path, contents: bool) -> BTreeMap<String, Option<Vec<u8>>> {
+    fn walk(root: &Path, dir: &Path, contents: bool, out: &mut BTreeMap<String, Option<Vec<u8>>>) {
         for e in std::fs::read_dir(dir).unwrap() {
             let path = e.unwrap().path();
             let name = path
@@ -392,14 +403,14 @@ fn snapshot(root: &Path) -> BTreeMap<String, Option<Vec<u8>>> {
                 .join("/");
             if path.is_dir() {
                 out.insert(format!("{name}/"), None);
-                walk(root, &path, out);
+                walk(root, &path, contents, out);
             } else {
-                out.insert(name, Some(std::fs::read(&path).unwrap()));
+                out.insert(name, contents.then(|| std::fs::read(&path).unwrap()));
             }
         }
     }
     let mut out = BTreeMap::new();
-    walk(root, root, &mut out);
+    walk(root, root, contents, &mut out);
     out
 }
 
@@ -415,6 +426,12 @@ fn macdive() {
     check(&Run {
         write_log: crate::macdive::tests::reference_log,
         open: |path| boxed(MacDive::open(path)),
+        capabilities: Capabilities {
+            temperature: true,
+            rating: true,
+            gps: true,
+            profile: true,
+        },
         marks_invalid: false,
     });
 }
@@ -424,6 +441,12 @@ fn subsurface_xml() {
     check(&Run {
         write_log: crate::subsurface::tests::reference_xml_log,
         open: |path| boxed(Subsurface::open(path)),
+        capabilities: Capabilities {
+            temperature: true,
+            rating: true,
+            gps: true,
+            profile: true,
+        },
         marks_invalid: true,
     });
 }
@@ -433,6 +456,12 @@ fn subsurface_git() {
     check(&Run {
         write_log: crate::subsurface::tests::reference_git_log,
         open: |path| boxed(Subsurface::open(path)),
+        capabilities: Capabilities {
+            temperature: true,
+            rating: true,
+            gps: true,
+            profile: true,
+        },
         marks_invalid: true,
     });
 }
