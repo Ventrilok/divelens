@@ -16,7 +16,7 @@ body:
     attributes:
       label: Dive Lens version
       description: Shown at the bottom of the app's Settings screen, or in Lightroom's Plug-in Manager.
-      placeholder: "0.1.0"
+      placeholder: "2.0.0"
     validations:
       required: true
   - type: dropdown
