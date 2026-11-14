@@ -262,28 +262,6 @@ fn reads_dives_macdive_has_not_copied_into_the_database_yet() {
     drop(macdive);
 }
 
-#[test]
-#[cfg(not(windows))]
-fn immutable_uris_escape_the_path() {
-    assert_eq!(
-        immutable_uri(Path::new("/Users/diver/Mac Dive ~ #1 100% été.sqlite")).as_deref(),
-        Some("file:/Users/diver/Mac%20Dive%20~%20%231%20100%25%20%C3%A9t%C3%A9.sqlite?immutable=1")
-    );
-}
-
-#[test]
-#[cfg(windows)]
-fn immutable_uris_escape_the_path() {
-    assert_eq!(
-        immutable_uri(Path::new(r"C:\Logs\Mac Dive #1.sqlite")).as_deref(),
-        Some("file:/C:/Logs/Mac%20Dive%20%231.sqlite?immutable=1")
-    );
-    assert_eq!(
-        immutable_uri(Path::new(r"\\server\share\MacDive.sqlite")),
-        None
-    );
-}
-
 fn by_id<'a>(dives: &'a [Dive], id: &str) -> &'a Dive {
     dives.iter().find(|d| d.id == id).unwrap()
 }

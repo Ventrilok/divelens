@@ -2,6 +2,9 @@
 //! the readers themselves, and the per-photo computations
 //! (depth / temperature / elapsed time).
 //!
+//! A new reader starts from a copy of the example reader in
+//! `core/src/skeleton.rs`, built only with the tests.
+//!
 //! This crate has no UI or Tauri dependency so it can be tested on every
 //! platform in CI.
 
@@ -14,6 +17,9 @@ pub mod error;
 pub mod macdive;
 pub mod model;
 pub mod profile;
+#[cfg(test)]
+mod skeleton;
+mod sqlite;
 pub mod subsurface;
 pub mod tags;
 

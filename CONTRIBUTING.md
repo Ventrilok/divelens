@@ -14,6 +14,7 @@ Bug reports, requests to support another dive application, fixes and documentati
 - [Trying the plug-in in Lightroom](#trying-the-plug-in-in-lightroom)
 - [Checks before you commit](#checks-before-you-commit)
 - [Branches, commits and pull requests](#branches-commits-and-pull-requests)
+- [Version numbers](#version-numbers)
 - [Test data: fictional or anonymised](#test-data-fictional-or-anonymised)
 - [Secrets](#secrets)
 - [What must never be renamed](#what-must-never-be-renamed)
@@ -88,6 +89,7 @@ From `app/`:
 | Dev window | `npm run tauri dev` (opens the app and keeps running, rebuilding as you edit) |
 | App build, macOS | `npm run tauri build -- --bundles app` (builds `Dive Lens.app`, skips the disk image) |
 | App build, Windows | `npm run tauri build -- --no-bundle` |
+| Change the version | `npm run set-version <version>` (see [Version numbers](#version-numbers)) |
 
 The front-end tests run in a UTC+14 time zone on purpose. Dive times are wall-clock times, as the dive computer recorded them, and must never shift with the time zone of the computer running Dive Lens; running far from most people's zone catches any accidental shift.
 
@@ -141,6 +143,38 @@ Continuous integration runs the same checks on **macOS and Windows** for every p
 - Once a branch is pushed, don't rewrite its history (no force-push): to catch up with `main`, merge it into your branch. The squash merge keeps `main` tidy anyway.
 
 **Visible text** says **"Dive Lens"**, two words, wherever a person reads it: the app, Lightroom texts, the bundle name, the documentation. Identifiers keep **"DiveLens"** / **"divelens"**: the plug-in identifier and folder, the bundle identifier, translation keys, crate names, log file names.
+
+## Version numbers
+
+**The version of Dive Lens is set in one place: `version` in `app/package.json`.** Everything that shows a version takes it from there: the app bundle, Settings › About, the app log, Lightroom's Plug-in Manager, the zip names `DiveLens-<version>-…` and the release tag `v<version>`, which the release workflow checks.
+
+To change it, from `app/`:
+
+```sh
+npm run set-version 2.1.0
+```
+
+This sets the version in `package.json` and `package-lock.json` (it is npm's own `npm version`, without a git commit or tag), then copies it to the files that cannot read `package.json`: the plug-in's `Info.lua` (Lightroom reads that file alone, without access to any other file) and the Rust workspace's `Cargo.toml` and `Cargo.lock`. The app reads its version from `package.json` when it is built, through `tauri.conf.json`. Never edit a copy by hand: `cargo test -p divelens` fails as soon as one differs. Commit all the changed files together; once that commit is on `main`, pushing the tag `v2.1.0` builds the release as a draft.
+
+The numbers follow [Semantic Versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
+
+- **MAJOR**: a change that breaks what users rely on, for example a catalog or settings that would need migrating. Version 2 marks the break with the 0.x plug-in: the first public version is 2.0.0, and development versions stay in 0.x until then.
+- **MINOR**: new features, compatible with what came before.
+- **PATCH**: fixes only.
+
+A **pre-release** adds a label after a hyphen, for example `2.1.0-beta.1`, `2.1.0-beta.2`, then `2.1.0`. Always put a dot before the number (`beta.2`): versions are compared part by part, and only parts made of digits compare as numbers, so `beta10` would come before `beta2`. What the tools do with a label:
+
+- Lightroom's `VERSION` holds three numbers (major, minor, revision) and a free text, `display`, which is what the Plug-in Manager shows: the numbers carry `2.1.0`, the text the whole version.
+- macOS: the app bundle carries the whole version (`2.1.0-beta.1`) as both its version and its build number. Apple documents both as numbers only, but Tauri builds the app with the label all the same.
+- Windows: the app's numeric file version drops the label (`2.1.0-beta.1` and `2.1.0` both read 2.1.0.0); its product version text keeps it. An MSI installer, which Dive Lens does not build, would accept only a numeric label of at most 65535 (`2.1.0-1`).
+- No build metadata (`2.1.0+7`): npm drops it, and the tests refuse it.
+- A tag such as `v2.1.0-beta.1` builds a draft release like any other; mark it as a pre-release on GitHub when publishing it.
+
+Three other numbers are **compatibility versions**, not the version of Dive Lens: they never change with it, and each changes only when its own format does.
+
+- **Link protocol**: `PROTOCOL` in `app/src-tauri/src/lightroom.rs` and in `plugin/DiveLens.lrdevplugin/Link.lua`. Raise both together when a message between the app and the plug-in changes in a way the other side would misread: an app and a plug-in with different numbers refuse to connect.
+- **Metadata schema**: `schemaVersion` in `plugin/DiveLens.lrdevplugin/Metadata.lua`. Raise it when Dive Lens fields are added or their definitions change, as the Lightroom SDK asks. Each field's own `version` changes only when its definition changes incompatibly, which the compatibility contract rules out for the existing fields.
+- **Settings file**: `CURRENT_VERSION` in `app/src-tauri/src/settings.rs`, written into the settings file and into exported settings. Raise it when the layout of the file changes, keeping older files readable (the same goes for the clock-offset files, `CURRENT_VERSION` in `app/src-tauri/src/offsets.rs`).
 
 ## Test data: fictional or anonymised
 

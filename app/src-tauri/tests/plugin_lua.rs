@@ -2,26 +2,10 @@
 //! version Lightroom embeds). The parts that need Lightroom itself are checked
 //! by hand in Lightroom.
 
-use std::path::PathBuf;
+mod common;
 
+use common::{lua, plugin_dir};
 use mlua::Lua;
-
-fn plugin_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugin/DiveLens.lrdevplugin")
-}
-
-fn lua() -> Lua {
-    let lua = Lua::new();
-    let path = plugin_dir().join("?.lua");
-    lua.load(format!(
-        "package.path = {:?}\n\
-         LOC = function(s) return (s:gsub('^%$%$%$/[^=]*=', '')) end",
-        path.to_str().unwrap()
-    ))
-    .exec()
-    .unwrap();
-    lua
-}
 
 fn run(lua: &Lua, code: &str) {
     if let Err(e) = lua.load(code).exec() {
@@ -138,28 +122,6 @@ fn framing_splits_lines_whatever_lightroom_hands_over() {
         assert(f.buffer == "")
         "#,
     );
-}
-
-#[test]
-fn plugin_version_matches_app_version() {
-    let lua = lua();
-    let version: String = lua
-        .load(
-            r#"
-            local v = require "Info".VERSION
-            local numbers = string.format("%d.%d.%d", v.major, v.minor, v.revision)
-            assert(v.display == numbers, "display " .. tostring(v.display) .. " vs " .. numbers)
-            return numbers
-            "#,
-        )
-        .eval()
-        .unwrap();
-    let package: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../package.json"))
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(version, package["version"].as_str().unwrap());
 }
 
 #[test]

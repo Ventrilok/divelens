@@ -418,43 +418,57 @@ fn snapshot(root: &Path, contents: bool) -> BTreeMap<String, Option<Vec<u8>>> {
 // Every registered application (`crate::apps::ALL`), each of its runs: one
 // per storage format it reads.
 
-#[test]
-fn every_registered_application() {
+/// Every run of `app`'s description; what failed, by run.
+fn check_app(app: &crate::apps::DiveApp) -> Vec<String> {
     let mut failures = Vec::new();
-    for app in crate::apps::ALL {
-        let runs = (app.conformance)();
-        if runs.is_empty() {
-            failures.push(format!("{}: no run of the common tests", app.name));
+    let runs = (app.conformance)();
+    if runs.is_empty() {
+        failures.push(format!("{}: no run of the common tests", app.name));
+    }
+    for (i, run) in runs.iter().enumerate() {
+        let what = format!("{}, run {} of {}", app.name, i + 1, runs.len());
+        if let Err(panic) = std::panic::catch_unwind(|| check(run)) {
+            let message = panic
+                .downcast_ref::<String>()
+                .map(String::as_str)
+                .or_else(|| panic.downcast_ref::<&str>().copied())
+                .unwrap_or("panicked");
+            failures.push(format!("{what}: {message}"));
         }
-        for (i, run) in runs.iter().enumerate() {
-            let what = format!("{}, run {} of {}", app.name, i + 1, runs.len());
-            if let Err(panic) = std::panic::catch_unwind(|| check(run)) {
-                let message = panic
-                    .downcast_ref::<String>()
-                    .map(String::as_str)
-                    .or_else(|| panic.downcast_ref::<&str>().copied())
-                    .unwrap_or("panicked");
-                failures.push(format!("{what}: {message}"));
+        // What Settings says once the log is read.
+        let dir = TempDir::new().unwrap();
+        let path = (run.write_log)(dir.path());
+        match (app.open)(&path, &crate::apps::Kept::default()) {
+            Ok(opened) if !app.texts.en.read.iter().any(|(f, _)| *f == opened.format) => {
+                failures.push(format!("{what}: no text for format {:?}", opened.format));
             }
-            // What Settings says once the log is read.
-            let dir = TempDir::new().unwrap();
-            let path = (run.write_log)(dir.path());
-            match (app.open)(&path, &crate::apps::Kept::default()) {
-                Ok(opened) if !app.texts.en.read.iter().any(|(f, _)| *f == opened.format) => {
-                    failures.push(format!("{what}: no text for format {:?}", opened.format));
-                }
-                Ok(_) => {}
-                Err(e) => failures.push(format!("{what}: not opened: {e}")),
-            }
+            Ok(_) => {}
+            Err(e) => failures.push(format!("{what}: not opened: {e}")),
         }
     }
+    failures
+}
+
+#[test]
+fn every_registered_application() {
+    let failures: Vec<String> = crate::apps::ALL.iter().flat_map(|a| check_app(a)).collect();
+    assert!(failures.is_empty(), "\n{}", failures.join("\n\n"));
+}
+
+/// The example reader every new reader starts from (`crate::skeleton`), run
+/// through its description like a registered one: not offered in the app,
+/// kept passing so that a copy starts from code that works.
+#[test]
+fn skeleton() {
+    let failures = check_app(&crate::skeleton::APP);
     assert!(failures.is_empty(), "\n{}", failures.join("\n\n"));
 }
 
 /// The tests above again, in a child process whose time zone is 14 hours
 /// ahead of UTC: a reader turning wall-clock times into instants would shift
 /// every dive there. Unix only, as Windows ignores `TZ`; the comparison with
-/// the literal reference times holds everywhere.
+/// the literal reference times holds everywhere. The child first lists the
+/// tests it runs, so that every run above must pass there.
 #[test]
 #[cfg(unix)]
 fn in_another_time_zone() {
@@ -462,14 +476,28 @@ fn in_another_time_zone() {
     if std::env::var_os(CHILD).is_some() {
         return;
     }
-    let out = std::process::Command::new(std::env::current_exe().unwrap())
-        .arg("conformance::")
-        .env("TZ", "Pacific/Kiritimati")
-        .env(CHILD, "1")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "in UTC+14:\n{stdout}");
-    // Every reader's runs, and this test returning at once.
-    assert!(stdout.contains("2 passed"), "in UTC+14:\n{stdout}");
+    let child = |args: &[&str]| {
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("conformance::")
+            .args(args)
+            .env("TZ", "Pacific/Kiritimati")
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(out.status.success(), "in UTC+14:\n{stdout}");
+        stdout
+    };
+    // Every test of this file: the runs above, and this one, which returns
+    // at once in the child.
+    let runs = child(&["--list"])
+        .lines()
+        .filter(|l| l.ends_with(": test"))
+        .count();
+    assert!(runs > 1, "no run listed in UTC+14");
+    let stdout = child(&[]);
+    assert!(
+        stdout.contains(&format!("test result: ok. {runs} passed;")),
+        "in UTC+14, {runs} tests expected to pass:\n{stdout}"
+    );
 }
