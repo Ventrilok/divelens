@@ -1,2 +1,4 @@
-# Subsurface fixtures are compared byte for byte with what Subsurface writes.
-core/fixtures/subsurface/** text eol=lf
+# Fixtures are compared byte for byte with what each application writes:
+# LF line endings on every system. A binary fixture needs its own `binary`
+# line below this one.
+core/fixtures/** text eol=lf
