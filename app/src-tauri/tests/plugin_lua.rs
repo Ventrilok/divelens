@@ -458,6 +458,278 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
     );
 }
 
+/// What a photo carries before "Tag Selection", as the plugin's own write
+/// path left it.
+enum Before<'a> {
+    Nothing,
+    Tagged(&'a divelens_core::tags::TagRequest),
+    Filed(&'a divelens_core::tags::CollectionsRequest),
+}
+
+/// The extra changes "Tag Selection" makes on a photo left by `before` when
+/// it writes `request`, as "kind field=value" lines. `altitude` replaces the
+/// photo's GPS altitude when given (the camera's, or the value as Lightroom
+/// stored it).
+fn retag(
+    before: Before,
+    altitude: Option<f64>,
+    request: &divelens_core::tags::TagRequest,
+) -> Vec<String> {
+    let lua = lua();
+    let globals = lua.globals();
+    match before {
+        Before::Nothing => {}
+        Before::Tagged(r) => globals
+            .set("tagged", serde_json::to_string(r).unwrap())
+            .unwrap(),
+        Before::Filed(r) => globals
+            .set("filed", serde_json::to_string(r).unwrap())
+            .unwrap(),
+    }
+    globals.set("altitude", altitude).unwrap();
+    globals
+        .set("input", serde_json::to_string(request).unwrap())
+        .unwrap();
+    lua.load(
+        r#"
+        local Json = require "Json"
+        local Tagging = require "Tagging"
+        local function date(iso) return "date(" .. iso .. ")" end
+        local photo = {}
+        local function write(changes)
+            for _, c in ipairs(changes) do photo[c.field] = c.value end
+        end
+        if tagged then write(assert(Tagging.plan(Json.decode(tagged), date))) end
+        if filed then
+            local groups = assert(Tagging.planCollections(Json.decode(filed), date))
+            write(groups[1].common)
+            write(groups[1].photos[1].changes)
+        end
+        if altitude then photo.gpsAltitude = altitude end
+        -- What Link.lua reads on the photo before writing.
+        local current = { gpsAltitude = photo.gpsAltitude }
+        for _, field in ipairs(Tagging.RETAG_FIELDS) do current[field] = photo[field] end
+        local lines = {}
+        for i, c in ipairs(Tagging.retagChanges(current, assert(Tagging.plan(Json.decode(input), date)))) do
+            lines[i] = ("%s %s=%s"):format(c.kind, c.field, tostring(c.value))
+        end
+        return lines
+        "#,
+    )
+    .eval()
+    .unwrap()
+}
+
+mod retagging {
+    use super::{Before, retag, sample_dive};
+    use divelens_core::Dive;
+    use divelens_core::profile::PhotoPoint;
+    use divelens_core::tags::{
+        CollectionGroup, CollectionsRequest, DiveTags, LocationTags, PhotoTags, TagRequest, Units,
+    };
+
+    const CLEARED: [&str; 4] = [
+        "plugin PhotoDepth=nil",
+        "plugin PhotoTemp=nil",
+        "plugin PhotoElapsed=nil",
+        "plugin ClockOffset=nil",
+    ];
+
+    fn cleared(altitude: bool) -> Vec<String> {
+        let mut lines: Vec<String> = CLEARED.iter().map(|s| s.to_string()).collect();
+        if altitude {
+            lines.push("raw gpsAltitude=nil".into());
+        }
+        lines
+    }
+
+    /// The dive after the sample one, the same day.
+    fn next_dive() -> Dive {
+        let mut d = sample_dive();
+        d.id = "B".into();
+        d.number = Some(701);
+        d.start += chrono::Duration::hours(3);
+        d.end += chrono::Duration::hours(3);
+        d
+    }
+
+    /// A photo filed by "Create Collections" in `dive`, at `depth_m` (none:
+    /// at the surface), its depth copied to the altitude.
+    fn filed(dive: &Dive, source: &str, depth_m: Option<f64>, units: Units) -> CollectionsRequest {
+        let point = depth_m.map(|depth_m| PhotoPoint {
+            elapsed_s: 600,
+            depth_m,
+            temp_c: Some(26.5),
+        });
+        let mut request = CollectionsRequest {
+            search: 1,
+            parent: Vec::new(),
+            group: None,
+            groups: vec![CollectionGroup {
+                collection: "700 - Coral Garden".into(),
+                dive: DiveTags::new(dive, units, source),
+                location: LocationTags::new(&dive.site, None, None),
+                photos: vec![PhotoTags::new("1".into(), point, 240, units)],
+            }],
+        };
+        request.copy_depth_to_altitude();
+        request
+    }
+
+    fn tag(dive: &Dive, source: &str) -> TagRequest {
+        TagRequest {
+            dive: Some(DiveTags::new(dive, Units::default(), source)),
+            location: Some(LocationTags::new(&dive.site, None, None)),
+        }
+    }
+
+    #[test]
+    fn another_dive_clears_the_photos_own_values() {
+        let a = sample_dive();
+        let photo = filed(&a, "MacDive", Some(18.44), Units::default());
+        assert_eq!(
+            retag(Before::Filed(&photo), None, &tag(&next_dive(), "MacDive")),
+            cleared(true)
+        );
+        // The camera's altitude is not Dive Lens's: kept.
+        assert_eq!(
+            retag(
+                Before::Filed(&photo),
+                Some(12.0),
+                &tag(&next_dive(), "MacDive")
+            ),
+            cleared(false)
+        );
+        // Only the source differs: another dive (the same log in another
+        // application may have other start times).
+        assert_eq!(
+            retag(Before::Filed(&photo), None, &tag(&a, "Subsurface")),
+            cleared(true)
+        );
+        // Only the number differs, or one side has none.
+        let mut renumbered = a.clone();
+        renumbered.number = Some(702);
+        assert_eq!(
+            retag(Before::Filed(&photo), None, &tag(&renumbered, "MacDive")),
+            cleared(true)
+        );
+        renumbered.number = None;
+        assert_eq!(
+            retag(Before::Filed(&photo), None, &tag(&renumbered, "MacDive")),
+            cleared(true)
+        );
+        // Tagged earlier by "Tag Selection" (no depth): the altitude stays,
+        // even one equal to a depth Dive Lens could have written.
+        let tagged = tag(&a, "MacDive");
+        assert_eq!(
+            retag(
+                Before::Tagged(&tagged),
+                Some(-18.4),
+                &tag(&next_dive(), "MacDive")
+            ),
+            cleared(false)
+        );
+        // Filed in the margin (no depth): the same.
+        let surface = filed(&a, "MacDive", None, Units::default());
+        assert_eq!(
+            retag(
+                Before::Filed(&surface),
+                Some(-18.4),
+                &tag(&next_dive(), "MacDive")
+            ),
+            cleared(false)
+        );
+    }
+
+    #[test]
+    fn same_dive_location_only_and_untagged_photos_touch_nothing() {
+        let a = sample_dive();
+        let photo = filed(&a, "MacDive", Some(18.44), Units::default());
+        let none: Vec<String> = Vec::new();
+        assert_eq!(
+            retag(Before::Filed(&photo), None, &tag(&a, "MacDive")),
+            none
+        );
+        // Same dive, edited in the log since: still the same dive.
+        let mut edited = a.clone();
+        edited.rating = Some(5);
+        edited.max_depth_m = Some(32.0);
+        assert_eq!(
+            retag(Before::Filed(&photo), None, &tag(&edited, "MacDive")),
+            none
+        );
+        // No number on either side counts as the same number.
+        let mut unnumbered = a.clone();
+        unnumbered.number = None;
+        let photo_unnumbered = filed(&unnumbered, "MacDive", Some(18.44), Units::default());
+        assert_eq!(
+            retag(
+                Before::Filed(&photo_unnumbered),
+                None,
+                &tag(&unnumbered, "MacDive")
+            ),
+            none
+        );
+        // Location only ("Dive data" unchecked), even another dive's site.
+        let location_only = TagRequest {
+            dive: None,
+            location: Some(LocationTags::new(&next_dive().site, None, None)),
+        };
+        assert_eq!(retag(Before::Filed(&photo), None, &location_only), none);
+        // A photo without dive data: nothing to clear, its altitude kept.
+        assert_eq!(
+            retag(Before::Nothing, Some(-18.4), &tag(&next_dive(), "MacDive")),
+            none
+        );
+        assert_eq!(
+            retag(
+                Before::Tagged(&location_only),
+                None,
+                &tag(&next_dive(), "MacDive")
+            ),
+            none
+        );
+    }
+
+    #[test]
+    fn altitude_cleared_only_when_dive_lens_derived_it() {
+        use divelens_core::tags::{DepthUnit, altitude, depth};
+        let metres = |m| Some(depth(m, DepthUnit::Metres));
+        let feet = |m| Some(depth(m, DepthUnit::Feet));
+        // Rounding to the foot: both are written "60 ft", only the first
+        // gives back the altitude written from the exact depth.
+        assert_eq!(feet(18.288), feet(18.44));
+        assert_eq!(feet(18.44).as_deref(), Some("60 ft"));
+        let cases: [(Option<String>, Option<f64>, bool); 14] = [
+            (metres(18.44), Some(altitude(18.44)), true),
+            // As Lightroom may store it.
+            (metres(18.44), Some(altitude(18.44) as f32 as f64), true),
+            (metres(18.44), Some(-18.5), false),
+            (metres(18.44), Some(-18.3), false),
+            (metres(18.44), Some(18.4), false),
+            (metres(0.02), Some(altitude(0.02)), true),
+            (feet(18.288), Some(altitude(18.288)), true),
+            (feet(18.44), Some(altitude(18.44)), false),
+            // Before units: a number, in metres.
+            (Some("18.4".into()), Some(altitude(18.4)), true),
+            (Some(String::new()), Some(-18.4), false),
+            (None, Some(-18.4), false),
+            (Some("deep".into()), Some(-18.4), false),
+            (Some("18,4 m".into()), Some(-18.4), false),
+            (metres(18.44), None, false),
+        ];
+        let lua = super::lua();
+        let derived: mlua::Function = lua
+            .load(r#"return require("Tagging").isDerivedAltitude"#)
+            .eval()
+            .unwrap();
+        for (photo_depth, alt, want) in cases {
+            let got: bool = derived.call((alt, photo_depth.clone())).unwrap();
+            assert_eq!(got, want, "{photo_depth:?} {alt:?}");
+        }
+    }
+}
+
 #[test]
 fn collection_sets_are_found_by_path_and_listed() {
     let lua = lua();

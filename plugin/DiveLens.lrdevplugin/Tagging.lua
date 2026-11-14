@@ -7,6 +7,9 @@ Lightroom; Link.lua applies the changes inside one catalog write.
 a photo's GPS altitude (the depth, negative) is written only when the
 request carries one, otherwise the photo keeps its altitude.
 
+A "tag the selection" request that writes a dive on a photo already carrying
+another one also clears that photo's own values (retagChanges).
+
 Request (built by the app, see core/src/tags.rs):
   dive:     { diveId, start, end, duration, maxDepth, tempHigh, tempLow, rating } or null
   location: { country, city, location, lat, lon } or null
@@ -74,6 +77,95 @@ function Tagging.plan(request, formatDate)
         end
     end
     return changes
+end
+
+-- Photo's own values (spec F6, section 7): they belong to the dive they were
+-- computed in.
+local PER_PHOTO = { "PhotoDepth", "PhotoTemp", "PhotoElapsed", "ClockOffset" }
+
+-- The fields that tell one dive from another (spec F8).
+local DIVE_IDENTITY = { "Source", "StartDate", "DiveId" }
+
+--- DiveLens fields "Tag Selection" reads on each photo before writing a dive
+--- (see retagChanges).
+Tagging.RETAG_FIELDS = { "Source", "StartDate", "DiveId", "PhotoDepth" }
+
+local FT_PER_M = 3.28084 -- as core/src/tags.rs
+
+-- A field's value, nil when empty: a field emptied in Lightroom counts as unset.
+local function filled(v)
+    if type(v) ~= "string" or v == "" then return nil end
+    return v
+end
+
+-- Nearest integer, halves away from zero (as Rust's f64::round).
+local function round(x)
+    if x < 0 then return -math.floor(-x + 0.5) end
+    return math.floor(x + 0.5)
+end
+
+--- Depth in metres from a PhotoDepth value: "18.4 m", "60 ft", or a bare
+--- number (metres, the format before units); nil when it is none of these.
+function Tagging.depthMetres(s)
+    if type(s) ~= "string" then return nil end
+    local number, unit = s:match("^%s*(%-?%d+%.?%d*)%s*(%a*)%s*$")
+    local n = tonumber(number)
+    if not n then return nil end
+    if unit == "" or unit == "m" then return n end
+    if unit == "ft" then return n / FT_PER_M end
+    return nil
+end
+
+--- True when the GPS `altitude` (metres) is, to the decimetre, the one Dive
+--- Lens derives from the PhotoDepth value `depth` (the depth, negative,
+--- rounded to the decimetre: core/src/tags.rs, altitude).
+function Tagging.isDerivedAltitude(altitude, depth)
+    local m = Tagging.depthMetres(depth)
+    if type(altitude) ~= "number" or not m then return false end
+    return round(altitude * 10) == -round(m * 10)
+end
+
+--- True when `changes` (from Tagging.plan) write a dive, not only a location.
+function Tagging.writesDive(changes)
+    for _, c in ipairs(changes) do
+        if c.kind == "plugin" and c.field == "StartDate" then return true end
+    end
+    return false
+end
+
+--- Extra changes for one photo of a "Tag Selection" request (`changes`, from
+--- Tagging.plan) when the photo already carries another dive (spec F8): its
+--- own values belonged to that dive and are cleared. Its GPS altitude is
+--- cleared only when it is exactly the one Dive Lens derived from the old
+--- depth: the field is shared with the camera and the user, and Lightroom's
+--- Undo does not restore it.
+---
+--- `photo` is what the photo carries before the write: the RETAG_FIELDS
+--- values and `gpsAltitude` (metres or nil). Nothing (an empty list) for the
+--- same dive (source, start and number all equal), a photo without dive
+--- data, or a request writing only a location.
+function Tagging.retagChanges(photo, changes)
+    if not Tagging.writesDive(changes) then return {} end
+    photo = photo or {}
+    local new = {}
+    for _, c in ipairs(changes) do
+        if c.kind == "plugin" then new[c.field] = filled(c.value) end
+    end
+    local hasDive, same = false, true
+    for _, field in ipairs(DIVE_IDENTITY) do
+        local old = filled(photo[field])
+        if old then hasDive = true end
+        if old ~= new[field] then same = false end
+    end
+    if not hasDive or same then return {} end
+    local extra = {}
+    for _, field in ipairs(PER_PHOTO) do
+        extra[#extra + 1] = { kind = "plugin", field = field, value = nil }
+    end
+    if Tagging.isDerivedAltitude(photo.gpsAltitude, filled(photo.PhotoDepth)) then
+        extra[#extra + 1] = { kind = "raw", field = "gpsAltitude", value = nil }
+    end
+    return extra
 end
 
 --- Changes for one dive of a "Create Collections" request:
