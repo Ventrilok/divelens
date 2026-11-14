@@ -397,7 +397,7 @@ Pas dans le premier écran Réglages : il faut d'abord la clé de signature des 
 
 - Une mise à jour remplace **tout le paquet** : l'application et la partie Lightroom. **[Proposé]**
 - Vérification au lancement, au plus une fois par jour, avec un réglage pour la désactiver et un bouton « Vérifier maintenant ». **[Proposé]**
-- **Numérotation [Décidé]** : la première version publique est la **2.0.0**, pour marquer la rupture avec le plugin 0.x. Versions de développement en 0.x d'ici là.
+- **Numérotation [Décidé]** : la première version publique est la **2.0.0**, pour marquer la rupture avec le plugin 0.x. Versions de développement en 0.x d'ici là. Pas de bêta publique : la 2.0.0 est publiée directement. **[Décidé, 2026-11-14]**
 - Rien ne s'installe sans l'accord de l'utilisateur : « Version 2.1 disponible — nouveautés — Installer ». **[Proposé]**
 - Après installation, un message demande de redémarrer Lightroom, car Lightroom ne recharge sa partie Dive Lens qu'au redémarrage. **[Proposé]**
 - Paquets signés avec la clé de mise à jour Dive Lens, pour qu'une mise à jour falsifiée soit refusée. Signature Apple et Windows : plus tard (section 9). **[Décidé]**
