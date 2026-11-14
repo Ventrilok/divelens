@@ -16,6 +16,7 @@ log, or anything copied from one, to the repository.
 | MacDive copy (built from SQL when the tests run) | `core/src/macdive/tests.rs` |
 | Subsurface copy, XML file | `core/fixtures/subsurface/fictional.xml` |
 | Subsurface copy, git storage (turned into a repository by the tests) | `core/fixtures/subsurface/git-tree/` |
+| Example copy, for the example reader (built from SQL when the tests run) | `core/src/skeleton/tests.rs` |
 
 Change a dive here, in the expected values and in every copy together:
 `cargo test -p divelens-core` fails until they agree.
@@ -187,11 +188,28 @@ with nothing but a date, and a raw download libdivecomputer cannot decode
 - dives have no id in Subsurface: Dive Lens uses the start time, with `#2`
   for the second dive starting at the same second (107).
 
+**Example** (the example reader, `core/src/skeleton.rs`: an invented
+SQLite database that no real application writes):
+
+- times are wall-clock text, `YYYY-MM-DD HH:MM:SS`; depths in metres and
+  temperatures in °C;
+- rating 0 means unrated (102 and the dives without rating), blank fields
+  mean nothing (the place of Lemuria, the notes of 102), notes use Windows
+  line breaks (101);
+- a dive without samples has no profile (100, 103, 104); samples are stored
+  last first, so that the reader must sort them;
+- the database is in WAL mode, closed, so that reading it must not leave
+  `-wal` and `-shm` files behind;
+- Example has no "invalid" dives.
+
 ## Adding a reader
 
 1. Write the reader in `core/src/<application>.rs`: it implements
    `DiveSource` (`core/src/model.rs`) and has an `open(path)` that reads the
-   log without writing anything.
+   log without writing anything. Start from a copy of the example reader,
+   `core/src/skeleton.rs` and `core/src/skeleton/tests.rs`: it reads a
+   SQLite log, opened by the shared `crate::sqlite::open_read_only`, and
+   marks with `ADAPT:` each place to change.
 2. Write the reference log in the application's own format, from the tables
    above, shaped exactly like what the application itself writes. Files go
    in `core/fixtures/<application>/`, but files ending `.sqlite` or `.ssrf`
@@ -203,7 +221,9 @@ with nothing but a date, and a raw download libdivecomputer cannot decode
    reach it.
 3. Add a test at the bottom of `core/src/conformance.rs` calling `check`
    with that function, the reader's `open`, the capabilities the reader must
-   declare, and whether the application marks dives invalid.
+   declare, and whether the application marks dives invalid. Raise by one
+   the number of passed tests that `in_another_time_zone`, below them,
+   expects.
 4. Run `cargo test -p divelens-core` until it passes. A failure lists every
    value that differs from this page.
 5. Register the application in the tool below

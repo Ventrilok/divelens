@@ -466,6 +466,24 @@ fn subsurface_git() {
     });
 }
 
+/// The example reader every new reader starts from (`crate::skeleton`):
+/// not offered in the app, kept passing so that a copy starts from code that
+/// works.
+#[test]
+fn skeleton() {
+    check(&Run {
+        write_log: crate::skeleton::tests::reference_log,
+        open: |path| boxed(crate::skeleton::Example::open(path)),
+        capabilities: Capabilities {
+            temperature: true,
+            rating: true,
+            gps: true,
+            profile: true,
+        },
+        marks_invalid: false,
+    });
+}
+
 /// The tests above again, in a child process whose time zone is 14 hours
 /// ahead of UTC: a reader turning wall-clock times into instants would shift
 /// every dive there. Unix only, as Windows ignores `TZ`; the comparison with
@@ -485,6 +503,6 @@ fn in_another_time_zone() {
         .unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "in UTC+14:\n{stdout}");
-    // The three readers' runs, and this test returning at once.
-    assert!(stdout.contains("4 passed"), "in UTC+14:\n{stdout}");
+    // The four runs above, and this test returning at once.
+    assert!(stdout.contains("5 passed"), "in UTC+14:\n{stdout}");
 }
