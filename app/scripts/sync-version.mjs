@@ -15,7 +15,7 @@ const app = join(dirname(fileURLToPath(import.meta.url)), "..");
 const root = join(app, "..");
 
 const { version } = JSON.parse(readFileSync(join(app, "package.json"), "utf8"));
-// MAJOR.MINOR.PATCH, optionally followed by a pre-release label (2.0.0-beta.1).
+// MAJOR.MINOR.PATCH, optionally followed by a pre-release label (2.1.0-beta.1).
 const parts = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(version);
 if (!parts) {
   console.error(

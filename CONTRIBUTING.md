@@ -162,13 +162,13 @@ The numbers follow [Semantic Versioning](https://semver.org): **MAJOR.MINOR.PATC
 - **MINOR**: new features, compatible with what came before.
 - **PATCH**: fixes only.
 
-A **pre-release** adds a label after a hyphen: `2.0.0-beta.1`, `2.0.0-beta.2`, then `2.0.0`. Always put a dot before the number (`beta.2`): versions are compared part by part, and only parts made of digits compare as numbers, so `beta10` would come before `beta2`. What the tools do with a label:
+A **pre-release** adds a label after a hyphen, for example `2.1.0-beta.1`, `2.1.0-beta.2`, then `2.1.0`. Always put a dot before the number (`beta.2`): versions are compared part by part, and only parts made of digits compare as numbers, so `beta10` would come before `beta2`. What the tools do with a label:
 
-- Lightroom's `VERSION` holds three numbers (major, minor, revision) and a free text, `display`, which is what the Plug-in Manager shows: the numbers carry `2.0.0`, the text the whole version.
-- macOS: the app bundle carries the whole version (`2.0.0-beta.1`) as both its version and its build number. Apple documents both as numbers only, but Tauri builds the app with the label all the same.
-- Windows: the app's numeric file version drops the label (`2.0.0-beta.1` and `2.0.0` both read 2.0.0.0); its product version text keeps it. An MSI installer, which Dive Lens does not build, would accept only a numeric label of at most 65535 (`2.0.0-1`).
-- No build metadata (`2.0.0+7`): npm drops it, and the tests refuse it.
-- A tag such as `v2.0.0-beta.1` builds a draft release like any other; mark it as a pre-release on GitHub when publishing it.
+- Lightroom's `VERSION` holds three numbers (major, minor, revision) and a free text, `display`, which is what the Plug-in Manager shows: the numbers carry `2.1.0`, the text the whole version.
+- macOS: the app bundle carries the whole version (`2.1.0-beta.1`) as both its version and its build number. Apple documents both as numbers only, but Tauri builds the app with the label all the same.
+- Windows: the app's numeric file version drops the label (`2.1.0-beta.1` and `2.1.0` both read 2.1.0.0); its product version text keeps it. An MSI installer, which Dive Lens does not build, would accept only a numeric label of at most 65535 (`2.1.0-1`).
+- No build metadata (`2.1.0+7`): npm drops it, and the tests refuse it.
+- A tag such as `v2.1.0-beta.1` builds a draft release like any other; mark it as a pre-release on GitHub when publishing it.
 
 Three other numbers are **compatibility versions**, not the version of Dive Lens: they never change with it, and each changes only when its own format does.
 
