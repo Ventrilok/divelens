@@ -121,6 +121,22 @@ pub(crate) fn reference_log(dir: &Path) -> PathBuf {
     database(dir, "")
 }
 
+/// MacDive's run of the common tests: its copy of the reference log, opened
+/// as the app opens it.
+pub(crate) fn conformance() -> Vec<crate::conformance::Run> {
+    vec![crate::conformance::Run {
+        write_log: reference_log,
+        open: |path| Ok((APP.open)(path, &crate::apps::Kept::default())?.log),
+        capabilities: Capabilities {
+            temperature: true,
+            rating: true,
+            gps: true,
+            profile: true,
+        },
+        marks_invalid: false,
+    }]
+}
+
 /// The reference log and MacDive's own cases.
 fn fixture() -> (TempDir, MacDive) {
     let dir = TempDir::new().unwrap();

@@ -375,6 +375,23 @@ pub(crate) fn reference_git_log(dir: &Path) -> PathBuf {
     git_log_in(dir, "main")
 }
 
+/// Subsurface's runs of the common tests, one per storage format: its copies
+/// of the reference log, opened as the app opens them (each time anew).
+pub(crate) fn conformance() -> Vec<crate::conformance::Run> {
+    let run = |write_log: fn(&Path) -> PathBuf| crate::conformance::Run {
+        write_log,
+        open: |path| Ok((APP.open)(path, &crate::apps::Kept::default())?.log),
+        capabilities: Capabilities {
+            temperature: true,
+            rating: true,
+            gps: true,
+            profile: true,
+        },
+        marks_invalid: true,
+    };
+    vec![run(reference_xml_log), run(reference_git_log)]
+}
+
 #[test]
 fn reads_the_fictional_git_log() {
     let dir = TempDir::new().unwrap();

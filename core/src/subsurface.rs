@@ -31,8 +31,11 @@ use crate::model::{Capabilities, Dive, DiveSource, Site, clean_notes};
 use crate::profile::Sample;
 use crate::{Error, Result};
 
+mod app;
 mod git;
 mod xml;
+
+pub use app::APP;
 
 /// Subsurface's standard folder, relative to the home folder (macOS).
 pub const MAC_RELATIVE_FOLDER: &str = "Library/Application Support/Subsurface";

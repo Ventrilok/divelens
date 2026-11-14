@@ -25,6 +25,10 @@ use crate::model::{Capabilities, Dive, DiveSource, Site, clean_notes};
 use crate::profile::Sample;
 use crate::{Error, Result};
 
+mod app;
+
+pub use app::APP;
+
 /// Seconds between 1970-01-01 and 2001-01-01 (Core Data reference date).
 const CORE_DATA_EPOCH: i64 = 978_307_200;
 
