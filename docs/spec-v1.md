@@ -23,7 +23,7 @@ La V1 apporte en plus une fonctionnalité nouvelle : la **profondeur, la tempér
 | Inclus | Exclu (plus tard) |
 |---|---|
 | Sources : **MacDive et Subsurface** **[Décidé]** | BlueDive, Submersion |
-| **macOS (Intel et Apple Silicon) et Windows** **[Décidé]** ; MacDive sur Mac seulement, Subsurface sur les deux | Signature Apple et Windows (avant ou après la première version publique, à décider) |
+| **macOS (Intel et Apple Silicon) et Windows** **[Décidé]** ; MacDive sur Mac seulement, Subsurface sur les deux | Signature Windows (après la première version publique, section 9) |
 | Les trois usages actuels du plugin, repensés | Notion de « voyage » |
 | Données par photo (profondeur, température, temps écoulé) | Ajustement visuel sur la courbe de plongée |
 | Décalage d'horloge par appareil, avec suggestion | Calage automatique par la profondeur enregistrée par l'appareil |
@@ -55,6 +55,8 @@ Application Dive Lens (Rust + Tauri)
   - « Créer les collections… » (EN « Create Collections… ») → F5
   - « Tagger la sélection… » (EN « Tag Selection… ») → F8, actif seulement si des photos sont sélectionnées
 - **Livraison** : un seul paquet ; l'application est rangée dans le dossier du plugin. **[Décidé]**
+  - **Paquet [Proposé, 2026-11-13]** : un zip par système, `DiveLens-<version>-macOS.zip` (application universelle, Intel et Apple Silicon) et `DiveLens-<version>-Windows.zip`. Chacun contient le dossier `DiveLens.lrplugin`, le nom de l'ancien plugin, avec l'application dedans et la licence. Il est fabriqué automatiquement quand une étiquette de version (ex. `v2.0.0`) est poussée et déposé en **brouillon** sur GitHub Releases : le propriétaire le relit et le publie à la main.
+  - Windows : l'application a besoin de WebView2, présent sur Windows 11 et sur la plupart des Windows 10.
 - **Aucune fenêtre Lua.** Le gestionnaire de modules externes de Lightroom affichera au minimum la version et un bouton pour ouvrir Dive Lens (Lightroom impose cette entrée). **[Proposé]**
 - **Liaison** : l'application suit en direct la sélection de photos dans Lightroom. Rien n'est écrit dans le catalogue avant que l'utilisateur clique sur **Appliquer** ; tout est alors écrit en **une seule fois**, donc annulable en une seule étape dans Lightroom. **[Décidé]**
 - Si la liaison est perdue (Lightroom fermé, plugin rechargé), l'application l'indique clairement et désactive « Appliquer ». **[Proposé]**
@@ -429,7 +431,9 @@ BlueDive et Submersion, après examen de leur stockage.
 - **Recherche des photos par date** — constaté (2026-11-12) : la recherche du catalogue par date de prise de vue ne fonctionne qu'au jour près, et sur l'heure de prise de vue modifiée dans Lightroom, pas l'heure d'origine. Le plugin cherche donc par jours élargis, puis l'application filtre sur l'heure d'origine.
 - **Filtrer par profondeur** : les champs de plugin sont du texte. Un filtre « photos sous 30 m » n'est probablement pas possible dans Lightroom ; seuls la recherche et la navigation par valeur le sont. À vérifier avant de promettre quoi que ce soit.
 - **Températures nulles ou négatives** : le plugin actuel ne les écrit pas (plongée sous glace). **[Proposé : corrigé en V1]**
-- **Signature** : V1 développée et testée **sans signature** **[Décidé]**. Apple (environ 99 $/an, notarisation automatique) recommandé avant la première version publique ; Windows : signature gratuite pour l'open source à viser (ex. SignPath Foundation).
+- **Signature [Décidé, 2026-11-13]** : V1 développée et testée **sans signature** (sur Mac, signature « ad hoc » seulement : macOS signale un développeur non identifié au lieu d'une application endommagée).
+  - **Apple** : signée (Developer ID) et notarisée **avant la première version publique**. Compte Apple Developer Program au nom du propriétaire (99 USD/an). Certificat et mots de passe dans les secrets GitHub, jamais dans le dépôt.
+  - **Windows** : première version publique **non signée** (alerte SmartScreen, « Exécuter quand même »), puis demande à **SignPath Foundation** : gratuit pour l'open source, mais exige une version déjà publiée et documentée ; le certificat est au nom de SignPath Foundation. Microsoft Artifact Signing n'est pas ouvert aux particuliers en Suisse.
 - **Clé de signature des mises à jour** : créée dès le début, conservée hors du dépôt, jamais changée.
 - **Windows** : la partie Lightroom du plugin bloque Windows aujourd'hui ; chemins, lancement de l'application et installation à adapter. Tests manuels Windows **[Décidé]** : machine virtuelle Windows 11 sur le Mac (Apple Silicon, donc Windows ARM) + testeurs sur de vrais PC (Intel/AMD). Vérifier que Lightroom Classic et Subsurface tournent dans la machine virtuelle.
 - **Réglage « Application »** (F2) : MacDive ou Subsurface, avec l'emplacement du fichier ou du dossier correspondant ; sur Windows, seul Subsurface est proposé.

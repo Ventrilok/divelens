@@ -1,0 +1,162 @@
+name: Release
+
+# Builds the package people download: the Lightroom plug-in folder
+# (DiveLens.lrplugin) with the app inside, one zip for macOS (Intel and Apple
+# Silicon) and one for Windows. The plug-in finds the app next to its own
+# files (plugin/DiveLens.lrdevplugin/Launch.lua).
+#
+# - A pull request that changes this workflow builds the package as a test:
+#   the zips are kept as run artifacts, nothing is published.
+# - Pushing a version tag (v2.0.0) builds it and attaches it to a DRAFT
+#   GitHub release; the owner reviews and publishes it by hand.
+#
+# Not signed yet (spec, section 9): the macOS app gets an ad-hoc signature
+# only, so macOS reports an unidentified developer rather than a damaged app.
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - app/src-tauri/tauri.conf.json
+      - plugin/DiveLens.lrdevplugin/Launch.lua
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Package (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: macOS
+          - os: windows-latest
+            name: Windows
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: true
+
+      - name: Read the version
+        id: version
+        run: |
+          version=$(node -p "require('./app/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # A release tag must name the version the package carries.
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match app/package.json version $version (expected v$version)."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.name == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: release
+
+      - run: npm ci
+        working-directory: app
+
+      - name: Build the app (macOS, Intel and Apple Silicon)
+        if: matrix.name == 'macOS'
+        working-directory: app
+        env:
+          # Ad-hoc signature until the Developer ID certificate exists.
+          APPLE_SIGNING_IDENTITY: "-"
+        run: npm run tauri build -- --target universal-apple-darwin --bundles app
+
+      - name: Build the app (Windows)
+        if: matrix.name == 'Windows'
+        working-directory: app
+        run: npm run tauri build -- --no-bundle
+
+      - name: Assemble the plug-in folder
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          out=package/DiveLens.lrplugin
+          mkdir -p "$out"
+          cp plugin/DiveLens.lrdevplugin/* "$out/"
+          cp LICENSE "$out/"
+          if [ "${{ matrix.name }}" = macOS ]; then
+            cp -R "target/universal-apple-darwin/release/bundle/macos/Dive Lens.app" "$out/"
+          else
+            cp target/release/divelens.exe "$out/Dive Lens.exe"
+          fi
+          ls -la "$out"
+
+      - name: Check the app (macOS)
+        if: matrix.name == 'macOS'
+        run: |
+          app="package/DiveLens.lrplugin/Dive Lens.app"
+          bin="$app/Contents/MacOS/$(defaults read "$PWD/$app/Contents/Info" CFBundleExecutable)"
+          archs=$(lipo -archs "$bin")
+          echo "Architectures: $archs"
+          case "$archs" in *x86_64*arm64*|*arm64*x86_64*) ;; *) echo "::error::Not a universal app: $archs"; exit 1 ;; esac
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv "$app" 2>&1 | grep -E "Identifier|Signature|Format"
+
+      - name: Zip (macOS)
+        if: matrix.name == 'macOS'
+        working-directory: package
+        # ditto keeps the app bundle as macOS expects it (links, permissions,
+        # signature); plain zip can break it.
+        run: ditto -c -k --keepParent DiveLens.lrplugin "DiveLens-${{ steps.version.outputs.version }}-macOS.zip"
+
+      - name: Zip (Windows)
+        if: matrix.name == 'Windows'
+        working-directory: package
+        shell: pwsh
+        run: Compress-Archive -Path DiveLens.lrplugin -DestinationPath "DiveLens-${{ steps.version.outputs.version }}-Windows.zip"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: DiveLens-${{ matrix.name }}
+          path: package/DiveLens-*.zip
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    if: github.ref_type == 'tag'
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -la dist
+          gh release create "$TAG" dist/*.zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --title "Dive Lens ${TAG#v}" \
+            --generate-notes
