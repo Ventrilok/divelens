@@ -12,10 +12,10 @@
 use std::collections::{BTreeMap, HashMap};
 
 use chrono::NaiveDateTime;
-use divelens_core::Dive;
 use divelens_core::collections::{self as matching, Placement, Span};
 use divelens_core::profile::Sample;
 use divelens_core::tags::{PhotoTags, Units};
+use divelens_core::{Dive, Error};
 use serde::{Deserialize, Serialize};
 
 use crate::collections::{Camera, CameraCount, Shots};
@@ -229,6 +229,61 @@ pub fn remember(applied: &BTreeMap<String, i32>, offsets: &mut Offsets) {
     for (camera, offset) in applied {
         offsets.cameras.insert(camera.clone(), *offset);
     }
+}
+
+/// What Tag Selection writes per photo, for a dive with a profile.
+#[derive(Debug)]
+pub enum PerPhoto {
+    /// Per-photo values for the selection described (the plugin's number
+    /// for it), and the offsets applied, to remember once written.
+    Values {
+        described: u64,
+        photos: Vec<PhotoTags>,
+        applied: BTreeMap<String, i32>,
+    },
+    /// The profile cannot be read: the dive data alone, as before per-photo
+    /// values (tagging is never blocked by a profile).
+    Unreadable(Error),
+}
+
+/// Why Tag Selection writes nothing.
+#[derive(Debug)]
+pub enum Refusal {
+    /// The profile reads, but the screen did not describe the selection: it
+    /// must, for the per-photo values.
+    Describe,
+    /// The screen showed the per-photo values, but the profile did not read
+    /// now: nothing is written rather than the dive data without them.
+    Profile(Error),
+}
+
+/// The per-photo values of `dive` (it has a profile). `described`: the
+/// selection the screen shows, as its number for the plugin and its photos
+/// taken during the dive; `None` when the screen showed no cards because it
+/// could not read the profile. `profile` reads the profile from the
+/// configured log, only when needed.
+pub fn per_photo(
+    dive: &Dive,
+    described: Option<(u64, Vec<InDive>)>,
+    units: Units,
+    profile: impl FnOnce() -> Result<Vec<Sample>, Error>,
+) -> Result<PerPhoto, Refusal> {
+    let Some((number, in_dive)) = described else {
+        return match profile() {
+            Ok(_) => Err(Refusal::Describe),
+            Err(e) => Ok(PerPhoto::Unreadable(e)),
+        };
+    };
+    let samples = if in_dive.is_empty() {
+        Vec::new()
+    } else {
+        profile().map_err(Refusal::Profile)?
+    };
+    Ok(PerPhoto::Values {
+        described: number,
+        photos: photo_tags(dive, &samples, &in_dive, units),
+        applied: applied_offsets(&in_dive),
+    })
 }
 
 #[cfg(test)]
@@ -468,6 +523,56 @@ mod tests {
             "pre-filled next time"
         );
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_profile_that_cannot_be_read_never_blocks_tagging() {
+        let s = selection(&Offsets::default());
+        let inside = || {
+            Some((
+                s.described,
+                s.in_dive(span(), &offsets(&[("TG-7|A1", 240)])),
+            ))
+        };
+        let garbled = || Err(Error::BadProfile("garbled".into()));
+        // The screen could not read it, nor can the back end: the dive data
+        // alone, no per-photo values, no offset remembered.
+        assert!(matches!(
+            per_photo(&dive(), None, Units::default(), garbled),
+            Ok(PerPhoto::Unreadable(Error::BadProfile(_)))
+        ));
+        // It reads after all: the selection must be described, nothing is
+        // written without its per-photo values.
+        assert!(matches!(
+            per_photo(&dive(), None, Units::default(), || Ok(profile())),
+            Err(Refusal::Describe)
+        ));
+        // Shown with its per-photo values but no longer readable: nothing is
+        // written rather than the dive data alone.
+        assert!(matches!(
+            per_photo(&dive(), inside(), Units::default(), garbled),
+            Err(Refusal::Profile(_))
+        ));
+        // Readable: the values and the offsets applied.
+        let Ok(PerPhoto::Values {
+            described,
+            photos,
+            applied,
+        }) = per_photo(&dive(), inside(), Units::default(), || Ok(profile()))
+        else {
+            panic!("per-photo values");
+        };
+        assert_eq!((described, photos.len()), (42, 4));
+        assert_eq!(applied.get("TG-7|A1"), Some(&240));
+        // No photo in the dive: the profile is not even read.
+        let none = Some((s.described, Vec::new()));
+        let Ok(PerPhoto::Values {
+            photos, applied, ..
+        }) = per_photo(&dive(), none, Units::default(), || panic!("not read"))
+        else {
+            panic!("no per-photo values");
+        };
+        assert!(photos.is_empty() && applied.is_empty());
     }
 
     #[test]

@@ -27,7 +27,7 @@ use lightroom::{
     ApplyOutcome, CollectionSet, Command, End, Event, LinkFile, Status, Timing, WrittenCollection,
 };
 use offsets::Offsets;
-use selection::{DiveSpan, Selection, SelectionPhotos, TagPreview};
+use selection::{DiveSpan, PerPhoto, Selection, SelectionPhotos, TagPreview};
 use settings::{ImportError, Settings};
 
 /// Where the app writes its log (`None`: no home folder).
@@ -424,7 +424,8 @@ struct TagChoice {
     location: Option<LocationChoice>,
     /// The description of the selection the screen shows
     /// (`find_selection_photos`): needed when the dive has a profile, for
-    /// the per-photo values.
+    /// the per-photo values. `None` for such a dive: the screen could not
+    /// read its profile, the dive data are written alone.
     #[serde(default)]
     search: Option<u64>,
     /// The clock offsets shown, in minutes by camera key.
@@ -523,33 +524,41 @@ fn tag_request(
     let mut applied = std::collections::BTreeMap::new();
     // Per-photo values (spec F8): when the dive has a profile, on the photos
     // of the selection shown taken during the dive, with the offsets shown.
+    // A profile that cannot be read leaves the dive data alone.
     if let Some(dive) = dive.filter(|d| d.has_profile) {
-        let (described, in_dive) = {
-            let state = app.state::<TagState>();
-            let selections = state.selections.lock().expect("selections");
-            let selection = choice
-                .search
-                .and_then(|n| selections.get(n))
-                .ok_or(TagError::NoPhotos)?;
-            (
-                selection.described,
-                selection.in_dive(Span::from(&dive), &choice.offsets),
-            )
+        let described = match choice.search {
+            None => None,
+            Some(n) => {
+                let state = app.state::<TagState>();
+                let selections = state.selections.lock().expect("selections");
+                let selection = selections.get(n).ok_or(TagError::NoPhotos)?;
+                Some((
+                    selection.described,
+                    selection.in_dive(Span::from(&dive), &choice.offsets),
+                ))
+            }
         };
         // The profile of the configured log, read now; only when needed.
-        let profile = if in_dive.is_empty() {
-            Vec::new()
-        } else {
-            source
-                .profile(&dive.id)
-                .map_err(|detail| TagError::Source { detail })?
-        };
-        request.selection = Some(described);
-        request.photos = selection::photo_tags(&dive, &profile, &in_dive, units);
-        if Settings::load(&config_dir(app)).depth_to_altitude {
-            request.copy_depth_to_altitude();
+        match selection::per_photo(&dive, described, units, || source.profile(&dive.id)) {
+            Ok(PerPhoto::Values {
+                described,
+                photos,
+                applied: offsets,
+            }) => {
+                request.selection = Some(described);
+                request.photos = photos;
+                if Settings::load(&config_dir(app)).depth_to_altitude {
+                    request.copy_depth_to_altitude();
+                }
+                applied = offsets;
+            }
+            Ok(PerPhoto::Unreadable(e)) => log::warn!(
+                "profile of dive {} not read, dive data without per-photo values: {e:?}",
+                dive.id
+            ),
+            Err(selection::Refusal::Describe) => return Err(TagError::NoPhotos),
+            Err(selection::Refusal::Profile(detail)) => return Err(TagError::Source { detail }),
         }
-        applied = selection::applied_offsets(&in_dive);
     }
     Ok((request, applied))
 }
