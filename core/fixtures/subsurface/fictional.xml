@@ -18,8 +18,19 @@
 </site>
 <site uuid='   abcde' name='Blue Lagoon' gps='1.250000 2.500000'>
 </site>
+<site uuid='c0ffee07' name='Atlantide / Île Verte / Récif d&apos;Émeraude' gps='-20.500000 57.250000'>
+</site>
+<site uuid='c0ffee08' gps='25.000000 -77.500000'>
+</site>
 </divesites>
 <dives>
+<dive number='100' rating='3' divesiteid='c0ffee01' date='2024-12-31' time='23:40:00' duration='32:00 min'>
+  <notes>Night dive, lobsters everywhere</notes>
+  <divecomputer model='Suunto Vyper' deviceid='00000004'>
+  <depth max='14.2 m' mean='9.0 m' />
+  <temperature water='21.0 C' />
+  </divecomputer>
+</dive>
 <trip date='2025-06-14' time='09:30:00' location='Atlantis'>
 <notes>Trip notes, never shown on a dive</notes>
 <dive number='101' rating='4' divesiteid='c0ffee01' date='2025-06-14' time='09:30:00' duration='42:30 min'>
@@ -84,7 +95,7 @@ by hand</notes>
   <divecomputer model='Shearwater Perdix 2' deviceid='00000001'>
   <depth max='9.0 m' mean='6.0 m' />
   <temperature water='-1.5 C' />
-  <sample time='0:10 min' depth='1.0 m' temp='-1.0 C' />
+  <sample time='0:10 min' depth='1.0 m' temp='0.0 C' />
   <sample time='6:00 min' depth='9.0 m' temp='-1.5 C' />
   <sample time='12:00 min' depth='0.5 m' />
   </divecomputer>
@@ -103,6 +114,29 @@ by hand</notes>
   <temperature water='28.0 C' />
   <sample time='0:20 min' depth='2.0 m' temp='28.5 C' />
   <sample time='25:00 min' depth='0.5 m' />
+  </divecomputer>
+</dive>
+<dive number='108' rating='3' divesiteid='c0ffee07' date='2025-06-18' time='09:00:00' duration='64:00 min'>
+  <notes>Manta ray at 30 m — café afterwards.</notes>
+  <divecomputer model='Shearwater Perdix 2' deviceid='00000001'>
+  <depth max='31.2 m' mean='18.0 m' />
+  <temperature water='25.0 C' />
+  <sample time='0:10 min' depth='3.0 m' temp='27.0 C' />
+  <sample time='5:00 min' depth='25.0 m' temp='26.0 C' />
+  <sample time='10:00 min' depth='31.2 m' temp='25.0 C' />
+  <sample time='30:00 min' depth='22.0 m' />
+  <sample time='50:00 min' depth='12.0 m' temp='26.0 C' />
+  <sample time='60:00 min' depth='5.0 m' temp='26.5 C' />
+  <sample time='64:00 min' depth='0.0 m' />
+  </divecomputer>
+</dive>
+<dive number='109' divesiteid='c0ffee08' date='2025-06-18' time='15:30:00' duration='24:00 min'>
+  <divecomputer model='Mares Genius' deviceid='00000002'>
+  <depth max='16.0 m' mean='9.0 m' />
+  <sample time='0:10 min' depth='2.0 m' temp='26.0 C' />
+  <sample time='8:00 min' depth='16.0 m' temp='25.0 C' />
+  <sample time='20:00 min' depth='5.0 m' />
+  <sample time='24:00 min' depth='0.0 m' temp='25.5 C' />
   </divecomputer>
 </dive>
 </dives>

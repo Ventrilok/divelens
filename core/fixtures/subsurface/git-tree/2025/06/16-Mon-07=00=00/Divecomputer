@@ -3,6 +3,6 @@ deviceid 00000001
 maxdepth 9.0m
 meandepth 6.0m
 watertemp -1.5°C
-  0:10 1.0m -1.0°C
+  0:10 1.0m 0.0°C
   6:00 9.0m -1.5°C
  12:00 0.5m

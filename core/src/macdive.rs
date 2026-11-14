@@ -8,7 +8,13 @@
 //!   dives without a raw download (manual entries, some very old computers)
 //!   have no profile.
 //! - Missing values: NULL temperature, rating 0, GPS 0/0.
+//! - Read-only: the database and its `-wal` file are never changed. While
+//!   MacDive is closed, nothing next to the database is created or changed
+//!   either; while it is open, SQLite updates its `-shm` index, as it does
+//!   for any reader.
 
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, NaiveDateTime};
@@ -31,14 +37,19 @@ pub struct MacDive {
 }
 
 impl MacDive {
-    /// Opens the database read-only. MacDive may stay open meanwhile.
+    /// Opens the database read-only. MacDive may stay open meanwhile. The
+    /// database and its `-wal` file are never changed; while MacDive is open,
+    /// SQLite updates its `-shm` index, as for any reader.
     pub fn open(path: &Path) -> Result<Self> {
         if !path.is_file() {
             return Err(Error::NotFound(path.to_path_buf()));
         }
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
-        let conn = Connection::open_with_flags(path, flags)
-            .map_err(|_| Error::NotADiveLog(path.to_path_buf()))?;
+        let conn = match immutable_uri(path).filter(|_| is_closed_wal(path)) {
+            Some(uri) => Connection::open_with_flags(uri, flags | OpenFlags::SQLITE_OPEN_URI),
+            None => Connection::open_with_flags(path, flags),
+        }
+        .map_err(|_| Error::NotADiveLog(path.to_path_buf()))?;
         let is_macdive: bool = conn
             .query_row(
                 "SELECT count(*) = 2 FROM sqlite_master
@@ -60,6 +71,56 @@ impl MacDive {
     pub fn default_path(home: &Path) -> PathBuf {
         home.join(DEFAULT_RELATIVE_PATH)
     }
+}
+
+/// A database in WAL mode (as Core Data writes them) whose `-wal` file is
+/// missing or empty: every change is in the database file itself. Opened
+/// normally, even read-only, SQLite would create `-wal` and `-shm` files next
+/// to it, or change a `-shm` file left there; opened "immutable", it creates
+/// and changes nothing, and misses nothing. When the `-wal` file holds
+/// anything (MacDive open), it may hold dives not yet copied into the
+/// database file, so the database is opened normally.
+///
+/// Opened immutable, the database is read as it stands when the connection
+/// opens: should MacDive start and copy its changes into the file meanwhile,
+/// a read could miss them or fail. Connections last one command of the app,
+/// and the next command reads the database again.
+fn is_closed_wal(path: &Path) -> bool {
+    // Bytes 18 and 19 of the SQLite header are 2 in WAL mode.
+    let mut header = [0u8; 20];
+    let wal_mode = File::open(path)
+        .and_then(|mut f| f.read_exact(&mut header))
+        .is_ok_and(|()| header[18] == 2 && header[19] == 2);
+    let mut wal = path.as_os_str().to_owned();
+    wal.push("-wal");
+    wal_mode && !std::fs::metadata(&wal).is_ok_and(|m| m.len() > 0)
+}
+
+/// SQLite `file:` URI opening `path` immutable; `None` for a path SQLite's
+/// URIs cannot name (not Unicode; on Windows, not on a drive letter).
+fn immutable_uri(path: &Path) -> Option<String> {
+    let path = std::path::absolute(path).ok()?;
+    let text = path.to_str()?;
+    let mut uri = String::from("file:");
+    if cfg!(windows) {
+        // "C:\Logs\MacDive.sqlite" is written "file:/C:/Logs/MacDive.sqlite".
+        if text.as_bytes().get(1) != Some(&b':') {
+            return None;
+        }
+        uri.push('/');
+    }
+    for (i, b) in text.bytes().enumerate() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' | b'/' => {
+                uri.push(char::from(b));
+            }
+            b'\\' if cfg!(windows) => uri.push('/'),
+            b':' if cfg!(windows) && i == 1 => uri.push(':'),
+            _ => uri.push_str(&format!("%{b:02X}")),
+        }
+    }
+    uri.push_str("?immutable=1");
+    Some(uri)
 }
 
 fn wall_clock(core_data_s: f64) -> NaiveDateTime {
@@ -201,4 +262,4 @@ impl DiveSource for MacDive {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

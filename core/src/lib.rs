@@ -6,6 +6,8 @@
 //! platform in CI.
 
 pub mod collections;
+#[cfg(test)]
+mod conformance;
 pub mod divecomputer;
 pub mod error;
 pub mod macdive;
