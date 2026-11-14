@@ -2,26 +2,10 @@
 //! version Lightroom embeds). The parts that need Lightroom itself are checked
 //! by hand in Lightroom.
 
-use std::path::PathBuf;
+mod common;
 
+use common::{lua, plugin_dir};
 use mlua::Lua;
-
-fn plugin_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugin/DiveLens.lrdevplugin")
-}
-
-fn lua() -> Lua {
-    let lua = Lua::new();
-    let path = plugin_dir().join("?.lua");
-    lua.load(format!(
-        "package.path = {:?}\n\
-         LOC = function(s) return (s:gsub('^%$%$%$/[^=]*=', '')) end",
-        path.to_str().unwrap()
-    ))
-    .exec()
-    .unwrap();
-    lua
-}
 
 fn run(lua: &Lua, code: &str) {
     if let Err(e) = lua.load(code).exec() {

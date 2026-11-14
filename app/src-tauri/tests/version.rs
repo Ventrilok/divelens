@@ -2,9 +2,9 @@
 //! the running app read it from there (tauri.conf.json points to it); every
 //! other copy is written by `npm run set-version` and must match it.
 
-use std::path::{Path, PathBuf};
+mod common;
 
-use mlua::Lua;
+use std::path::{Path, PathBuf};
 
 fn app_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
@@ -23,24 +23,69 @@ fn version() -> String {
         .to_owned()
 }
 
+/// A number in a version: digits, without a leading zero (semver).
+fn is_number(part: &str) -> bool {
+    !part.is_empty()
+        && part.bytes().all(|b| b.is_ascii_digit())
+        && (part == "0" || !part.starts_with('0'))
+}
+
+/// MAJOR.MINOR.PATCH, optionally followed by a pre-release label, following
+/// semver: dot-separated parts, each non-empty, made of letters, digits and
+/// hyphens, a part made of digits only without a leading zero. No build
+/// metadata (`+7`): npm drops it, and Lightroom's numbers could not hold it.
+fn is_version(version: &str) -> bool {
+    let (numbers, label) = match version.split_once('-') {
+        Some((numbers, label)) => (numbers, Some(label)),
+        None => (version, None),
+    };
+    let numbers: Vec<_> = numbers.split('.').collect();
+    numbers.len() == 3
+        && numbers.iter().all(|n| is_number(n))
+        && label.is_none_or(|label| {
+            label.split('.').all(|part| {
+                !part.is_empty()
+                    && part.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+                    && (!part.bytes().all(|b| b.is_ascii_digit()) || is_number(part))
+            })
+        })
+}
+
 #[test]
 fn version_is_major_minor_patch_with_an_optional_label() {
+    for good in [
+        "0.1.0",
+        "2.0.0",
+        "10.20.30",
+        "2.1.0-beta.1",
+        "2.1.0-rc.10",
+        "2.1.0-1",
+        "2.1.0-0.3.7",
+        "2.1.0-x-y.0a",
+    ] {
+        assert!(is_version(good), "{good}");
+    }
+    for bad in [
+        "2.1",
+        "2.1.0.0",
+        "02.1.0",
+        "2.01.0",
+        "2.1.00",
+        "v2.1.0",
+        "2.1.0-",
+        "2.1.0-beta.",
+        "2.1.0-.1",
+        "2.1.0-beta..1",
+        "2.1.0-beta.01",
+        "2.1.0-00",
+        "2.1.0-bêta",
+        "2.1.0+7",
+        "2.1.0-beta+7",
+    ] {
+        assert!(!is_version(bad), "{bad}");
+    }
     let version = version();
-    let (numbers, label) = version.split_once('-').unwrap_or((&version, ""));
-    let numbers: Vec<_> = numbers.split('.').collect();
-    assert!(
-        numbers.len() == 3
-            && numbers
-                .iter()
-                .all(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit())),
-        "{version}"
-    );
-    assert!(
-        label
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-'),
-        "{version}"
-    );
+    assert!(is_version(&version), "app/package.json version {version}");
 }
 
 #[test]
@@ -64,16 +109,7 @@ fn crate_version_matches_package_json() {
 
 #[test]
 fn plugin_version_matches_package_json() {
-    let lua = Lua::new();
-    let path = app_dir().join("../plugin/DiveLens.lrdevplugin/?.lua");
-    lua.load(format!(
-        "package.path = {:?}\n\
-         LOC = function(s) return (s:gsub('^%$%$%$/[^=]*=', '')) end",
-        path.to_str().unwrap()
-    ))
-    .exec()
-    .unwrap();
-    let (numbers, display): (String, String) = lua
+    let (numbers, display): (String, String) = common::lua()
         .load(
             r#"
             local v = require "Info".VERSION
