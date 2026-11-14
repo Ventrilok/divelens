@@ -30,3 +30,9 @@ It includes [libdivecomputer](https://www.libdivecomputer.org) (LGPL 2.1, in `th
 ## Building
 
 Clone with `git clone --recursive`, or run `git submodule update --init` after cloning.
+
+## Contributing
+
+Contributions are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) explains how the project is built, the commands, and the rules for branches, commits and pull requests.
+
+To report a bug or ask for another dive application, use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choose). The repository is public: never attach a real dive log, a dive-log database or the Dive Lens log files.
