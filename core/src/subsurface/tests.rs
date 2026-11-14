@@ -321,6 +321,9 @@ fn git(dir: &Path, args: &[&str]) {
             "-c",
             "core.autocrlf=false",
         ])
+        // No housekeeping left running in the background once a command
+        // returns: it would change the repository while the tests look at it.
+        .args(["-c", "gc.auto=0", "-c", "maintenance.auto=false"])
         .args(args)
         .current_dir(dir)
         .output()
