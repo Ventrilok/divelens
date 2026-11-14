@@ -6,8 +6,9 @@
 //! the catalog name and the live photo selection. Messages are one JSON object
 //! per line. The app pings every few seconds; silence means the link is lost.
 //!
-//! Requests (tag the selection, find the photos of a period, list the
-//! collection sets, write the collections, set the log level) go to the plugin through a channel of [`Command`]s; each
+//! Requests (describe and tag the selection, find the photos of a period,
+//! list the collection sets, write the collections, set the log level) go
+//! to the plugin through a channel of [`Command`]s; each
 //! carries its own reply channel. A request made while the link is down, or
 //! cut by a lost link, gets no reply: its channel is dropped, which the caller
 //! sees as "link lost". Requests are never retried.
@@ -19,6 +20,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
@@ -30,7 +32,7 @@ use crate::settings::{Legacy, LogLevel};
 /// Name of the link file, written by the plugin in the app's settings folder.
 pub const LINK_FILE: &str = "lightroom-link.json";
 /// Version of the message set; both sides must agree.
-pub const PROTOCOL: u32 = 5;
+pub const PROTOCOL: u32 = 6;
 
 /// Content of the link file.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -169,6 +171,12 @@ pub enum Command {
     FindPhotos {
         from: String,
         to: String,
+        reply: Sender<Result<PhotoSearch, ApplyOutcome>>,
+    },
+    /// The photos selected in Lightroom now (Tag Selection's per-photo
+    /// values). The plugin keeps them: an "Apply" naming this search writes
+    /// only if the selection is still exactly these photos.
+    DescribeSelection {
         reply: Sender<Result<PhotoSearch, ApplyOutcome>>,
     },
     /// Write collections, dive data and per-photo values in one Undo step.
@@ -317,6 +325,9 @@ enum ToPlugin<'a> {
         from: &'a str,
         to: &'a str,
     },
+    DescribeSelection {
+        id: u64,
+    },
     ApplyCollections {
         id: u64,
         #[serde(flatten)]
@@ -381,6 +392,17 @@ fn send_line(stream: &mut TcpStream, message: &ToPlugin) -> std::io::Result<()> 
     let mut line = serde_json::to_vec(message).expect("message serializes");
     line.push(b'\n');
     stream.write_all(&line)
+}
+
+/// Number of the next request to the plugin. It never starts again while
+/// the app runs, not even when the link does: a photo search or a selection
+/// description the plugin kept from an earlier link session can never be
+/// taken for a newer one. (The plugin forgets them when the link resets,
+/// and the app forgets its own when it quits.)
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_id() -> u64 {
+    NEXT_ID.fetch_add(1, Ordering::Relaxed)
 }
 
 /// Drops the requests waiting to be sent: whoever made one stops waiting
@@ -452,7 +474,6 @@ fn session(
     let mut reader = BufReader::new(incoming);
     let mut line = Vec::new();
     let mut pending: HashMap<u64, Pending> = HashMap::new();
-    let mut next_id = 1;
     loop {
         match reader.read_until(b'\n', &mut line) {
             Ok(0) => return End::Lost, // closed by the plugin
@@ -577,14 +598,14 @@ fn session(
             if !status.connected {
                 continue; // dropped: the caller learns the link is not up
             }
-            let id = next_id;
-            next_id += 1;
+            let id = next_id();
             let message = match &command {
                 Command::Apply { request, .. } => ToPlugin::Apply {
                     id,
                     request: request.as_ref(),
                 },
                 Command::FindPhotos { from, to, .. } => ToPlugin::FindPhotos { id, from, to },
+                Command::DescribeSelection { .. } => ToPlugin::DescribeSelection { id },
                 Command::ApplyCollections { request, .. } => {
                     ToPlugin::ApplyCollections { id, request }
                 }
@@ -596,7 +617,9 @@ fn session(
             }
             let waiting = match command {
                 Command::Apply { reply, .. } => Pending::Apply(reply),
-                Command::FindPhotos { reply, .. } => Pending::Find(reply, Vec::new()),
+                Command::FindPhotos { reply, .. } | Command::DescribeSelection { reply } => {
+                    Pending::Find(reply, Vec::new())
+                }
                 Command::ApplyCollections { reply, .. } => Pending::Collections(reply),
                 Command::ListSets { reply } => Pending::Sets(reply),
                 Command::SetLogLevel(_) => continue,
@@ -663,7 +686,7 @@ mod tests {
         stream.write_all(text.as_bytes()).unwrap();
     }
 
-    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":5,"type":"hello"}"#;
+    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":6,"type":"hello"}"#;
 
     #[test]
     fn dropped_requests_stop_their_callers_waiting() {
@@ -797,7 +820,6 @@ mod tests {
 
     fn request() -> TagRequest {
         TagRequest {
-            dive: None,
             location: Some(divelens_core::tags::LocationTags {
                 country: Some("Atlantis".into()),
                 city: None,
@@ -805,7 +827,141 @@ mod tests {
                 lat: Some(12.5),
                 lon: Some(-45.25),
             }),
+            ..TagRequest::default()
         }
+    }
+
+    /// Runs one link session in which the app asks for the collection sets;
+    /// returns the request's number as the plugin received it.
+    fn one_session_request_id() -> u64 {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (id_tx, id_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin(move |lines, to_app| {
+            lines.next().unwrap();
+            write(to_app, &format!("{HELLO}\n"));
+            lines.next().unwrap(); // first ping: the app is connected
+            let (reply, sets) = std::sync::mpsc::channel();
+            commands.send(Command::ListSets { reply }).unwrap();
+            let id = next_request(lines)["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!("{{\"type\":\"sets\",\"id\":{id},\"sets\":[]}}\n"),
+            );
+            sets.recv().unwrap().unwrap();
+            id_tx.send(id).unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        assert_eq!(
+            run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {}),
+            End::Bye
+        );
+        plugin.join().unwrap();
+        id_rx.recv().unwrap()
+    }
+
+    #[test]
+    fn request_numbers_never_start_again_with_a_new_link() {
+        // An old selection description or photo search, numbered in a
+        // previous link session, can never match a request of this one.
+        let first = one_session_request_id();
+        let second = one_session_request_id();
+        assert!(second > first, "{second} after {first}");
+    }
+
+    #[test]
+    fn the_plugin_speaks_the_same_protocol() {
+        let link = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../plugin/DiveLens.lrdevplugin/Link.lua"),
+        )
+        .unwrap();
+        // Line by line: a Windows checkout may end lines with CRLF.
+        let declared: Vec<&str> = link
+            .lines()
+            .map(str::trim)
+            .filter(|l| l.starts_with("local PROTOCOL ="))
+            .collect();
+        assert_eq!(
+            declared,
+            [format!("local PROTOCOL = {PROTOCOL}")],
+            "raise PROTOCOL in Link.lua and lightroom.rs together"
+        );
+    }
+
+    #[test]
+    fn describes_the_selection_then_tags_it_with_per_photo_values() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (result_tx, result_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin(move |lines, to_app| {
+            lines.next().unwrap();
+            write(to_app, &format!("{HELLO}\n"));
+            lines.next().unwrap(); // first ping: the app is connected
+            let (reply, found) = std::sync::mpsc::channel();
+            commands.send(Command::DescribeSelection { reply }).unwrap();
+            let describe = next_request(lines);
+            assert_eq!(describe["type"], "describeSelection");
+            let id = describe["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"photos\",\"id\":{id},\"done\":true,\"photos\":[{{\"id\":\"11\",\"time\":\"2025-12-30T05:02:00\",\"model\":\"TG-7\"}}]}}\n"
+                ),
+            );
+            let selection = found.recv().unwrap().unwrap();
+            let point = divelens_core::profile::PhotoPoint {
+                elapsed_s: 120,
+                depth_m: 8.0,
+                temp_c: None,
+            };
+            let (reply, outcome) = std::sync::mpsc::channel();
+            commands
+                .send(Command::Apply {
+                    request: Box::new(TagRequest {
+                        selection: Some(selection.search),
+                        photos: vec![divelens_core::tags::PhotoTags::new(
+                            "11".into(),
+                            Some(point),
+                            240,
+                            divelens_core::tags::Units::default(),
+                        )],
+                        ..request()
+                    }),
+                    reply,
+                })
+                .unwrap();
+            let apply = next_request(lines);
+            assert_eq!(apply["type"], "apply");
+            assert_eq!(apply["selection"].as_u64(), Some(selection.search));
+            assert_eq!(apply["photos"][0]["id"], "11");
+            assert_eq!(apply["photos"][0]["photoDepth"], "8.0 m");
+            assert_eq!(apply["photos"][0]["clockOffset"], "+04:00");
+            let id = apply["id"].as_u64().unwrap();
+            // The selection changed in Lightroom since: nothing written.
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"applyFailed\",\"id\":{id},\"reason\":\"selectionChanged\"}}\n"
+                ),
+            );
+            result_tx
+                .send((selection, outcome.recv().unwrap()))
+                .unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {});
+        plugin.join().unwrap();
+        assert_eq!(end, End::Bye);
+        let (selection, outcome) = result_rx.recv().unwrap();
+        assert_eq!(selection.photos.len(), 1);
+        assert_eq!(selection.photos[0].model.as_deref(), Some("TG-7"));
+        assert_eq!(
+            outcome,
+            ApplyOutcome::Failed {
+                reason: "selectionChanged".into(),
+                detail: None
+            }
+        );
+        assert!(!outcome.half_written());
     }
 
     /// Connects, waits for the app's first ping (so the app knows it is
@@ -1085,7 +1241,7 @@ mod tests {
             lines.next().unwrap();
             write(
                 to_app,
-                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":5,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
+                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":6,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
             );
             write(to_app, "\n");
             lines.next().unwrap(); // first ping: the app is connected

@@ -155,19 +155,65 @@ export interface SelectionPreview {
 export interface TagChoice {
   diveId: string | null;
   location: { kind: "diveSite" } | { kind: "site"; siteId: string; lat: number | null; lon: number | null } | null;
+  /** The description of the selection shown (SelectionPhotos.search): needed for a dive with a profile. */
+  search: number | null;
+  /** Clock offsets shown, in minutes by camera key. */
+  offsets: Record<string, number>;
+}
+
+/** The photos selected in Lightroom, described for Tag Selection's per-photo values (app/src-tauri/src/selection.rs). */
+export interface SelectionPhotos {
+  /** Number of the description: the counts, Suggest and Apply name it (a newer one replaces it). */
+  search: number;
+  /** Photos selected, with a capture time or not. */
+  photos: number;
+  undated: number;
+  /** Cameras of the photos with a capture time, sorted by name. */
+  cameras: Camera[];
+}
+
+/** The chosen dive as the counts and Suggest of Tag Selection take it. */
+export interface DiveSpan {
+  start: string;
+  end: string;
+}
+
+/** Tag Selection's live counts for the offsets shown. */
+export interface TagPreview {
+  total: number;
+  /** Photos taken during the chosen dive (0 without one). */
+  inDive: number;
+  cameras: CameraCount[];
+  /** The selection's range moved by the offsets shown ("covers the selection"). */
+  coverFrom: string | null;
+  coverTo: string | null;
 }
 
 export type ApplyOutcome =
   | { outcome: "applied"; count: number }
   | {
       outcome: "failed";
-      /** "gpsNotWritten": all written but the GPS and altitude (the plugin's second write did not happen). */
-      reason: "noSelection" | "busy" | "badRequest" | "gpsNotWritten" | "error" | string;
+      /**
+       * "gpsNotWritten": all written but the GPS and altitude (the plugin's second write did not happen);
+       * "selectionChanged" / "staleSelection": nothing written, the selection is no longer the one described.
+       */
+      reason: "noSelection" | "busy" | "badRequest" | "gpsNotWritten" | "selectionChanged" | "staleSelection" | "error" | string;
       detail: string | null;
     };
 
 export type TagError =
-  | { error: "nothingChosen" | "notConnected" | "linkLost" | "badGps" | "unknownDive" | "unknownSite" | "logChanged" }
+  | {
+      error:
+        | "nothingChosen"
+        | "notConnected"
+        | "linkLost"
+        | "badGps"
+        | "unknownDive"
+        | "unknownSite"
+        | "logChanged"
+        /** The selection shown must be described again (its per-photo values). */
+        | "noPhotos";
+    }
   | { error: "source"; detail: ReaderError };
 
 // --- Create Collections (app/src-tauri/src/collections.rs) ------------------

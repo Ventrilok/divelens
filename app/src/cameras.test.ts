@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampMargin, clampOffset, initialOffsets, offsetField, parseOffset } from "./cameras";
+import { clampMargin, clampOffset, initialOffsets, keepOffsets, offsetField, parseOffset } from "./cameras";
 import type { Camera } from "./types";
 
 describe("clock offsets", () => {
@@ -32,5 +32,18 @@ describe("clock offsets", () => {
   it("starts from each camera's remembered offset", () => {
     const cam = (key: string, remembered: number | null): Camera => ({ key, model: key, serial: null, photos: 1, remembered });
     expect(initialOffsets([cam("a", 240), cam("b", null)])).toEqual({ a: 240, b: 0 });
+  });
+
+  it("keeps the offsets shown when the selection's cameras change", () => {
+    const cam = (key: string, remembered: number | null): Camera => ({ key, model: key, serial: null, photos: 1, remembered });
+    // The TG-7 set by hand stays; the GoPro arrives with its remembered
+    // offset, the phone with none; the camera no longer selected goes.
+    expect(keepOffsets({ tg7: 245, gone: 60 }, [cam("tg7", 240), cam("gopro", -30), cam("phone", null)])).toEqual({
+      tg7: 245,
+      gopro: -30,
+      phone: 0,
+    });
+    // A shown offset of 0 is kept too, not replaced by the remembered one.
+    expect(keepOffsets({ tg7: 0 }, [cam("tg7", 240)])).toEqual({ tg7: 0 });
   });
 });

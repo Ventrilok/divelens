@@ -3,6 +3,7 @@ mod collections;
 mod dive_log;
 mod lightroom;
 mod offsets;
+mod selection;
 mod settings;
 mod units;
 
@@ -12,6 +13,7 @@ use std::sync::mpsc::{self, Sender};
 use std::time::Duration;
 
 use divelens_core::apps::{self, DiveApp, Kept, Opened, Os, Places};
+use divelens_core::collections::Span;
 use divelens_core::macdive;
 use divelens_core::profile::Sample;
 use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
@@ -25,6 +27,7 @@ use lightroom::{
     ApplyOutcome, CollectionSet, Command, End, Event, LinkFile, Status, Timing, WrittenCollection,
 };
 use offsets::Offsets;
+use selection::{DiveSpan, PerPhoto, Selection, SelectionPhotos, TagPreview};
 use settings::{ImportError, Settings};
 
 /// Where the app writes its log (`None`: no home folder).
@@ -419,6 +422,15 @@ struct TagChoice {
     dive_id: Option<String>,
     /// Write a location; `None`: location unticked.
     location: Option<LocationChoice>,
+    /// The description of the selection the screen shows
+    /// (`find_selection_photos`): needed when the dive has a profile, for
+    /// the per-photo values. `None` for such a dive: the screen could not
+    /// read its profile, the dive data are written alone.
+    #[serde(default)]
+    search: Option<u64>,
+    /// The clock offsets shown, in minutes by camera key.
+    #[serde(default)]
+    offsets: std::collections::HashMap<String, i32>,
 }
 
 /// Why Tag Selection wrote nothing before reaching Lightroom, or lost track.
@@ -434,6 +446,10 @@ enum TagError {
     UnknownSite,
     /// The screen shows another dive log than the configured one.
     LogChanged,
+    /// The dive has a profile but the selection the screen shows is no
+    /// longer kept (a newer description replaced it, the link restarted):
+    /// it must be described again.
+    NoPhotos,
     Source {
         detail: Error,
     },
@@ -445,12 +461,20 @@ impl From<LogChanged> for TagError {
     }
 }
 
-/// What to write, from `info`, the dive log checked for this write.
+/// Tag Selection's descriptions of the Lightroom selection: the latest one
+/// only is kept (its own, never Create Collections' photo search).
+#[derive(Default)]
+struct TagState {
+    selections: Mutex<Searches<Selection>>,
+}
+
+/// What to write, from `info`, the dive log checked for this write, and the
+/// offset applied to each camera, to remember once written.
 fn tag_request(
     app: &AppHandle,
     info: &SourceInfo,
     choice: &TagChoice,
-) -> Result<TagRequest, TagError> {
+) -> Result<(TagRequest, std::collections::BTreeMap<String, i32>), TagError> {
     let source = open(app, info)
         .map_err(|detail| TagError::Source { detail })?
         .log;
@@ -490,15 +514,63 @@ fn tag_request(
     if dive.is_none() && location.is_none() {
         return Err(TagError::NothingChosen);
     }
-    Ok(TagRequest {
-        dive: dive.map(|d| DiveTags::new(&d, units, info.app.name)),
+    let mut request = TagRequest {
+        dive: dive
+            .as_ref()
+            .map(|d| DiveTags::new(d, units, info.app.name)),
         location,
-    })
+        ..TagRequest::default()
+    };
+    let mut applied = std::collections::BTreeMap::new();
+    // Per-photo values (spec F8): when the dive has a profile, on the photos
+    // of the selection shown taken during the dive, with the offsets shown.
+    // A profile that cannot be read leaves the dive data alone.
+    if let Some(dive) = dive.filter(|d| d.has_profile) {
+        let described = match choice.search {
+            None => None,
+            Some(n) => {
+                let state = app.state::<TagState>();
+                let selections = state.selections.lock().expect("selections");
+                let selection = selections.get(n).ok_or(TagError::NoPhotos)?;
+                Some((
+                    selection.described,
+                    selection.in_dive(Span::from(&dive), &choice.offsets),
+                ))
+            }
+        };
+        // The profile of the configured log, read now; only when needed.
+        match selection::per_photo(&dive, described, units, || source.profile(&dive.id)) {
+            Ok(PerPhoto::Values {
+                described,
+                photos,
+                applied: offsets,
+            }) => {
+                request.selection = Some(described);
+                request.photos = photos;
+                if Settings::load(&config_dir(app)).depth_to_altitude {
+                    request.copy_depth_to_altitude();
+                }
+                applied = offsets;
+            }
+            Ok(PerPhoto::Unreadable(e)) => log::warn!(
+                "profile of dive {} not read, dive data without per-photo values: {e:?}",
+                dive.id
+            ),
+            Err(selection::Refusal::Describe) => return Err(TagError::NoPhotos),
+            Err(selection::Refusal::Profile(detail)) => return Err(TagError::Source { detail }),
+        }
+    }
+    Ok((request, applied))
 }
 
 /// Tags the photos selected in Lightroom (at the moment Lightroom gets the
 /// request) with a dive's data and/or a location, in one undoable step.
-/// `log` is the dive log the screen shows: refused when it changed.
+/// `log` is the dive log the screen shows: refused when it changed. When
+/// the dive has a profile, the photos taken during it also get their
+/// per-photo values and clock offset, computed for the selection the
+/// screen shows; the plugin refuses if the selection changed since. The
+/// offsets applied are then remembered, as Create Collections does (also
+/// when only the GPS and altitude could not be written).
 #[tauri::command]
 async fn tag_selection(
     app: AppHandle,
@@ -508,7 +580,8 @@ async fn tag_selection(
     tauri::async_runtime::spawn_blocking(move || {
         let writes = app.state::<Writes>();
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
-        let request = tag_request(&app, &info, &choice)?;
+        let (request, applied) = tag_request(&app, &info, &choice)?;
+        let with_values = request.photos.len();
         let state = app.state::<Lightroom>();
         if !state.status.lock().expect("lightroom state").connected {
             return Err(TagError::NotConnected);
@@ -525,10 +598,106 @@ async fn tag_selection(
         if sent.is_err() {
             return Err(TagError::NotConnected);
         }
-        outcome.recv().map_err(|_| TagError::LinkLost)
+        let outcome = outcome.recv().map_err(|_| TagError::LinkLost)?;
+        let written = matches!(outcome, ApplyOutcome::Applied { .. }) || outcome.half_written();
+        if written && !applied.is_empty() {
+            let dir = config_dir(&app);
+            let mut offsets = Offsets::load(&dir, info.app);
+            selection::remember(&applied, &mut offsets);
+            if let Err(e) = offsets.save(&dir, info.app) {
+                log::error!("clock offsets not saved: {e}");
+            }
+        }
+        match &outcome {
+            ApplyOutcome::Applied { count } => {
+                log::info!("selection tagged: {count} photos, per-photo values on {with_values}")
+            }
+            ApplyOutcome::Failed { .. } => log::warn!("selection not tagged: {outcome:?}"),
+        }
+        Ok(outcome)
     })
     .await
     .expect("tagging task failed")
+}
+
+/// Describes the photos selected in Lightroom now, for Tag Selection's
+/// per-photo values: their cameras, each with the offset last applied to it
+/// for the application of `log`, the dive log the screen shows. `search`
+/// numbers the description, higher than any the screen asked for before:
+/// only the latest one is kept.
+#[tauri::command]
+async fn find_selection_photos(
+    app: AppHandle,
+    log: LogId,
+    search: u64,
+) -> Result<SelectionPhotos, CollectionsError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<TagState>();
+        if !state.selections.lock().expect("selections").start(search) {
+            return Err(CollectionsError::NoPhotos);
+        }
+        let info = source_info(&app);
+        log.check(&info)?;
+        // The plugin keeps the photos of its last description only: checked
+        // and sent under the lock, so a newer one cannot reach it first.
+        let (reply, answer) = mpsc::channel();
+        {
+            let selections = state.selections.lock().expect("selections");
+            if !selections.is_latest(search) {
+                return Err(CollectionsError::NoPhotos);
+            }
+            send(&app, Command::DescribeSelection { reply })?;
+        }
+        let found = answer.recv().map_err(|_| CollectionsError::LinkLost)??;
+        let offsets = Offsets::load(&config_dir(&app), info.app);
+        let selection = Selection::new(found.search, found.photos, &offsets);
+        let shown = selection.shown(search);
+        keep_search(
+            &state.selections,
+            search,
+            &log,
+            &source_info(&app),
+            selection,
+        )?;
+        Ok(shown)
+    })
+    .await
+    .expect("selection task failed")
+}
+
+/// Live counts of selection description `search` for the dive shown (none:
+/// not chosen yet) and the offsets shown.
+#[tauri::command]
+fn tag_preview(
+    state: State<TagState>,
+    search: u64,
+    dive: Option<DiveSpan>,
+    offsets: std::collections::HashMap<String, i32>,
+) -> Result<TagPreview, CollectionsError> {
+    let selections = state.selections.lock().expect("selections");
+    let selection = selections.get(search).ok_or(CollectionsError::NoPhotos)?;
+    let span = dive.as_ref().and_then(DiveSpan::span);
+    Ok(selection.preview(span, &offsets))
+}
+
+/// Suggested clock offset of the given cameras of selection description
+/// `search`, for the dive shown (`None`: no offset fits).
+#[tauri::command]
+async fn suggest_tag_offsets(
+    app: AppHandle,
+    search: u64,
+    dive: DiveSpan,
+    cameras: Vec<String>,
+) -> Result<std::collections::HashMap<String, Option<i32>>, CollectionsError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<TagState>();
+        let selections = state.selections.lock().expect("selections");
+        let selection = selections.get(search).ok_or(CollectionsError::NoPhotos)?;
+        let span = dive.span().ok_or(CollectionsError::NothingChosen)?;
+        Ok(selection.suggest(span, &cameras))
+    })
+    .await
+    .expect("suggestion task failed")
 }
 
 /// Photos found for "Create Collections", kept until the next search.
@@ -539,13 +708,14 @@ struct CollectionsState {
 
 /// Keeps the session of photo search `number` once it is done, unless the
 /// configured log changed during it (its dives belong to the previous log)
-/// or a newer search started since (the screen shows that one).
-fn keep_search(
-    searches: &Mutex<Searches>,
+/// or a newer search started since (the screen shows that one). Tag
+/// Selection keeps its descriptions of the selection the same way.
+fn keep_search<S>(
+    searches: &Mutex<Searches<S>>,
     number: u64,
     log: &LogId,
     configured: &SourceInfo,
-    session: Session,
+    session: S,
 ) -> Result<(), CollectionsError> {
     log.check(configured)?;
     if !searches
@@ -1010,6 +1180,9 @@ pub fn run() {
             lightroom_writing,
             initial_screen,
             tag_selection,
+            find_selection_photos,
+            tag_preview,
+            suggest_tag_offsets,
             selection_preview,
             find_collection_photos,
             collections_preview,
@@ -1038,6 +1211,7 @@ pub fn run() {
                 preview: Mutex::new(SelectionPreview::default()),
             });
             app.manage(CollectionsState::default());
+            app.manage(TagState::default());
             app.manage(Kept::default());
             // Writes are told to the UI from a thread of their own, in order:
             // never from under the lock that settings changes wait on.
@@ -1067,8 +1241,8 @@ pub fn run() {
 mod tests {
     use super::screen_arg;
     use super::{
-        ChangeError, CollectionsError, DiveApp, Offsets, Os, Searches, Session, Settings, Writes,
-        change_unless_writing, dive_log, keep_search,
+        ChangeError, CollectionsError, DiveApp, Offsets, Os, Searches, Selection, Session,
+        Settings, Writes, change_unless_writing, dive_log, keep_search,
     };
     use crate::settings::DepthChoice;
     use divelens_core::subsurface;
@@ -1106,6 +1280,33 @@ mod tests {
         assert!(keep_search(&searches, newer, &a.id(), &a, session()).is_ok());
         assert!(searches.lock().unwrap().get(newer).is_some());
         assert!(searches.lock().unwrap().get(older).is_none());
+    }
+
+    #[test]
+    fn a_selection_is_kept_only_for_the_log_still_configured_and_if_newest() {
+        let selections = Mutex::new(Searches::<Selection>::default());
+        let at = |path: &str| dive_log::SourceInfo {
+            app: &subsurface::APP,
+            path: path.into(),
+            is_default_path: false,
+        };
+        let (a, b) = (at("/Logs/a.xml"), at("/Logs/b.xml"));
+        let described = || Selection::new(3, Vec::new(), &Offsets::default());
+        // The log changed in Settings while Lightroom described the
+        // selection: its remembered offsets belong to the previous log.
+        assert!(selections.lock().unwrap().start(1));
+        let kept = keep_search(&selections, 1, &a.id(), &b, described());
+        assert!(matches!(kept, Err(CollectionsError::LogChanged)));
+        assert!(selections.lock().unwrap().get(1).is_none());
+        // The selection changed again meanwhile: only the newer one counts,
+        // for the counts, "Suggest" and "Apply".
+        assert!(selections.lock().unwrap().start(2));
+        assert!(selections.lock().unwrap().start(3));
+        let kept = keep_search(&selections, 2, &a.id(), &a, described());
+        assert!(matches!(kept, Err(CollectionsError::NoPhotos)));
+        assert!(keep_search(&selections, 3, &a.id(), &a, described()).is_ok());
+        assert!(selections.lock().unwrap().get(2).is_none());
+        assert_eq!(selections.lock().unwrap().get(3).unwrap().described, 3);
     }
 
     fn temp_dir(name: &str) -> PathBuf {

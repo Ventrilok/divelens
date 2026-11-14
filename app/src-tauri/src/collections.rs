@@ -34,10 +34,112 @@ pub struct Camera {
     pub remembered: Option<i32>,
 }
 
-struct Photo {
-    id: String,
-    time: NaiveDateTime,
-    camera: usize,
+/// A photo with a capture time, and the index of its camera.
+pub(crate) struct Photo {
+    pub id: String,
+    pub time: NaiveDateTime,
+    pub camera: usize,
+}
+
+/// Photos as Lightroom described them, with their cameras sorted by name
+/// (spec F5), each with the offset last applied to it in `offsets`. Photos
+/// without a capture time are only counted.
+pub(crate) struct Shots {
+    pub photos: Vec<Photo>,
+    pub cameras: Vec<Camera>,
+    pub undated: usize,
+}
+
+impl Shots {
+    pub fn new(found: Vec<FoundPhoto>, offsets: &Offsets) -> Self {
+        let mut cameras: Vec<Camera> = Vec::new();
+        let mut index: HashMap<String, usize> = HashMap::new();
+        let mut photos = Vec::new();
+        let mut undated = 0;
+        for p in found {
+            let Some(time) = p.time.as_deref().and_then(parse_time) else {
+                undated += 1;
+                continue;
+            };
+            let key = camera_key(p.model.as_deref(), p.serial.as_deref());
+            let camera = *index.entry(key.clone()).or_insert_with(|| {
+                cameras.push(Camera {
+                    remembered: offsets.get(&key),
+                    key,
+                    model: p.model.clone(),
+                    serial: p.serial.clone(),
+                    photos: 0,
+                });
+                cameras.len() - 1
+            });
+            cameras[camera].photos += 1;
+            photos.push(Photo {
+                id: p.id,
+                time,
+                camera,
+            });
+        }
+        // Spec: cameras sorted by name. Photo indexes follow the new order.
+        let mut order: Vec<usize> = (0..cameras.len()).collect();
+        let name = |c: &Camera| {
+            (
+                c.model.clone().unwrap_or_default().to_lowercase(),
+                c.serial.clone().unwrap_or_default(),
+            )
+        };
+        order.sort_by_key(|&i| name(&cameras[i]));
+        let mut new_index = vec![0; cameras.len()];
+        for (new, &old) in order.iter().enumerate() {
+            new_index[old] = new;
+        }
+        for p in &mut photos {
+            p.camera = new_index[p.camera];
+        }
+        let cameras = order.into_iter().map(|i| cameras[i].clone()).collect();
+        Self {
+            photos,
+            cameras,
+            undated,
+        }
+    }
+
+    pub fn offset(&self, offsets: &HashMap<String, i32>, camera: usize) -> i32 {
+        offset_of(&self.cameras, offsets, camera)
+    }
+
+    pub fn suggest(&self, spans: &[Span], keys: &[String]) -> HashMap<String, Option<i32>> {
+        suggest_for(&self.photos, &self.cameras, spans, keys)
+    }
+}
+
+/// Offset of camera `camera` in `offsets` (minutes by camera key; a missing
+/// camera has none), within ±24 h.
+fn offset_of(cameras: &[Camera], offsets: &HashMap<String, i32>, camera: usize) -> i32 {
+    offsets
+        .get(&cameras[camera].key)
+        .copied()
+        .unwrap_or(0)
+        .clamp(-matching::MAX_OFFSET_MIN, matching::MAX_OFFSET_MIN)
+}
+
+/// Suggested offset of each camera `keys` names, for `spans` (spec F5
+/// "Suggest"; `None`: no offset puts a photo of it in a dive).
+fn suggest_for(
+    photos: &[Photo],
+    cameras: &[Camera],
+    spans: &[Span],
+    keys: &[String],
+) -> HashMap<String, Option<i32>> {
+    keys.iter()
+        .map(|key| {
+            let times: Vec<NaiveDateTime> = photos
+                .iter()
+                .filter(|p| &cameras[p.camera].key == key)
+                .map(|p| p.time)
+                .collect();
+            (key.clone(), matching::suggest_offset(spans, &times))
+        })
+        .collect()
 }
 
 /// Photos of the chosen dives' period, kept between the live counts and
@@ -126,13 +228,24 @@ pub struct Preview {
 /// every later step (live counts, "Suggest", "Apply") names the search it
 /// works on. A slower, older search (more dives, more profiles to read) can
 /// then never replace the newer one the screen shows.
-#[derive(Default)]
-pub struct Searches {
+///
+/// Tag Selection keeps the photos of the selection the same way, in a
+/// `Searches` of its own (`S` is then [`crate::selection::Selection`]).
+pub struct Searches<S = Session> {
     started: u64,
-    kept: Option<(u64, Session)>,
+    kept: Option<(u64, S)>,
 }
 
-impl Searches {
+impl<S> Default for Searches<S> {
+    fn default() -> Self {
+        Self {
+            started: 0,
+            kept: None,
+        }
+    }
+}
+
+impl<S> Searches<S> {
     /// Starts search `number`, unless a search numbered as high or higher
     /// started already (the screen asked for this one earlier).
     pub fn start(&mut self, number: u64) -> bool {
@@ -150,7 +263,7 @@ impl Searches {
 
     /// Keeps the session of search `number`, unless a newer search started
     /// since. Returns whether it was kept.
-    pub fn finish(&mut self, number: u64, session: Session) -> bool {
+    pub fn finish(&mut self, number: u64, session: S) -> bool {
         if number != self.started {
             return false;
         }
@@ -159,7 +272,7 @@ impl Searches {
     }
 
     /// The session of search `number`; `None` when another one is kept.
-    pub fn get(&self, number: u64) -> Option<&Session> {
+    pub fn get(&self, number: u64) -> Option<&S> {
         match &self.kept {
             Some((kept, session)) if *kept == number => Some(session),
             _ => None,
@@ -187,50 +300,11 @@ impl Session {
     ) -> Self {
         dives.sort_by_key(|d| d.start);
         let spans = dives.iter().map(Span::from).collect();
-        let mut cameras: Vec<Camera> = Vec::new();
-        let mut index: HashMap<String, usize> = HashMap::new();
-        let mut photos = Vec::new();
-        let mut undated = 0;
-        for p in found {
-            let Some(time) = p.time.as_deref().and_then(parse_time) else {
-                undated += 1;
-                continue;
-            };
-            let key = camera_key(p.model.as_deref(), p.serial.as_deref());
-            let camera = *index.entry(key.clone()).or_insert_with(|| {
-                cameras.push(Camera {
-                    remembered: offsets.get(&key),
-                    key,
-                    model: p.model.clone(),
-                    serial: p.serial.clone(),
-                    photos: 0,
-                });
-                cameras.len() - 1
-            });
-            cameras[camera].photos += 1;
-            photos.push(Photo {
-                id: p.id,
-                time,
-                camera,
-            });
-        }
-        // Spec: cameras sorted by name. Photo indexes follow the new order.
-        let mut order: Vec<usize> = (0..cameras.len()).collect();
-        let name = |c: &Camera| {
-            (
-                c.model.clone().unwrap_or_default().to_lowercase(),
-                c.serial.clone().unwrap_or_default(),
-            )
-        };
-        order.sort_by_key(|&i| name(&cameras[i]));
-        let mut new_index = vec![0; cameras.len()];
-        for (new, &old) in order.iter().enumerate() {
-            new_index[old] = new;
-        }
-        for p in &mut photos {
-            p.camera = new_index[p.camera];
-        }
-        let cameras = order.into_iter().map(|i| cameras[i].clone()).collect();
+        let Shots {
+            photos,
+            cameras,
+            undated,
+        } = Shots::new(found, offsets);
         Self {
             search,
             dives,
@@ -287,12 +361,7 @@ impl Session {
     }
 
     fn offset(&self, choices: &Choices, camera: usize) -> i32 {
-        choices
-            .offsets
-            .get(&self.cameras[camera].key)
-            .copied()
-            .unwrap_or(0)
-            .clamp(-matching::MAX_OFFSET_MIN, matching::MAX_OFFSET_MIN)
+        offset_of(&self.cameras, &choices.offsets, camera)
     }
 
     fn ignored(&self, choices: &Choices, camera: usize) -> bool {
@@ -371,17 +440,7 @@ impl Session {
 
     /// Suggested offset of each camera (spec F5 "Suggest").
     pub fn suggest(&self, keys: &[String]) -> HashMap<String, Option<i32>> {
-        keys.iter()
-            .map(|key| {
-                let times: Vec<NaiveDateTime> = self
-                    .photos
-                    .iter()
-                    .filter(|p| &self.cameras[p.camera].key == key)
-                    .map(|p| p.time)
-                    .collect();
-                (key.clone(), matching::suggest_offset(&self.spans, &times))
-            })
-            .collect()
+        suggest_for(&self.photos, &self.cameras, &self.spans, keys)
     }
 
     /// Dives that will receive photos, as indexes, and whether any of their

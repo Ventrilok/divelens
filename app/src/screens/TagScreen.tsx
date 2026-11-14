@@ -2,22 +2,49 @@
 // the photos selected in Lightroom, whatever their time. The selection is
 // made in Lightroom and followed live; Lightroom resolves it again at the
 // moment of Apply, in one Undo step.
+//
+// When the chosen dive has a profile, the photos taken during it also get
+// their per-photo values (F6): the selection is described photo by photo,
+// each camera gets a clock offset as in Create Collections, and Apply
+// writes only if the selection is still the one described.
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { onApplyProgress, onSelectionPreview, selectionPreview, tagSelection } from "../api";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  findSelectionPhotos,
+  onApplyProgress,
+  onSelectionPreview,
+  selectionPreview,
+  suggestTagOffsets,
+  tagPreview,
+  tagSelection,
+} from "../api";
+import { clampOffset, keepOffsets } from "../cameras";
 import { coveringDive } from "../covers";
-import { logRef } from "../diveLog";
+import { logRef, nextSearchNumber } from "../diveLog";
 import { sourceName } from "../sourceText";
-import { DiveDetail } from "../components/DiveDetail";
+import { CameraCard } from "../components/CameraCard";
+import { DiveDetail, useProfile } from "../components/DiveDetail";
 import { LogNotice } from "../components/LogNotice";
 import { DiveList } from "../components/DiveList";
 import { FilterBar } from "../components/FilterBar";
 import { NO_PICK, pickAround, SitePicker, type SitePick } from "../components/SitePicker";
 import { formatGps, formatPhotoSpan } from "../format";
 import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters, type Sort } from "../filters";
-import { t, tn } from "../i18n";
+import { formatInt, t, tn } from "../i18n";
 import { gpsInput } from "../sites";
-import type { ApplyOutcome, Dive, DiveLog, LightroomStatus, SelectionPreview, Site, TagChoice, TagError } from "../types";
+import type {
+  ApplyOutcome,
+  CollectionsError,
+  Dive,
+  DiveLog,
+  LightroomStatus,
+  SelectionPhotos,
+  SelectionPreview,
+  Site,
+  TagChoice,
+  TagError,
+  TagPreview,
+} from "../types";
 
 const THUMBNAILS = 6;
 
@@ -27,11 +54,48 @@ type Run =
   | { state: "done"; count: number }
   | { state: "failed"; message: string };
 
+/** The selection described photo by photo, for the per-photo values; `version`: the selection's. */
+interface Described {
+  photos: SelectionPhotos;
+  version: number;
+}
+
+/** Live counts, and the description they were computed for. */
+interface Counts {
+  search: number;
+  preview: TagPreview;
+}
+
 function siteLine(site: Site): string {
   return [site.name, site.location, site.country].filter(Boolean).join(", ");
 }
 
+/** Why the selection could not be described; null: a newer description replaced this one. */
+function describeFailure(e: CollectionsError): string | null {
+  switch (e.error) {
+    case "noPhotos":
+    case "logChanged": // the app reads the log again and starts the screen again
+      return null;
+    case "notConnected":
+    case "linkLost":
+      return t("tag.disconnected");
+    case "lightroom":
+      return t("tag.perPhoto.failed", { detail: e.detail ?? e.reason });
+    case "source":
+      return t("tag.perPhoto.failed", { detail: e.detail.detail });
+    default:
+      return t("tag.perPhoto.failed", { detail: e.error });
+  }
+}
+
+/** Nothing was written because the selection is no longer the one described: it is described again. */
+function selectionChanged(e: ApplyOutcome | TagError): boolean {
+  if ("outcome" in e) return e.outcome === "failed" && (e.reason === "selectionChanged" || e.reason === "staleSelection");
+  return e.error === "noPhotos";
+}
+
 function failure(e: ApplyOutcome | TagError): string {
+  if (selectionChanged(e)) return t("tag.err.selectionChanged");
   const key = "outcome" in e ? (e.outcome === "failed" ? e.reason : "") : e.error;
   switch (key) {
     case "noSelection":
@@ -111,18 +175,119 @@ export function TagScreen({
   }, []);
   const thumbnails = preview.version === lr.selectionVersion ? preview.thumbnails : [];
 
-  // The dive covering the selection is pointed out and shown in the detail
-  // card, never chosen for the user.
-  const covering = useMemo(
-    () => coveringDive(dives, lr.coverFrom, lr.coverTo),
-    [dives, lr.coverFrom, lr.coverTo],
-  );
+  const chosen: Dive | null = withDive ? (dives.find((d) => d.id === chosenId) ?? null) : null;
+  const chosenRef = useRef(chosenId);
+  chosenRef.current = chosenId;
+  const span = chosen && { start: chosen.start, end: chosen.end };
+  const spanKey = span ? `${span.start}|${span.end}` : "";
+
+  // Per-photo values: for a dive with a profile, unless it cannot be read
+  // (the dive data are then written alone, as before per-photo values).
+  const profile = useProfile(logRef(log.source), chosen);
+  const hasProfile = chosen !== null && chosen.hasProfile;
+  const unreadable = hasProfile && profile.status === "error";
+  const needsValues = hasProfile && !unreadable;
+  const profileLoading = needsValues && profile.status === "loading";
+
+  // The selection photo by photo, described for such a dive, again whenever
+  // the selection changes, and its cameras: each keeps the offset shown, a
+  // new one starts from the offset last applied to it (spec F8). The last
+  // description and counts stay on screen until the new ones arrive.
+  const [described, setDescribed] = useState<Described | null>(null);
+  const [reading, setReading] = useState(false);
+  const [readFailure, setReadFailure] = useState<string | null>(null);
+  const [again, setAgain] = useState(0);
+  const [offsets, setOffsets] = useState<Record<string, number>>({});
+  const [touched, setTouched] = useState<Set<string>>(new Set());
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [counts, setCounts] = useState<Counts | null>(null);
+  const wanted = needsValues && lr.connected && lr.selected > 0;
   useEffect(() => {
-    if (covering) setFocusedId(covering.id);
+    if (!wanted) {
+      setDescribed(null);
+      setCounts(null);
+      setReading(false);
+      setReadFailure(null);
+      return;
+    }
+    let live = true;
+    const version = lr.selectionVersion;
+    setReading(true);
+    setReadFailure(null);
+    findSelectionPhotos(logRef(log.source), nextSearchNumber())
+      .then((photos) => {
+        if (!live) return;
+        const keys = new Set(photos.cameras.map((c) => c.key));
+        setOffsets((o) => keepOffsets(o, photos.cameras));
+        setTouched((s) => new Set([...s].filter((k) => keys.has(k))));
+        setNotes((n) => Object.fromEntries(Object.entries(n).filter(([k]) => keys.has(k))));
+        setDescribed({ photos, version });
+        setReading(false);
+      })
+      .catch((e: CollectionsError) => {
+        const message = live ? describeFailure(e) : null;
+        if (!message) return;
+        setReadFailure(message);
+        setReading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [wanted, lr.selectionVersion, again]);
+  // The description Apply may use: of the selection shown, and done.
+  const current =
+    described && described.version === lr.selectionVersion && !reading && !readFailure ? described.photos : null;
+
+  // Live counts for the dive chosen and the offsets shown: the latest answer
+  // wins. Refused once a newer description replaced this one: the last
+  // counts stay until the newer ones arrive.
+  const asked = useRef(0);
+  useEffect(() => {
+    if (!described) return;
+    const n = ++asked.current;
+    const search = described.photos.search;
+    tagPreview(search, span, offsets)
+      .then((preview) => n === asked.current && setCounts({ search, preview }))
+      .catch(() => {});
+  }, [described, offsets, spanKey]);
+  const shownCounts = counts?.preview ?? null;
+  const freshCounts = counts && current && counts.search === current.search ? counts.preview : null;
+
+  // A note on a camera (no offset found) belongs to the dive it was asked for.
+  useEffect(() => setNotes({}), [chosenId]);
+
+  // The dive covering the selection is pointed out, never chosen for the
+  // user. It follows the offsets shown once the selection is described for
+  // a dive with a profile; before, the offsets last applied. It is shown in
+  // the detail card only until a dive is chosen: then the detail stays.
+  const coverFrom = described && shownCounts ? shownCounts.coverFrom : lr.coverFrom;
+  const coverTo = described && shownCounts ? shownCounts.coverTo : lr.coverTo;
+  const covering = useMemo(() => coveringDive(dives, coverFrom, coverTo), [dives, coverFrom, coverTo]);
+  useEffect(() => {
+    if (covering && chosenId === null) setFocusedId(covering.id);
   }, [covering]);
 
+  const setOffset = (key: string, min: number) => {
+    setOffsets((o) => ({ ...o, [key]: clampOffset(min) }));
+    setTouched((s) => new Set(s).add(key));
+    setNotes((n) => ({ ...n, [key]: "" }));
+  };
+  const suggest = (key: string) => {
+    if (!current || !span) return;
+    const forDive = chosenId;
+    suggestTagOffsets(current.search, span, [key])
+      .then((found) => {
+        // Another dive chosen meanwhile: this suggestion was for the previous one.
+        if (forDive !== chosenRef.current) return;
+        const value = found[key];
+        if (value !== null && value !== undefined) setOffsets((o) => ({ ...o, [key]: value }));
+        setNotes((n) => ({ ...n, [key]: value === null ? t("tag.perPhoto.noSuggestion") : "" }));
+      })
+      // Refused once a newer description replaced this one: nothing to suggest.
+      .catch(() => {});
+  };
+
   const focused = dives.find((d) => d.id === focusedId) ?? null;
-  const chosen: Dive | null = withDive ? (dives.find((d) => d.id === chosenId) ?? null) : null;
   const diveSiteUsable = chosen !== null && chosen.site.id !== null;
   const usesDiveSite = withPlace && placeKind === "diveSite" && diveSiteUsable;
   const pickedSite = sites.find((s) => s.id === pick.siteId) ?? null;
@@ -145,6 +310,9 @@ export function TagScreen({
   else if (lr.selected === 0) blocker = t("tag.selectInLr");
   else if (!withDive && !withPlace) blocker = t("tag.chooseSomething");
   else if (withDive && !chosen) blocker = t("tag.chooseDive");
+  else if (needsValues && readFailure) blocker = readFailure;
+  else if (profileLoading) blocker = t("detail.profileLoading");
+  else if (needsValues && (!current || !freshCounts)) blocker = t("tag.perPhoto.reading");
   else if (withPlace && !usesDiveSite && !pickedSite) blocker = t("tag.chooseSite");
   else if (gpsError) blocker = t("tag.badGps");
 
@@ -164,18 +332,27 @@ export function TagScreen({
         : usesDiveSite
           ? { kind: "diveSite" }
           : { kind: "site", siteId: pick.siteId as string, lat: gps?.lat ?? null, lon: gps?.lon ?? null },
+      search: needsValues && current ? current.search : null,
+      offsets: needsValues ? offsets : {},
     };
     onDismissNotice();
     setRun({ state: "writing", done: 0, total: lr.selected });
     tagSelection(logRef(log.source), choice)
-      .then((outcome) =>
+      .then((outcome) => {
         setRun(
           outcome.outcome === "applied"
             ? { state: "done", count: outcome.count }
             : { state: "failed", message: failure(outcome) },
-        ),
-      )
-      .catch((e: TagError) => setRun({ state: "failed", message: failure(e) }));
+        );
+        // Described again: the offsets applied are now the remembered ones,
+        // or the selection changed meanwhile.
+        if (needsValues) setAgain((n) => n + 1);
+        if (outcome.outcome === "applied") setTouched(new Set());
+      })
+      .catch((e: TagError) => {
+        setRun({ state: "failed", message: failure(e) });
+        if (selectionChanged(e)) setAgain((n) => n + 1);
+      });
   };
 
   const writing = run.state === "writing";
@@ -260,7 +437,59 @@ export function TagScreen({
                 )}
                 <DiveDetail log={log.source} dive={focused} units={units} capabilities={capabilities} />
               </div>
-              <p className="muted small">{t("tag.diveDataWrites")}</p>
+              {chosen && !chosen.hasProfile && <p className="small">{t("tag.perPhoto.noProfile")}</p>}
+              {unreadable && <p className="small">{t("tag.perPhoto.unreadable")}</p>}
+              {needsValues && (
+                <section className="tag-clock" aria-labelledby="h-tag-clock">
+                  <div className="tag-clock-head">
+                    <h2 id="h-tag-clock">{t("coll.clock.title")}</h2>
+                    <p className="muted small">{t("coll.clock.text")}</p>
+                  </div>
+                  {readFailure ? (
+                    <div className="notice notice-warn" role="alert">
+                      <span>{readFailure}</span>
+                      <button type="button" className="btn btn-g" onClick={() => setAgain((n) => n + 1)}>
+                        {t("coll.retry")}
+                      </button>
+                    </div>
+                  ) : !described || !shownCounts ? (
+                    <p className="muted small">
+                      {profileLoading ? t("detail.profileLoading") : t("tag.perPhoto.reading")}
+                    </p>
+                  ) : (
+                    <>
+                      <p className="strong" aria-live="polite">
+                        {tn("tag.perPhoto.count", shownCounts.inDive, { total: formatInt(shownCounts.total) })}
+                      </p>
+                      {described.photos.cameras.length > 0 && (
+                        <div className="cams">
+                          {described.photos.cameras.map((c) => {
+                            const count = shownCounts.cameras.find((k) => k.key === c.key);
+                            const inDive = count?.inDives ?? 0;
+                            return (
+                              <CameraCard
+                                key={c.key}
+                                camera={c}
+                                offset={offsets[c.key] ?? 0}
+                                remembered={
+                                  c.remembered !== null && offsets[c.key] === c.remembered && !touched.has(c.key)
+                                }
+                                inDives={inDive}
+                                outside={count?.outside ?? 0}
+                                gauge={t("tag.perPhoto.inDive", { n: formatInt(inDive) })}
+                                note={notes[c.key] || null}
+                                onOffset={(m) => setOffset(c.key, m)}
+                                onSuggest={() => suggest(c.key)}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </section>
+              )}
+              <p className="muted small">{t(needsValues ? "tag.diveDataWritesPerPhoto" : "tag.diveDataWrites")}</p>
             </>
           ) : (
             <p className="muted small">{t("tag.diveDataOff")}</p>

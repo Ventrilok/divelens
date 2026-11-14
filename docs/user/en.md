@@ -73,7 +73,7 @@ Dive Lens looks in the whole catalog for photos taken over the period of the cho
 - You can also type the offset (hours:minutes) or adjust it yourself.
 - **Ignore** leaves out a camera, for example a phone that stayed on the boat: its photos are neither counted nor tagged.
 
-Dive Lens remembers the last offset used for each camera and proposes it next time.
+Dive Lens remembers the last offset used for each camera and proposes it next time, here and in Tag Selection (section 4).
 
 **Include photos taken at the surface.** Optional, 0 minutes by default: up to N minutes before and after each dive, for photos taken on the boat just before going in or just after getting out. They join the dive's collection and get the dive data, without depth.
 
@@ -108,15 +108,22 @@ For photos without a reliable time, to attach photos to a dive by hand, or to se
 
 1. In Lightroom, select the photos. The app follows the selection live and shows its thumbnails.
 2. Tick what to write:
-   - **Dive data**: then click a dive in the list. The dive whose times cover the selection carries the **Covers the selection** badge (it uses the camera's last offset). It is only a hint: you choose.
+   - **Dive data**: then click a dive in the list. The dive whose times cover the selection carries the **Covers the selection** badge (it uses the last offset used for each camera, then the offsets shown under the list once you chose a dive with a profile). It is only a hint: you choose.
    - **Location**: the **Dive site** of the chosen dive, or an **Other site** chosen by country › location › site among the sites of your log. Its GPS can be edited (decimal degrees, for example `-20.2531` and `57.5125`).
 3. Click **Apply to N photos**. The photos selected in Lightroom **at that moment** are written.
 
-What is written: with **Dive data**, the dive number, start, end, duration, max depth, temperatures and rating (no per-photo depth and no collection); with **Location**, country, city, location and GPS.
+**Camera clocks and per-photo data.** When the chosen dive has a profile, the photos taken during the dive also get their **depth, temperature and time into the dive**, exactly as in Create Collections. Under the dive list, **Camera clocks** shows one card per camera of the selection, as in Create Collections step 2: set its clock offset, or click **Suggest** for the offset that puts the most selected photos in the dive. Each offset starts from the last one used for that camera (in either screen); with none, it starts at 0:00. The line **Per-photo data: N photos of M in the dive** follows your settings. A dive without a profile shows "No profile: no per-photo data" instead, and a dive whose profile cannot be read "Profile could not be read: no per-photo data": the dive data are then written without per-photo data.
+
+- The photos outside the dive (after the offset) get the dive data, without per-photo data. There is no surface margin here.
+- The offsets used are remembered for next time, shared with Create Collections.
+- If the selection changes in Lightroom just as you click **Apply**, nothing is written: check the per-photo data, then apply again.
+
+What is written: with **Dive data**, the dive number, start, end, duration, max depth, temperatures and rating, and, on the photos taken during a dive with a profile, the depth, temperature, time into the dive and clock offset (and the GPS altitude when **Copy depth to GPS altitude** is on, section 5); no collection. With **Location**, country, city, location and GPS.
 
 - A value the chosen dive does not have (temperature, rating…) clears the old Dive Lens value on the photo, so the fields always describe a single dive.
 - A site without country, city or GPS leaves the values already on the photo untouched (a GPS position from a phone stays).
-- With **Dive data**, a photo that already carries a **different** dive loses that dive's own values: depth, temperature, elapsed time and clock offset. Its GPS altitude is cleared only if it is the one Dive Lens copied from the old depth; any other altitude stays. The photo stays in its collection: move it yourself if needed.
+- With **Dive data**, a photo that already carries a **different** dive loses that dive's own values: depth, temperature, elapsed time and clock offset, replaced by the new ones when the photo was taken during the new dive. Its GPS altitude is cleared only if it is the one Dive Lens copied from the old depth (unless a new depth is copied there); any other altitude stays. The photo stays in its collection: move it yourself if needed.
+- Tagging a photo with the dive it already carries rewrites its per-photo data when it was taken during the dive, with the offset shown; the other photos keep theirs.
 - **Edit › Undo** in Lightroom reverts everything in one step, GPS and altitude included.
 
 ---

@@ -15,28 +15,37 @@ const DiveMap = lazy(() => import("./DiveMap"));
 
 type ProfileState = { status: "loading" } | { status: "ok"; samples: Sample[] } | { status: "error" };
 
-/** Profile of a dive of `log`, the dive log the screen shows. */
-function useProfile(log: LogRef, dive: Dive): ProfileState {
-  const [state, setState] = useState<ProfileState>({ status: "loading" });
+/**
+ * Profile of a dive of `log`, the dive log the screen shows (read once,
+ * then kept). `null` or a dive without a profile: stays "loading", unused.
+ */
+export function useProfile(log: LogRef, dive: Dive | null): ProfileState {
+  // The state names the dive it is for: another dive's is never returned.
+  const [state, setState] = useState<{ id: string | null; profile: ProfileState }>({
+    id: null,
+    profile: { status: "loading" },
+  });
+  const id = dive?.id ?? null;
+  const hasProfile = dive?.hasProfile ?? false;
   useEffect(() => {
-    if (!dive.hasProfile) return;
+    if (id === null || !hasProfile) return;
     const source = { kind: log.kind, path: log.path };
-    const cached = profiles.get(source, dive.id);
+    const cached = profiles.get(source, id);
     if (cached) {
-      setState({ status: "ok", samples: cached });
+      setState({ id, profile: { status: "ok", samples: cached } });
       return;
     }
     let live = true;
-    setState({ status: "loading" });
+    setState({ id, profile: { status: "loading" } });
     profiles
-      .load(source, dive.id)
-      .then((samples) => live && setState({ status: "ok", samples }))
-      .catch(() => live && setState({ status: "error" }));
+      .load(source, id)
+      .then((samples) => live && setState({ id, profile: { status: "ok", samples } }))
+      .catch(() => live && setState({ id, profile: { status: "error" } }));
     return () => {
       live = false;
     };
-  }, [log.kind, log.path, dive.id, dive.hasProfile]);
-  return state;
+  }, [log.kind, log.path, id, hasProfile]);
+  return state.id === id ? state.profile : { status: "loading" };
 }
 
 export function siteSubtitle(dive: Dive): string {

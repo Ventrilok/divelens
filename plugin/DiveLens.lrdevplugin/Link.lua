@@ -10,7 +10,8 @@ small "link file" in the app's settings folder. The app reads it, connects,
 and says hello with the token; nothing is answered before that.
 
 Each message is one JSON object on one line. The plugin pushes the current
-photo selection whenever it changes. Its hello carries the previous plugin's
+photo selection whenever it changes, and describes it photo by photo when
+the app asks (Tag Selection's per-photo values). Its hello carries the previous plugin's
 settings (same plug-in identifier, so the same preferences) for the app to
 take over once. Messages are handled in the link's own
 task, never inside socket callbacks, so they may use the catalog.
@@ -37,7 +38,7 @@ local Json = require "Json"
 local Log = require "Log"
 local Tagging = require "Tagging"
 
-local PROTOCOL = 5
+local PROTOCOL = 6
 local APP_ID = "com.querton.divelens.desktop" -- the app's bundle identifier
 local LINK_FILE = "lightroom-link.json"
 local TICK = 0.1           -- seconds between two passes of the link task
@@ -167,14 +168,31 @@ local function describePhotos(photos)
     return list
 end
 
+local function photoId(photo)
+    return tostring(photo.localIdentifier)
+end
+
+-- The selected `photos` as described to the app (describePhotos), and as a
+-- set (Tagging.photoSet). Lightroom's metadata is read once per selection:
+-- kept with the photos it describes, and reused while the selection is
+-- exactly those photos (for the live selection and describeSelection).
+local function describedSelection(s, photos)
+    local kept = s.selectionDescribed
+    if kept and Tagging.sameSelection(kept.set, photos, photoId) then return kept.list, kept.set end
+    local list = #photos > 0 and describePhotos(photos) or {}
+    local set = Tagging.photoSet(photos, photoId)
+    s.selectionDescribed = { set = set, list = list }
+    return list, set
+end
+
 -- Earliest and latest capture times of the selection, wall-clock
 -- "YYYY-MM-DDTHH:MM:SS" (or nil), overall and per camera (the app applies
--- each camera's remembered clock offset).
-local function timeRange(photos)
-    if #photos == 0 then return nil end
+-- each camera's remembered clock offset). `list`: the photos described.
+local function timeRange(list)
+    if #list == 0 then return nil end
     local first, last
     local cameras, order = {}, {}
-    for _, p in ipairs(describePhotos(photos)) do
+    for _, p in ipairs(list) do
         local t = p.time
         if t then
             if not first or t < first then first = t end
@@ -226,7 +244,7 @@ local function pushSelection(s, force)
     if not force and signature == s.selectionSignature then return end
     s.selectionVersion = s.selectionVersion + 1
     s.thumbnailOutbox = {}
-    local from, to, cameras = timeRange(photos)
+    local from, to, cameras = timeRange((describedSelection(s, photos)))
     if send(s, {
         type = "selection", count = #photos, version = s.selectionVersion, from = from, to = to,
         cameras = (cameras and #cameras > 0) and cameras or Json.emptyArray,
@@ -358,7 +376,11 @@ end
 -- second (Tagging.splitGps, writeGpsLater), so one Undo reverts it all. A
 -- photo that carried another dive also loses that dive's own values
 -- (Tagging.retagChanges), read from the photo inside the first write; its
--- altitude, when cleared, in the second. Always answers the app.
+-- altitude, when cleared, in the second. With per-photo values
+-- (Tagging.planPhotos), the selection must be exactly the one described to
+-- the app (describeSelection): otherwise nothing is written. The photos
+-- taken during the dive get their values, and the other dive's are not
+-- cleared on them first (Tagging.notOverwritten). Always answers the app.
 local function applyTags(s, message)
     local id = message.id
     local function fail(reason, detail)
@@ -367,22 +389,29 @@ local function applyTags(s, message)
     end
     local changes, why = Tagging.plan(message, formatDate)
     if not changes then return fail("badRequest", why) end
+    local perPhoto, bad = Tagging.planPhotos(message)
+    if bad then return fail("badRequest", bad) end
     local catalog = LrApplication.activeCatalog()
     -- Never the whole filmstrip: getTargetPhotos returns it when nothing is selected.
     if not catalog:getTargetPhoto() then return fail("noSelection") end
     local photos = catalog:getTargetPhotos()
+    if perPhoto then
+        local described = s.described
+        if not (described and described.id == perPhoto.selection) then return fail("staleSelection") end
+        if not Tagging.sameSelection(described.set, photos, photoId) then return fail("selectionChanged") end
+    end
     local total = #photos
     local undoName = LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)"
     local progress = Tagging.progress(total, PROGRESS_EVERY)
-    local cleared, later = 0, {}
+    local cleared, withValues, later = 0, 0, {}
     local ok, status = LrTasks.pcall(function()
         return catalog:withWriteAccessDo(undoName, function()
             local before = Tagging.writesDive(changes) and photosBefore(catalog, photos) or {}
             for _, photo in ipairs(photos) do
-                local extra = before[photo] and Tagging.retagChanges(before[photo], changes) or {}
-                -- An altitude to clear always comes with a depth to clear.
-                if #extra > 0 then cleared = cleared + 1 end
-                local now, afterwards = Tagging.splitGps(changes, extra)
+                local own = perPhoto and perPhoto.photos[photoId(photo)]
+                if own then withValues = withValues + 1 end
+                local now, afterwards, replaced = Tagging.photoWrites(changes, before[photo], own)
+                if replaced then cleared = cleared + 1 end
                 write(photo, now)
                 if #afterwards > 0 then later[#later + 1] = { photo = photo, changes = afterwards } end
                 advance(s, id, total, progress)
@@ -401,13 +430,40 @@ local function applyTags(s, message)
         return
     end
     logSecondWrite(later, second)
-    Log.info("tagged %d photos; another dive's values cleared on %d (GPS altitude on %d)", total, cleared, second.cleared)
+    Log.info("tagged %d photos, per-photo values on %d; another dive's values cleared or replaced on %d (GPS altitude cleared on %d)",
+        total, withValues, cleared, second.cleared)
     send(s, { type = "applied", id = id, count = total })
 end
 
--- Create Collections ----------------------------------------------------------
-
+-- Sends `list` (described photos) to the app as "photos" messages of at
+-- most PHOTOS_PER_MESSAGE, the last one marked done.
 local PHOTOS_PER_MESSAGE = 200
+
+local function sendPhotos(s, id, list)
+    local i = 1
+    repeat
+        local chunk = {}
+        for j = i, math.min(i + PHOTOS_PER_MESSAGE - 1, #list) do chunk[#chunk + 1] = list[j] end
+        i = i + PHOTOS_PER_MESSAGE
+        local done = i > #list
+        send(s, { type = "photos", id = id, photos = #chunk > 0 and chunk or Json.emptyArray, done = done })
+        if not done then LrTasks.yield() end
+    until done
+    s.lastHeard = LrDate.currentTime()
+end
+
+-- The photos selected now, described to the app for Tag Selection's
+-- per-photo values, and kept: an "apply" naming this description writes
+-- only if the selection is still exactly these photos (applyTags).
+local function describeSelection(s, message)
+    local photos = selection()
+    local list, set = describedSelection(s, photos)
+    s.described = { id = message.id, set = set }
+    Log.debug("selection described: %d photos", #list)
+    sendPhotos(s, message.id, list)
+end
+
+-- Create Collections ----------------------------------------------------------
 
 -- Every photo captured between two days (inclusive, "YYYY-MM-DD"), whole
 -- catalog. Lightroom searches by day only and on the adjusted capture time;
@@ -436,16 +492,7 @@ local function findPhotos(s, message)
         if not p.time then undated = undated + 1 end
     end
     Log.info("found %d photos from %s to %s (%d without capture time)", #list, message.from, message.to, undated)
-    local i = 1
-    repeat
-        local chunk = {}
-        for j = i, math.min(i + PHOTOS_PER_MESSAGE - 1, #list) do chunk[#chunk + 1] = list[j] end
-        i = i + PHOTOS_PER_MESSAGE
-        local done = i > #list
-        send(s, { type = "photos", id = id, photos = #chunk > 0 and chunk or Json.emptyArray, done = done })
-        if not done then LrTasks.yield() end
-    until done
-    s.lastHeard = LrDate.currentTime()
+    sendPhotos(s, id, list)
 end
 
 local function findChild(list, name)
@@ -609,9 +656,13 @@ local function handle(s, text)
         if Log.setLevel(message.level) then Log.info("log level: %s", tostring(message.level)) end
     elseif message.type == "apply" then
         applyTags(s, message)
-    elseif message.type == "findPhotos" or message.type == "applyCollections" or message.type == "listSets" then
+    elseif message.type == "findPhotos" or message.type == "applyCollections" or message.type == "listSets"
+        or message.type == "describeSelection" then
         -- The app waits for an answer: an error still gets one.
-        local handlers = { findPhotos = findPhotos, applyCollections = applyCollections, listSets = listSets }
+        local handlers = {
+            findPhotos = findPhotos, applyCollections = applyCollections, listSets = listSets,
+            describeSelection = describeSelection,
+        }
         local handler = handlers[message.type]
         local ok, err = LrTasks.pcall(handler, s, message)
         if not ok then
@@ -649,6 +700,8 @@ local function closeSockets(s)
     s.authed = false
     s.selectionSignature = nil
     s.search = nil -- photo ids belong to one app session
+    s.described = nil
+    s.selectionDescribed = nil
     s.thumbnailRequests = {}
     s.thumbnailOutbox = {}
     s.framing = Framing.new()
