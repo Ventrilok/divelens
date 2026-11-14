@@ -1,6 +1,7 @@
-//! Clock offset last applied to each camera by "Create Collections" (spec F5):
-//! pre-filled the next time, and used by Tag Selection's "covers the
-//! selection" hint (F8). One small JSON file per dive application in the app
+//! Clock offset last applied to each camera by "Create Collections" (spec F5)
+//! or "Tag Selection" (F8): pre-filled the next time in both, and used by Tag
+//! Selection's "covers the selection" hint until the selection's cameras are
+//! shown with their offsets. One small JSON file per dive application in the app
 //! config folder: the same dive may start at another time in another
 //! application's log (seen after importing a MacDive log into Subsurface).
 
