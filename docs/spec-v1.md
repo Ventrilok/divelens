@@ -298,6 +298,11 @@ Un fichier journal est conservé pour le diagnostic, consultable depuis les rég
 
 **Emplacement [Décidé, 2026-11-12]** : l'application écrit son journal (`DiveLens App.log`) dans le dossier des journaux de Lightroom, à côté de celui du plugin (`DiveLens.log`) : `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/` sur Mac, `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\` sur Windows. « Afficher le journal » ouvre ce dossier, avec les deux fichiers côte à côte. Le niveau choisi (Normal / Détaillé) s'applique aux deux. Le journal de l'application est limité en taille : au-delà, l'ancien est gardé une fois puis remplacé.
 
+**Signaler un problème [Décidé, 2026-11-14]** :
+- Les journaux s'envoient par e-mail à divelens@querton.com, jamais dans un ticket GitHub : le dépôt est public, et les journaux contiennent les sites de plongée et des chemins de fichiers. Le guide (F12), le formulaire de signalement de bug et `CONTRIBUTING.md` le disent : décrire le problème dans un ticket ou à cette adresse, puis envoyer les deux journaux à cette adresse seulement.
+- Prise en charge d'une nouvelle application de plongée : les carnets réels anonymisés envoyés par le public sont acceptés, en plus des carnets fictifs, en privé à la même adresse, jamais joints publiquement. Ils servent seulement aux essais : le dépôt ne contient toujours que des données de test fictives.
+- Le signalement privé des vulnérabilités de GitHub est activé. Une faille ou un secret exposé se signale par là ou à la même adresse, jamais dans un ticket ou une pull request publics (`SECURITY.md`, en anglais). Seule la dernière version publiée est prise en charge.
+
 ### F11 — Exporter et importer les réglages
 
 **[Décidé]** L'utilisateur peut exporter ses réglages dans un fichier pour les reprendre sur un autre ordinateur, ou après une réinstallation.

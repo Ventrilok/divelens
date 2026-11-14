@@ -4,7 +4,7 @@ Thank you for your interest in Dive Lens. It links underwater photos in Adobe Li
 
 Bug reports, requests to support another dive application, fixes and documentation are all welcome.
 
-**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share a real dive log, a dive-log database, what a tool prints from one, the Dive Lens log files, or an exported Dive Lens settings file. See [Test data: fictional only](#test-data-fictional-only).
+**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share here a real dive log, a dive-log database, what a tool prints from one, the Dive Lens log files, or an exported Dive Lens settings file. See [Test data: fictional only](#test-data-fictional-only). When the log files, or a log to test a new dive application, are needed, they go privately by e-mail to [divelens@querton.com](mailto:divelens@querton.com): see [Reporting a bug or asking for a dive application](#reporting-a-bug-or-asking-for-a-dive-application).
 
 ## Contents
 
@@ -101,7 +101,7 @@ The plug-in's pure-Lua parts (JSON, message framing, manifest, metadata fields) 
 
 A dev window started with `npm run tauri dev` connects to Lightroom by itself while it runs.
 
-The plug-in writes its log to `DiveLens.log` in Lightroom's log folder, next to the app's `DiveLens App.log`: `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/` on macOS, `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\` on Windows. These logs contain your own data (dive sites, file paths): read them, but never commit or post them.
+The plug-in writes its log to `DiveLens.log` in Lightroom's log folder, next to the app's `DiveLens App.log`: `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/` on macOS, `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\` on Windows. These logs contain your own data (dive sites, file paths): read them, but never commit them or post them in an issue or a pull request.
 
 Never copy files from the Adobe Lightroom SDK into the repository. The legacy 0.x plug-in's licence code, compiled Lua bytecode and the `luac5.1` binary must not be brought over either.
 
@@ -161,7 +161,7 @@ The `.gitignore` already blocks some dive-log file types and the build output, b
 
 ## Secrets
 
-Never commit keys, certificates, passwords or tokens. Signing keys and credentials live in GitHub secrets or with the maintainer, never in the repository. If one was committed by mistake, deleting it in a new commit does not remove it from history: say so in your pull request or in an issue, without repeating the secret, so that it can be revoked.
+Never commit keys, certificates, passwords or tokens. Signing keys and credentials live in GitHub secrets or with the maintainer, never in the repository. If one was committed by mistake, deleting it in a new commit does not remove it from history: report it privately, as described in [SECURITY.md](SECURITY.md), so that it can be revoked. Never mention it in a public issue or pull request. Security vulnerabilities are reported the same way.
 
 ## What must never be renamed
 
@@ -184,4 +184,7 @@ Use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choos
 - **Bug report**: something does not work as expected.
 - **Support a new dive application**: you would like Dive Lens to read another dive log. If you want to write that reader yourself, open this issue first so the approach can be discussed.
 
-Both remind you of the privacy rule above: describe the problem, and if a log helps, paste only the relevant lines with site names, places, people's names and file paths removed.
+Both remind you of the privacy rule above:
+
+- For a bug, describe the problem in the issue. If the Dive Lens log files are needed, you will be asked for them: send them by e-mail to [divelens@querton.com](mailto:divelens@querton.com), never in an issue. In the issue itself, paste at most the relevant lines, with site names, places, people's names and file paths removed.
+- For a new dive application, a fictional log, or your real log once anonymised, helps testing. Send it by e-mail to the same address, never attached to the issue. It is used only to test the new reader: it is never added to the repository, whose test data stays fictional.

@@ -183,7 +183,7 @@ Les champs Dive Lens restent dans le catalogue Lightroom : ils ne sont pas écri
 
 **Passer de MacDive à Subsurface.** Rien à migrer. Relancer une plongée retrouve sa collection quand le nom « numéro - site » est identique ; sinon une nouvelle collection est créée à côté. Les décalages d'horloge sont mémorisés séparément pour chaque application.
 
-**Signaler un problème.** Passez **Réglages › Diagnostic › Niveau du journal** sur **Détaillé**, reproduisez le problème, puis **Afficher le journal** : le dossier contient les deux journaux. Ne les joignez jamais à un ticket GitHub : le dépôt est public, et les journaux contiennent vos sites de plongée et des chemins de fichiers. Décrivez le problème et collez seulement les lignes utiles, après avoir retiré les noms de sites, de lieux et de personnes, et les chemins de fichiers.
+**Signaler un problème.** Passez **Réglages › Diagnostic › Niveau du journal** sur **Détaillé**, reproduisez le problème, puis **Afficher le journal** : le dossier contient les deux journaux. [Ouvrez ensuite un ticket](https://github.com/Ventrilok/divelens/issues/new/choose) qui décrit le problème, ou écrivez à [divelens@querton.com](mailto:divelens@querton.com). Envoyez les deux journaux à cette adresse uniquement, jamais dans un ticket : le dépôt GitHub est public, et les journaux contiennent vos sites de plongée et des chemins de fichiers.
 
 ---
 
