@@ -260,7 +260,7 @@ Comportements **[Décidé, 2026-11-12]** :
 - Tant qu'aucune plongée n'est choisie, le lieu part sur « Autre site » ; il passe au site de la plongée dès qu'une plongée est choisie.
 - Liste : un clic sur une ligne choisit la plongée ; les flèches ne font que parcourir (la fiche suit la ligne parcourue).
 - « Annuler » remet l'écran à zéro, sans rien garder (il n'y a plus d'écran Plongées où revenir). **[Proposé, 2026-11-13]**
-- Après l'écriture : bandeau avec le nombre de photos taguées et le rappel qu'« Annuler » dans Lightroom défait tout en une fois, sauf le GPS.
+- Après l'écriture : bandeau avec le nombre de photos taguées et le rappel qu'« Annuler » dans Lightroom défait tout en une fois, sauf le GPS (et l'altitude quand une altitude a été effacée, voir plus bas).
 
 Photo déjà rattachée à une autre plongée **[Décidé, 2026-11-14]** :
 - Quand « Données de plongée » est cochée et qu'une photo porte déjà une **autre** plongée, ses valeurs par photo sont effacées : profondeur, température, temps écoulé et décalage d'horloge (F6, section 7). Elles décrivaient l'ancienne plongée.
