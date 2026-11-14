@@ -13,6 +13,7 @@ pub mod error;
 pub mod macdive;
 pub mod model;
 pub mod profile;
+mod sqlite;
 pub mod subsurface;
 pub mod tags;
 
