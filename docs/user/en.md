@@ -116,7 +116,8 @@ What is written: with **Dive data**, the dive number, start, end, duration, max 
 
 - A value the chosen dive does not have (temperature, rating…) clears the old Dive Lens value on the photo, so the fields always describe a single dive.
 - A site without country, city or GPS leaves the values already on the photo untouched (a GPS position from a phone stays).
-- **Edit › Undo** in Lightroom reverts it in one step, except the GPS.
+- A photo that already carries a **different** dive loses that dive's own values: depth, temperature, elapsed time and clock offset. Its GPS altitude is cleared only if it is the one Dive Lens copied from the old depth; any other altitude stays. The photo stays in its collection: move it yourself if needed.
+- **Edit › Undo** in Lightroom reverts it in one step, except the GPS (and the altitude, when one was cleared): Lightroom does not restore those.
 
 ---
 

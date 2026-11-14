@@ -251,8 +251,61 @@ local function formatDate(iso)
     return LrDate.formatShortDate(t) .. " " .. LrDate.formatMediumTime(t)
 end
 
+-- Writes one planned change on a photo, inside a catalog write.
+local function writeChange(photo, change)
+    if change.kind == "plugin" then
+        photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
+    else
+        photo:setRawMetadata(change.field, change.value)
+    end
+end
+
+local function write(photo, changes)
+    for _, change in ipairs(changes) do writeChange(photo, change) end
+end
+
+-- Clears what a photo kept from another dive (Tagging.retagChanges, which
+-- lists only values the photo has). Returns whether something was cleared,
+-- and whether the GPS altitude was.
+local function clearOtherDive(photo, extra)
+    local cleared, altitude = false, false
+    for _, change in ipairs(extra) do
+        if change.kind == "raw" and change.field == "gpsAltitude" then
+            -- When in doubt, leave it: an altitude Lightroom refuses to clear
+            -- stays, and the rest of the write goes on.
+            local ok, err = LrTasks.pcall(writeChange, photo, change)
+            if ok then
+                cleared, altitude = true, true
+            else
+                Log.warn("GPS altitude kept on photo %s: %s", tostring(photo.localIdentifier), tostring(err))
+            end
+        else
+            writeChange(photo, change)
+            cleared = true
+        end
+    end
+    return cleared, altitude
+end
+
+-- What the photos carry before a dive is written on them, for
+-- Tagging.retagChanges: { [photo] = { RETAG_FIELDS..., gpsAltitude } }.
+local function photosBefore(catalog, photos)
+    local fields = catalog:batchGetPropertyForPlugin(photos, _PLUGIN, Tagging.RETAG_FIELDS)
+    local raw = catalog:batchGetRawMetadata(photos, { "gpsAltitude" })
+    local before = {}
+    for _, photo in ipairs(photos) do
+        local f = fields[photo] or {}
+        local current = { gpsAltitude = (raw[photo] or {}).gpsAltitude }
+        for _, field in ipairs(Tagging.RETAG_FIELDS) do current[field] = f[field] end
+        before[photo] = current
+    end
+    return before
+end
+
 -- Tags the photos selected in Lightroom now (not when the app last looked),
--- in one catalog write, so one Undo reverts it. Always answers the app.
+-- in one catalog write, so one Undo reverts it. A photo that carried another
+-- dive also loses that dive's own values (Tagging.retagChanges), read from
+-- the photo inside the same write. Always answers the app.
 local function applyTags(s, message)
     local id = message.id
     local function fail(reason, detail)
@@ -266,16 +319,16 @@ local function applyTags(s, message)
     if not catalog:getTargetPhoto() then return fail("noSelection") end
     local photos = catalog:getTargetPhotos()
     local total = #photos
+    local cleared, altitudes = 0, 0
     local ok, status = LrTasks.pcall(function()
         return catalog:withWriteAccessDo(LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)", function()
+            local before = Tagging.writesDive(changes) and photosBefore(catalog, photos) or {}
             for i, photo in ipairs(photos) do
-                for _, change in ipairs(changes) do
-                    if change.kind == "plugin" then
-                        photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
-                    else
-                        photo:setRawMetadata(change.field, change.value)
-                    end
-                end
+                local extra = before[photo] and Tagging.retagChanges(before[photo], changes) or {}
+                write(photo, changes)
+                local any, altitude = clearOtherDive(photo, extra)
+                if any then cleared = cleared + 1 end
+                if altitude then altitudes = altitudes + 1 end
                 if i % PROGRESS_EVERY == 0 and i < total then
                     send(s, { type = "progress", id = id, done = i, total = total })
                     LrTasks.yield()
@@ -286,8 +339,9 @@ local function applyTags(s, message)
     s.lastHeard = LrDate.currentTime() -- the app's pings waited during the write
     if not ok then return fail("error", tostring(status)) end
     if status ~= "executed" then return fail("busy") end
-    Log.info("tagged %d photos", total)
-    send(s, { type = "applied", id = id, count = total })
+    Log.info("tagged %d photos; another dive's values cleared on %d (GPS altitude on %d)", total, cleared, altitudes)
+    -- altitudesCleared: the app's Undo reminder then mentions the altitude.
+    send(s, { type = "applied", id = id, count = total, altitudesCleared = altitudes })
 end
 
 -- Create Collections ----------------------------------------------------------
