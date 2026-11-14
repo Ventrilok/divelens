@@ -116,7 +116,8 @@ What is written: with **Dive data**, the dive number, start, end, duration, max 
 
 - A value the chosen dive does not have (temperature, rating…) clears the old Dive Lens value on the photo, so the fields always describe a single dive.
 - A site without country, city or GPS leaves the values already on the photo untouched (a GPS position from a phone stays).
-- **Edit › Undo** in Lightroom reverts it in one step, except the GPS.
+- A photo that already carries a **different** dive loses that dive's own values: depth, temperature, elapsed time and clock offset. Its GPS altitude is cleared only if it is the one Dive Lens copied from the old depth; any other altitude stays. The photo stays in its collection: move it yourself if needed.
+- **Edit › Undo** in Lightroom reverts it in one step, except the GPS (and the altitude, when one was cleared): Lightroom does not restore those.
 
 ---
 
@@ -142,6 +143,14 @@ Every change is saved at once.
 **Collections**
 - **Place in**: the catalog root or an existing collection set (Lightroom must be connected to browse them).
 - **Group in the set**: "Dive Lens" by default, created when needed; leave it empty to put the collections straight in the place above. A preview shows the resulting path. Collections already created stay where they are.
+
+**Settings backup**
+- **Export or import**: to get your settings back on another computer, or after reinstalling.
+- **Export…** saves them in a file, named "Dive Lens settings.json" unless you choose another name. The file holds: the dive application and the log location of each one, language, units, the GPS altitude option, where the collections go, the log level and the order of the dive list. The clock offsets remembered for each camera are not in it: they stay on this computer.
+- **Import…** asks before changing anything: **Replace** puts the file's settings in place of every setting on this screen, **Cancel** leaves them as they are.
+- If the file's dive log is not on this computer, Dive Lens says so and keeps its location until you choose the right one (**Choose…**, or **Choose a file…** / **Choose a folder…** for Subsurface). If the collection set chosen in **Place in** is not in this catalog, Create Collections says so: choose another place in Settings.
+- A file that does not look like a Dive Lens settings file is refused, and nothing changes. A file exported by an earlier version of Dive Lens can still be imported.
+- After an import, Dive Lens no longer takes over the previous plug-in's settings (section 1): the imported settings are the ones kept.
 
 **Diagnostics**
 - **Log level**: Normal or Detailed. Raise it only to report a problem.
@@ -174,7 +183,7 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 
 **Switching from MacDive to Subsurface.** Nothing to migrate. Running a dive again finds its collection when the name "<number> - <site>" is the same; otherwise a new collection is created next to it. Clock offsets are remembered separately for each application.
 
-**Reporting a problem.** Set **Settings › Diagnostics › Log level** to **Detailed**, reproduce the problem, then **Show log** and send the two files.
+**Reporting a problem.** Set **Settings › Diagnostics › Log level** to **Detailed**, reproduce the problem, then **Show log**: the folder holds the two log files. Never attach them to a GitHub issue: the repository is public, and the logs contain your dive sites and file paths. Describe the problem, and paste only the relevant lines, with site names, places, people's names and file paths removed.
 
 ---
 

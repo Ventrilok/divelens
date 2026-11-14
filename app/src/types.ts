@@ -126,7 +126,7 @@ export interface TagChoice {
 }
 
 export type ApplyOutcome =
-  | { outcome: "applied"; count: number }
+  | { outcome: "applied"; count: number; altitudesCleared: number }
   | { outcome: "failed"; reason: "noSelection" | "busy" | "badRequest" | "error" | string; detail: string | null };
 
 export type TagError =

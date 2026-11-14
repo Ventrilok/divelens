@@ -208,8 +208,14 @@ impl Pending {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "outcome", rename_all = "camelCase")]
 pub enum ApplyOutcome {
-    /// Written in one catalog step on `count` photos.
-    Applied { count: usize },
+    /// Written in one catalog step on `count` photos. `altitudes_cleared`:
+    /// photos whose GPS altitude, derived from another dive's depth, was
+    /// cleared (spec F8); Lightroom's Undo does not restore it.
+    Applied {
+        count: usize,
+        #[serde(rename = "altitudesCleared")]
+        altitudes_cleared: usize,
+    },
     /// Nothing written. `reason`: `noSelection`, `busy` (Lightroom kept the
     /// catalog busy), `badRequest`, `staleSearch` (the photos were found in
     /// an earlier link session), `parentNotFound` (the collection set chosen
@@ -262,6 +268,9 @@ enum FromPlugin {
     Applied {
         id: u64,
         count: usize,
+        /// Absent from plugins that never clear an altitude.
+        #[serde(default, rename = "altitudesCleared")]
+        altitudes_cleared: usize,
     },
     ApplyFailed {
         id: u64,
@@ -499,9 +508,16 @@ fn session(
                     FromPlugin::Progress { done, total } => {
                         on_event(Event::Progress { done, total });
                     }
-                    FromPlugin::Applied { id, count } => match pending.remove(&id) {
+                    FromPlugin::Applied {
+                        id,
+                        count,
+                        altitudes_cleared,
+                    } => match pending.remove(&id) {
                         Some(Pending::Apply(reply)) => {
-                            let _ = reply.send(ApplyOutcome::Applied { count });
+                            let _ = reply.send(ApplyOutcome::Applied {
+                                count,
+                                altitudes_cleared,
+                            });
                         }
                         Some(other) => other.fail(ApplyOutcome::Failed {
                             reason: "error".into(),
@@ -838,14 +854,50 @@ mod tests {
         let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |e| events.push(e));
         plugin.join().unwrap();
         assert_eq!(end, End::Bye);
+        // No altitudesCleared in the answer (older plugin): none cleared.
         assert_eq!(
             outcome_rx.recv().unwrap(),
-            ApplyOutcome::Applied { count: 120 }
+            ApplyOutcome::Applied {
+                count: 120,
+                altitudes_cleared: 0
+            }
         );
         assert!(events.contains(&Event::Progress {
             done: 50,
             total: 120
         }));
+    }
+
+    #[test]
+    fn apply_tells_how_many_altitudes_were_cleared() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (outcome_tx, outcome_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin(move |lines, to_app| {
+            let outcome = connect_and_apply(lines, to_app, &commands);
+            let id = next_request(lines)["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"applied\",\"id\":{id},\"count\":12,\"altitudesCleared\":3}}\n"
+                ),
+            );
+            outcome_tx.send(outcome.recv().unwrap()).unwrap();
+        });
+        run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {});
+        plugin.join().unwrap();
+        let outcome = outcome_rx.recv().unwrap();
+        assert_eq!(
+            outcome,
+            ApplyOutcome::Applied {
+                count: 12,
+                altitudes_cleared: 3
+            }
+        );
+        // As the front end reads it.
+        assert_eq!(
+            serde_json::to_value(&outcome).unwrap(),
+            serde_json::json!({ "outcome": "applied", "count": 12, "altitudesCleared": 3 })
+        );
     }
 
     #[test]
