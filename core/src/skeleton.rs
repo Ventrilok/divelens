@@ -29,9 +29,8 @@
 //!    ids, wall-clock times, metres, °C, its way of storing missing values.
 //!    Declare what it provides in `capabilities`.
 //! 3. In the tests, write the reference log as the application stores it.
-//! 4. Add the application's run at the bottom of `core/src/conformance.rs`
-//!    (and raise the count `in_another_time_zone` expects), then run
-//!    `cargo test -p divelens-core` until it passes.
+//! 4. Add the application's run at the bottom of `core/src/conformance.rs`,
+//!    then run `cargo test -p divelens-core` until it passes.
 //! 5. Register the application in `core/examples/verify_log.rs` and check
 //!    the reader against a real log on your own computer.
 //!

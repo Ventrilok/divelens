@@ -487,7 +487,8 @@ fn skeleton() {
 /// The tests above again, in a child process whose time zone is 14 hours
 /// ahead of UTC: a reader turning wall-clock times into instants would shift
 /// every dive there. Unix only, as Windows ignores `TZ`; the comparison with
-/// the literal reference times holds everywhere.
+/// the literal reference times holds everywhere. The child first lists the
+/// tests it runs, so that every run above must pass there.
 #[test]
 #[cfg(unix)]
 fn in_another_time_zone() {
@@ -495,14 +496,28 @@ fn in_another_time_zone() {
     if std::env::var_os(CHILD).is_some() {
         return;
     }
-    let out = std::process::Command::new(std::env::current_exe().unwrap())
-        .arg("conformance::")
-        .env("TZ", "Pacific/Kiritimati")
-        .env(CHILD, "1")
-        .output()
-        .unwrap();
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "in UTC+14:\n{stdout}");
-    // The four runs above, and this test returning at once.
-    assert!(stdout.contains("5 passed"), "in UTC+14:\n{stdout}");
+    let child = |args: &[&str]| {
+        let out = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("conformance::")
+            .args(args)
+            .env("TZ", "Pacific/Kiritimati")
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
+        assert!(out.status.success(), "in UTC+14:\n{stdout}");
+        stdout
+    };
+    // Every test of this file: the runs above, and this one, which returns
+    // at once in the child.
+    let runs = child(&["--list"])
+        .lines()
+        .filter(|l| l.ends_with(": test"))
+        .count();
+    assert!(runs > 1, "no run listed in UTC+14");
+    let stdout = child(&[]);
+    assert!(
+        stdout.contains(&format!("test result: ok. {runs} passed;")),
+        "in UTC+14, {runs} tests expected to pass:\n{stdout}"
+    );
 }

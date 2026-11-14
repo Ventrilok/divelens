@@ -222,9 +222,7 @@ SQLite database that no real application writes):
    reach it.
 3. Add a test at the bottom of `core/src/conformance.rs` calling `check`
    with that function, the reader's `open`, the capabilities the reader must
-   declare, and whether the application marks dives invalid. Raise by one
-   the number of passed tests that `in_another_time_zone`, below them,
-   expects.
+   declare, and whether the application marks dives invalid.
 4. Run `cargo test -p divelens-core` until it passes. A failure lists every
    value that differs from this page.
 5. Register the application in the tool below
