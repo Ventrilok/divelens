@@ -183,7 +183,7 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 
 **Switching from MacDive to Subsurface.** Nothing to migrate. Running a dive again finds its collection when the name "<number> - <site>" is the same; otherwise a new collection is created next to it. Clock offsets are remembered separately for each application.
 
-**Reporting a problem.** Set **Settings › Diagnostics › Log level** to **Detailed**, reproduce the problem, then **Show log**: the folder holds the two log files. Never attach them to a GitHub issue: the repository is public, and the logs contain your dive sites and file paths. Describe the problem, and paste only the relevant lines, with site names, places, people's names and file paths removed.
+**Reporting a problem.** Set **Settings › Diagnostics › Log level** to **Detailed**, reproduce the problem, then **Show log**: the folder holds the two log files. Then [open an issue](https://github.com/Ventrilok/divelens/issues/new/choose) describing the problem, without attaching the log files: the GitHub repository is public, and the logs contain your dive sites and file paths. If they are needed, you will be asked for them: send them only by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number.
 
 ---
 
