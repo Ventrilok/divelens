@@ -207,6 +207,19 @@ export interface Settings {
   legacyImported: boolean;
 }
 
+/** A settings file's dive log on this computer (spec F11). */
+export interface ImportCheck {
+  source: SourceInfo;
+  /** The dive log is at that location. */
+  found: boolean;
+}
+
+/** Why a settings file was not imported. */
+export type ImportError =
+  | { kind: "unreadable"; detail: string }
+  | { kind: "notSettings" }
+  | { kind: "notSaved"; detail: string };
+
 /** A collection set of the Lightroom catalog. */
 export interface CollectionSet {
   name: string;

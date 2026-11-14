@@ -104,7 +104,7 @@ Tous les réglages sont gérés **dans l'application**. **[Décidé]** Le gestio
 
 Au premier lancement, l'application reprend automatiquement les réglages existants du plugin actuel : emplacement de la base et ordre d'affichage. L'utilisateur n'a rien à ressaisir. **[Décidé]** Le nouveau plugin garde le même identifiant, il lit donc directement les réglages de l'ancien et les transmet à l'application à la connexion. La reprise n'a lieu qu'une fois, et ne remplace jamais un réglage déjà choisi dans l'application. **[Décidé, 2026-11-12]**
 
-**Écran Réglages [Décidé, 2026-11-12]** — sections, dans l'ordre : Carnet de plongée, Affichage, Écriture sur les photos, Collections, Diagnostic, À propos. Chaque modification est enregistrée immédiatement, sans bouton « Enregistrer ». Les sections « Sauvegarde des réglages » (F11) et « Mises à jour » (F13) de la maquette sont masquées tant que ces fonctions n'existent pas.
+**Écran Réglages [Décidé, 2026-11-12]** — sections, dans l'ordre : Carnet de plongée, Affichage, Écriture sur les photos, Collections, Sauvegarde des réglages (F11, depuis le 2026-11-13), Diagnostic, À propos. Chaque modification est enregistrée immédiatement, sans bouton « Enregistrer ». La section « Mises à jour » (F13) de la maquette est masquée tant que cette fonction n'existe pas.
 
 - **Source de plongée** : MacDive (Mac) ou Subsurface (Mac et Windows). Emplacement pré-rempli avec l'emplacement standard de l'application choisie, modifiable via un sélecteur. Pas de recherche automatique ailleurs sur le disque. **[Décidé]**
   - Sur Windows, seul Subsurface est proposé : MacDive n'apparaît pas dans la liste. **[Décidé, 2026-11-12]**
@@ -277,11 +277,18 @@ Un fichier journal est conservé pour le diagnostic, consultable depuis les rég
 
 **[Décidé]** L'utilisateur peut exporter ses réglages dans un fichier pour les reprendre sur un autre ordinateur, ou après une réinstallation.
 
-Pas dans le premier écran Réglages : chantier à part, après Subsurface. Les réglages tiennent déjà dans un seul fichier lisible. **[Décidé, 2026-11-12]**
+Chantier à part, fait après Subsurface (2026-11-13). Les réglages tiennent déjà dans un seul fichier lisible. **[Décidé, 2026-11-12]**
 
-- Contenu : emplacement de la base de plongée, ordre d'affichage, unités, langue, option altitude, marge par défaut, niveau de journal, et les réglages ajoutés plus tard. **[Proposé]**
-- Format : un fichier texte lisible. **[Proposé]**
+- Contenu : tout ce que contient le fichier de réglages de l'application : application de plongée et emplacement du carnet de chacune, unités, langue, option altitude, emplacement des collections, niveau de journal, ordre des plongées, et les réglages ajoutés plus tard. Pas la marge (elle n'est plus mémorisée, F2), ni les décalages d'horloge mémorisés, ni le fait que les réglages de l'ancien plugin ont déjà été repris (propre à cet ordinateur). **[Proposé]**
+- Format : le fichier de réglages lui-même, en JSON lisible, avec son numéro de version. **[Proposé]**
 - Import : les réglages du fichier remplacent les réglages en cours, après confirmation. Si la base indiquée est introuvable sur cet ordinateur, l'application le signale et demande de la localiser. **[Proposé]**
+  - Un fichier qui n'est pas un fichier de réglages Dive Lens (pas de numéro de version) est refusé avec un message ; rien n'est changé.
+  - Carnet introuvable : l'emplacement du fichier est **gardé** (jamais de bascule silencieuse vers un autre carnet) ; la confirmation le dit déjà, puis la section affiche le problème avec « Choisir… » (ou « Choisir un fichier… » / « Choisir un dossier… » pour Subsurface).
+  - Ensemble de collections absent de ce catalogue : même état que dans F2 (signalé, « Appliquer » désactivé jusqu'à un nouveau choix).
+  - Après un import, les réglages de l'ancien plugin ne sont plus jamais repris : le fichier importé est un choix de l'utilisateur. **[Décidé, 2026-11-13]**
+- **Écran [Proposé, 2026-11-13]** : section « Sauvegarde des réglages » (EN « Settings backup ») entre Collections et Diagnostic, comme dans la maquette. Une ligne « Exporter ou importer » (« Pour retrouver vos réglages sur un autre ordinateur, ou après une réinstallation. ») avec « Exporter… » et « Importer… ».
+  - Export : fenêtre d'enregistrement du système, nom proposé « Réglages Dive Lens.json » (EN « Dive Lens settings.json »), puis « Réglages exportés dans « … » ».
+  - Import : fenêtre d'ouverture du système (fichiers `.json`), puis une confirmation dans la section : « Remplacer les réglages actuels par ceux de « … » ? — Tous les réglages de cet écran sont remplacés. », boutons « Remplacer » et « Annuler ».
 
 Critères d'acceptation :
 - Un fichier exporté par une version antérieure de Dive Lens reste importable ; les réglages inconnus sont ignorés.
@@ -333,7 +340,7 @@ Description fonctionnelle seulement. La mise en page est une décision du propri
 | **Liste des plongées** | Plongées (F4), indicateur de courbe ; étape 1 de « Créer les collections », pas d'écran à part | Rechercher, sélectionner une ou plusieurs plongées |
 | **Créer les collections** (F5) | Plongées choisies avec compteur de photos chacune, appareils détectés, décalage et marge, total | Régler le décalage par appareil, « Suggérer », régler la marge, Appliquer |
 | **Tagger la sélection** (F8) | Sélection Lightroom en direct (nombre, vignettes), plongée choisie, lieu (site de la plongée ou autre site : pays › lieu › site, GPS) | Cocher données de plongée et/ou lieu, choisir, Appliquer |
-| **Réglages** (F2, F3, F7, F10) | Source de plongée et état de la base, langue, unités, option altitude et son explication, emplacement des collections, journal, à propos | Modifier, afficher le journal ; F11 et F13 plus tard |
+| **Réglages** (F2, F3, F7, F10) | Source de plongée et état de la base, langue, unités, option altitude et son explication, emplacement des collections, journal, à propos | Modifier, afficher le journal, exporter et importer les réglages (F11) ; F13 plus tard |
 | **Résultat d'application** | Collections créées, photos écrites, plongées sans photo | Fermer |
 
 États à couvrir dans les maquettes : liaison perdue, base introuvable, plongée sans courbe, aucune photo trouvée, écriture en cours avec progression **[Décidé]**.

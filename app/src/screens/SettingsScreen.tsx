@@ -1,14 +1,26 @@
-// Settings screen (spec F2, F3, F7, F10). Every change is saved at once;
+// Settings screen (spec F2, F3, F7, F10, F11). Every change is saved at once;
 // the app follows it live (language, units, dive log location).
 
 import { useEffect, useState } from "react";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { collectionSets } from "../api";
+import { checkSettingsFile, collectionSets, exportSettings, importSettings } from "../api";
+import { fileName, importErrorText } from "../backup";
 import { flattenSets, pathKey, placeLabel, setExists } from "../collectionPlace";
 import { Icon } from "../components/Icon";
 import { systemLang, t, tn } from "../i18n";
 import { chooseLog, errorText, sourceName } from "../sourceText";
-import type { AppInfo, CollectionSet, DiveLog, LightroomStatus, LoadError, Settings, SourceKind } from "../types";
+import type {
+  AppInfo,
+  CollectionSet,
+  DiveLog,
+  ImportCheck,
+  LightroomStatus,
+  LoadError,
+  Settings,
+  SourceInfo,
+  SourceKind,
+} from "../types";
 
 const SOURCE_CODE = "https://github.com/Ventrilok/divelens";
 
@@ -230,6 +242,131 @@ function CollectionsSection({ settings, lr, onChange }: { settings: Settings; lr
   );
 }
 
+/**
+ * Settings backup (spec F11): export the settings to a file, or replace them
+ * with a file's after confirmation. A dive log the file names but this
+ * computer lacks is reported, with the way to choose where it is.
+ */
+function BackupSection({ settings, logState, onChange }: { settings: Settings; logState: LogState; onChange: (p: Patch) => void }) {
+  const [pending, setPending] = useState<{ path: string; check: ImportCheck } | null>(null);
+  const [missing, setMissing] = useState<SourceInfo | null>(null);
+  const [message, setMessage] = useState<{ tone: "ok" | "warn"; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const filters = [{ name: t("settings.backupFilter"), extensions: ["json"] }];
+
+  const reset = () => {
+    setPending(null);
+    setMissing(null);
+    setMessage(null);
+  };
+  const doExport = async () => {
+    reset();
+    const path = await save({ defaultPath: t("settings.exportName"), filters });
+    if (!path) return;
+    try {
+      await exportSettings(path);
+      setMessage({ tone: "ok", text: t("settings.exported", { name: fileName(path) }) });
+    } catch (e) {
+      setMessage({ tone: "warn", text: t("settings.exportError", { detail: String(e) }) });
+    }
+  };
+  const doImport = async () => {
+    reset();
+    const path = await open({ multiple: false, directory: false, filters });
+    if (typeof path !== "string") return;
+    try {
+      setPending({ path, check: await checkSettingsFile(path) });
+    } catch (e) {
+      setMessage({ tone: "warn", text: importErrorText(e) });
+    }
+  };
+  const confirm = async () => {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      const result = await importSettings(pending.path);
+      if (result.found) setMessage({ tone: "ok", text: t("settings.imported") });
+      else setMissing(result.source);
+    } catch (e) {
+      setMessage({ tone: "warn", text: importErrorText(e) });
+    } finally {
+      setBusy(false);
+      setPending(null);
+    }
+  };
+  const choose = async (folder: boolean) => {
+    if (!missing) return;
+    const picked = await chooseLog(missing.kind, undefined, folder);
+    if (!picked) return;
+    onChange({ source: { ...settings.source, [missing.kind === "subsurface" ? "subsurfacePath" : "macDivePath"]: picked } });
+    setMissing(null);
+  };
+  // Once the dive log reads (chosen here or in the Dive log section), the
+  // reminder goes.
+  const showMissing = missing !== null && logState.status !== "ok";
+
+  return (
+    <section className="card" aria-labelledby="s-backup">
+      <h2 id="s-backup" className="sec">
+        {t("settings.backup")}
+      </h2>
+      <Row title={t("settings.backupRow")} hint={t("settings.backupHint")} top={pending !== null || showMissing || message !== null}>
+        <div className="set-actions">
+          <button type="button" className="btn btn-s" disabled={busy} onClick={doExport}>
+            {t("settings.export")}
+          </button>
+          <button type="button" className="btn btn-s" disabled={busy} onClick={doImport}>
+            {t("settings.import")}
+          </button>
+        </div>
+        {pending && (
+          <div className="set-explain" role="group" aria-label={t("settings.import")}>
+            <b className="set-ask">{t("settings.importAsk", { name: fileName(pending.path) })}</b>
+            <span>{t("settings.importAskHint")}</span>
+            {!pending.check.found && (
+              <span className="set-warn">{t("settings.importAskMissing", { path: pending.check.source.path })}</span>
+            )}
+            <div className="set-actions">
+              <button type="button" className="btn btn-p" disabled={busy} onClick={confirm}>
+                {t("settings.importReplace")}
+              </button>
+              <button type="button" className="btn btn-g" disabled={busy} onClick={() => setPending(null)}>
+                {t("settings.importCancel")}
+              </button>
+            </div>
+          </div>
+        )}
+        {showMissing && missing && (
+          <div className="set-explain" role="alert">
+            <span className="set-warn">{t("settings.importedMissing", { path: missing.path })}</span>
+            <div className="set-actions">
+              {missing.kind === "subsurface" ? (
+                <>
+                  <button type="button" className="btn btn-s" onClick={() => choose(false)}>
+                    {t("errSs.chooseFile")}
+                  </button>
+                  <button type="button" className="btn btn-s" onClick={() => choose(true)}>
+                    {t("errSs.chooseFolder")}
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="btn btn-s" onClick={() => choose(false)}>
+                  {t("settings.choose")}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {message && (
+          <div className={`notice notice-${message.tone} set-full`} role={message.tone === "ok" ? "status" : "alert"}>
+            <span>{message.text}</span>
+          </div>
+        )}
+      </Row>
+    </section>
+  );
+}
+
 export function SettingsScreen({
   settings,
   logState,
@@ -331,6 +468,8 @@ export function SettingsScreen({
         </section>
 
         <CollectionsSection settings={settings} lr={lr} onChange={onChange} />
+
+        <BackupSection settings={settings} logState={logState} onChange={onChange} />
 
         <section className="card" aria-labelledby="s-diag">
           <h2 id="s-diag" className="sec">
