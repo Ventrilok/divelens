@@ -1,9 +1,9 @@
 //! Example reader: the starting point for a reader of a new dive
 //! application. It reads the log of "Example", an application invented for
 //! this purpose, kept in a small SQLite database that no real application
-//! writes. Dive Lens never offers it; it is built and passes the common tests
+//! writes. It is built only with the tests, where it passes the common tests
 //! (`core/src/conformance.rs`) on macOS and Windows, so that a copy starts
-//! from code that works.
+//! from code that works; Dive Lens never offers it.
 //!
 //! The Example database (the tests build one, in `skeleton/tests.rs`):
 //!
@@ -24,7 +24,7 @@
 //!
 //! 1. Copy this file and `skeleton/tests.rs` to `<application>.rs` and
 //!    `<application>/tests.rs`, rename `Example`, and declare the module in
-//!    `lib.rs`.
+//!    `lib.rs` as `pub mod <application>;` (this one is `#[cfg(test)]`).
 //! 2. Read the application's own tables and translate its values: stable
 //!    ids, wall-clock times, metres, °C, its way of storing missing values.
 //!    Declare what it provides in `capabilities`.
@@ -34,8 +34,9 @@
 //! 5. Register the application in `core/examples/verify_log.rs` and check
 //!    the reader against a real log on your own computer.
 //!
-//! A log that is not a SQLite database: see the Subsurface reader for files
-//! and folders.
+//! The app side (the application's descriptor, which offers it in Settings)
+//! is added separately. A log that is not a SQLite database: see the
+//! Subsurface reader for files and folders.
 
 use std::path::Path;
 

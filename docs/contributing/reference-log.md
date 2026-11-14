@@ -210,7 +210,9 @@ SQLite database that no real application writes):
    log without writing anything. Start from a copy of the example reader,
    `core/src/skeleton.rs` and `core/src/skeleton/tests.rs`: it reads a
    SQLite log, opened by the shared `crate::sqlite::open_read_only`, and
-   marks with `ADAPT:` each place to change.
+   marks with `ADAPT:` each place to change. Declare the module in
+   `core/src/lib.rs` as `pub mod <application>;` (the example reader is
+   declared `#[cfg(test)]`: only the tests build it).
 2. Write the reference log in the application's own format, from the tables
    above, shaped exactly like what the application itself writes. Files go
    in `core/fixtures/<application>/`, but files ending `.sqlite` or `.ssrf`
@@ -230,6 +232,11 @@ SQLite database that no real application writes):
    `open`, and how to recognise its logs in `guess`.
 6. Check the reader against a real log on your own computer, with that
    tool.
+
+Offering the application in the app's Settings goes through the
+application registry, which is being added; before starting a reader, open
+a "Support a new dive application" issue so that the approach can be
+discussed.
 
 ## Checking a reader against a real log
 
