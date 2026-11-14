@@ -84,6 +84,8 @@ const en = {
   "detail.noProfileHint": "Photos will get the dive data and the site. Depth, temperature and time will stay empty.",
   "detail.profileLoading": "Loading profile…",
   "detail.profileError": "The dive profile could not be read.",
+  "log.changed": "The dive log has changed: start again.",
+  "log.changedNothingWritten": "The dive log has changed. Nothing was written: start again.",
   "detail.chart": "Dive profile: {depth} max, {duration}",
   "detail.empty": "Choose a dive to see its details.",
   "rating.stars": "{n} stars",
@@ -248,6 +250,7 @@ const en = {
 
   "settings.title": "Settings",
   "settings.saveError": "Setting not saved: {detail}",
+  "settings.logLocked": "Writing to Lightroom: the dive log can be changed once the write is done.",
   "settings.source": "Dive log",
   "settings.app": "Application",
   "settings.appHint": "Where dives and sites come from.",
@@ -414,6 +417,8 @@ const fr: Record<Key, string> = {
   "detail.noProfileHint": "Les photos recevront les infos de plongée et le lieu. Profondeur, température et temps resteront vides.",
   "detail.profileLoading": "Chargement de la courbe…",
   "detail.profileError": "La courbe de cette plongée n'a pas pu être lue.",
+  "log.changed": "Le carnet de plongée a changé : recommencez.",
+  "log.changedNothingWritten": "Le carnet de plongée a changé. Rien n'a été écrit : recommencez.",
   "detail.chart": "Courbe de plongée : {depth} max, {duration}",
   "detail.empty": "Choisissez une plongée pour voir son détail.",
   "rating.stars": "{n} étoiles",
@@ -578,6 +583,7 @@ const fr: Record<Key, string> = {
 
   "settings.title": "Réglages",
   "settings.saveError": "Réglage non enregistré : {detail}",
+  "settings.logLocked": "Écriture dans Lightroom en cours : le carnet de plongée pourra être changé une fois celle-ci terminée.",
   "settings.source": "Carnet de plongée",
   "settings.app": "Application",
   "settings.appHint": "Source des plongées et des sites.",

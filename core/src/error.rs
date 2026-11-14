@@ -5,7 +5,7 @@ use serde::Serialize;
 
 /// Errors a dive-log reader can report. Serialized to the UI as
 /// `{ "kind": "...", "detail": "..." }` so the UI can pick its own message.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
 pub enum Error {
     /// Nothing at the given path.

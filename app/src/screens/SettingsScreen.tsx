@@ -8,6 +8,7 @@ import { checkSettingsFile, collectionSets, exportSettings, importSettings } fro
 import { fileName, importErrorText } from "../backup";
 import { flattenSets, pathKey, placeLabel, setExists } from "../collectionPlace";
 import { Icon } from "../components/Icon";
+import { changeErrorText } from "../diveLog";
 import { systemLang, t, tn } from "../i18n";
 import { chooseLog, errorText, sourceName } from "../sourceText";
 import type {
@@ -67,11 +68,14 @@ function SourceSection({
   settings,
   logState,
   info,
+  writing,
   onChange,
 }: {
   settings: Settings;
   logState: LogState;
   info: AppInfo | null;
+  /** Lightroom is being written to: the dive log cannot change. */
+  writing: boolean;
   onChange: (p: Patch) => void;
 }) {
   const source = logState.status === "ok" ? logState.log.source : logState.status === "error" ? logState.failure.source : null;
@@ -121,6 +125,7 @@ function SourceSection({
           className="inp set-select"
           aria-label={t("settings.app")}
           value={kind}
+          disabled={writing}
           onChange={(e) => onChange({ source: { ...settings.source, kind: e.target.value as SourceKind } })}
         >
           {!windows && <option value="macDive">{sourceName("macDive")}</option>}
@@ -132,17 +137,17 @@ function SourceSection({
           <div className="set-path-row">
             <input className="inp" aria-label={t(ss ? "settings.ssBase" : "settings.base")} value={source?.path ?? ""} readOnly />
             {!ss && (
-              <button type="button" className="btn btn-s" onClick={() => choose(false)}>
+              <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(false)}>
                 {t("settings.choose")}
               </button>
             )}
           </div>
           {ss && (
             <div className="set-path-row">
-              <button type="button" className="btn btn-s" onClick={() => choose(false)}>
+              <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(false)}>
                 {t("errSs.chooseFile")}
               </button>
-              <button type="button" className="btn btn-s" onClick={() => choose(true)}>
+              <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(true)}>
                 {t("errSs.chooseFolder")}
               </button>
             </div>
@@ -150,11 +155,12 @@ function SourceSection({
           <div className="set-path-row set-path-state">
             {state}
             {source && !source.isDefaultPath && (
-              <button type="button" className="btn btn-g btn-small" onClick={() => setPath(null)}>
+              <button type="button" className="btn btn-g btn-small" disabled={writing} onClick={() => setPath(null)}>
                 {t("settings.standard")}
               </button>
             )}
           </div>
+          {writing && <span className="set-note">{t("settings.logLocked")}</span>}
         </div>
       </Row>
     </section>
@@ -247,7 +253,18 @@ function CollectionsSection({ settings, lr, onChange }: { settings: Settings; lr
  * with a file's after confirmation. A dive log the file names but this
  * computer lacks is reported, with the way to choose where it is.
  */
-function BackupSection({ settings, logState, onChange }: { settings: Settings; logState: LogState; onChange: (p: Patch) => void }) {
+function BackupSection({
+  settings,
+  logState,
+  writing,
+  onChange,
+}: {
+  settings: Settings;
+  logState: LogState;
+  /** Lightroom is being written to: an import, which may name another dive log, waits. */
+  writing: boolean;
+  onChange: (p: Patch) => void;
+}) {
   const [pending, setPending] = useState<{ path: string; check: ImportCheck } | null>(null);
   const [missing, setMissing] = useState<SourceInfo | null>(null);
   const [message, setMessage] = useState<{ tone: "ok" | "warn"; text: string } | null>(null);
@@ -310,15 +327,20 @@ function BackupSection({ settings, logState, onChange }: { settings: Settings; l
       <h2 id="s-backup" className="sec">
         {t("settings.backup")}
       </h2>
-      <Row title={t("settings.backupRow")} hint={t("settings.backupHint")} top={pending !== null || showMissing || message !== null}>
+      <Row
+        title={t("settings.backupRow")}
+        hint={t("settings.backupHint")}
+        top={pending !== null || showMissing || message !== null || writing}
+      >
         <div className="set-actions">
           <button type="button" className="btn btn-s" disabled={busy} onClick={doExport}>
             {t("settings.export")}
           </button>
-          <button type="button" className="btn btn-s" disabled={busy} onClick={doImport}>
+          <button type="button" className="btn btn-s" disabled={busy || writing} onClick={doImport}>
             {t("settings.import")}
           </button>
         </div>
+        {writing && <span className="set-note set-full">{t("settings.logLocked")}</span>}
         {pending && (
           <div className="set-explain" role="group" aria-label={t("settings.import")}>
             <b className="set-ask">{t("settings.importAsk", { name: fileName(pending.path) })}</b>
@@ -327,7 +349,7 @@ function BackupSection({ settings, logState, onChange }: { settings: Settings; l
               <span className="set-warn">{t("settings.importAskMissing", { path: pending.check.source.path })}</span>
             )}
             <div className="set-actions">
-              <button type="button" className="btn btn-p" disabled={busy} onClick={confirm}>
+              <button type="button" className="btn btn-p" disabled={busy || writing} onClick={confirm}>
                 {t("settings.importReplace")}
               </button>
               <button type="button" className="btn btn-g" disabled={busy} onClick={() => setPending(null)}>
@@ -342,15 +364,15 @@ function BackupSection({ settings, logState, onChange }: { settings: Settings; l
             <div className="set-actions">
               {missing.kind === "subsurface" ? (
                 <>
-                  <button type="button" className="btn btn-s" onClick={() => choose(false)}>
+                  <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(false)}>
                     {t("errSs.chooseFile")}
                   </button>
-                  <button type="button" className="btn btn-s" onClick={() => choose(true)}>
+                  <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(true)}>
                     {t("errSs.chooseFolder")}
                   </button>
                 </>
               ) : (
-                <button type="button" className="btn btn-s" onClick={() => choose(false)}>
+                <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(false)}>
                   {t("settings.choose")}
                 </button>
               )}
@@ -372,6 +394,7 @@ export function SettingsScreen({
   logState,
   lr,
   info,
+  writing,
   error,
   onChange,
 }: {
@@ -379,8 +402,10 @@ export function SettingsScreen({
   logState: LogState;
   lr: LightroomStatus;
   info: AppInfo | null;
-  /** Why the last change was not saved. */
-  error: string | null;
+  /** Lightroom is being written to: the dive log cannot change. */
+  writing: boolean;
+  /** Why the last change was not made (a ChangeError), or null. */
+  error: unknown;
   onChange: (patch: Patch) => void;
 }) {
   const appName = sourceName(
@@ -395,14 +420,14 @@ export function SettingsScreen({
     <main className="screen screen-scroll">
       <div className="settings">
         <h1 className="settings-title">{t("settings.title")}</h1>
-        {error && (
+        {error !== null && (
           <p className="set-error" role="alert">
             <Icon name="warn" size={16} />
-            {t("settings.saveError", { detail: error })}
+            {changeErrorText(error)}
           </p>
         )}
 
-        <SourceSection settings={settings} logState={logState} info={info} onChange={onChange} />
+        <SourceSection settings={settings} logState={logState} info={info} writing={writing} onChange={onChange} />
 
         <section className="card" aria-labelledby="s-aff">
           <h2 id="s-aff" className="sec">
@@ -469,7 +494,7 @@ export function SettingsScreen({
 
         <CollectionsSection settings={settings} lr={lr} onChange={onChange} />
 
-        <BackupSection settings={settings} logState={logState} onChange={onChange} />
+        <BackupSection settings={settings} logState={logState} writing={writing} onChange={onChange} />
 
         <section className="card" aria-labelledby="s-diag">
           <h2 id="s-diag" className="sec">

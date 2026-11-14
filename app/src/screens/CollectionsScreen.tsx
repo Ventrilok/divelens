@@ -17,6 +17,7 @@ import {
   SLIDER_STEP_MIN,
 } from "../cameras";
 import { placeLabel, setExists } from "../collectionPlace";
+import { logRef } from "../diveLog";
 import { Icon } from "../components/Icon";
 import { Steps } from "../components/Steps";
 import { formatDay, formatRange, formatRowSpan } from "../format";
@@ -61,6 +62,8 @@ function failure(e: CollectionsError): string {
       return t("coll.err.nothingToWrite");
     case "nothingChosen":
       return t("coll.err.nothingChosen");
+    case "logChanged":
+      return t("log.changedNothingWritten");
     case "lightroom":
       if (e.reason === "busy") return t("coll.err.busy");
       if (e.reason === "staleSearch") return t("coll.err.noPhotos");
@@ -376,7 +379,7 @@ export function CollectionsScreen({
     let live = true;
     setSearch({ state: "searching" });
     setPreview(null);
-    findCollectionPhotos(diveKey.split(","))
+    findCollectionPhotos(logRef(log.source), diveKey.split(","))
       .then((period) => {
         if (!live) return;
         // Same dives found again (link restarted): the user's settings stay.
@@ -466,7 +469,7 @@ export function CollectionsScreen({
     if (!preview || !period) return;
     const cams = period.cameras;
     setRun({ state: "writing", done: 0, total: preview.total });
-    applyCollections(choices)
+    applyCollections(logRef(log.source), choices)
       .then((result) => setRun({ state: "done", result, choices, cameras: cams }))
       .catch((e: CollectionsError) => {
         setRun({ state: "failed", message: failure(e) });

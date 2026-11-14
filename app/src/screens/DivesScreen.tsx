@@ -130,7 +130,7 @@ export function DivesScreen({
             )}
           </div>
         )}
-        <DiveDetail dive={focused} units={units} capabilities={capabilities} />
+        <DiveDetail log={log.source} dive={focused} units={units} capabilities={capabilities} />
       </div>
 
       <div className="card selection-bar">

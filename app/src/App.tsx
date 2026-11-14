@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   appInfo,
+  getSettings,
   initialScreen,
   lightroomStatus,
+  lightroomWriting,
   loadDives,
   onLightroomStatus,
+  onLightroomWriting,
+  onLogChanged,
   onSettingsChanged,
   onShowScreen,
   updateSettings,
 } from "./api";
 import { unitsInUse } from "./collectionPlace";
+import { latestOnly, sourceWatch } from "./diveLog";
+import { profiles } from "./profiles";
 import { isReadyScreen, Sidebar, type Screen } from "./components/Sidebar";
 import { lang, setLanguage, t } from "./i18n";
 import { CollectionsScreen, type Phase } from "./screens/CollectionsScreen";
@@ -17,7 +23,7 @@ import { DivesScreen } from "./screens/DivesScreen";
 import { TagScreen } from "./screens/TagScreen";
 import { SettingsScreen, type LogState } from "./screens/SettingsScreen";
 import { SourceError } from "./screens/SourceError";
-import type { AppInfo, LightroomStatus, Settings, Sort } from "./types";
+import type { AppInfo, LightroomStatus, LoadError, Settings, Sort } from "./types";
 import "./App.css";
 
 const offline: LightroomStatus = {
@@ -59,20 +65,57 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   }, []);
   const [state, setState] = useState<LogState>({ status: "loading" });
   const [settings, setSettings] = useState<Settings>(initialSettings);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  // Why the last change of settings was not made (a ChangeError), or null.
+  const [saveError, setSaveError] = useState<unknown>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
 
+  // Each read of the dive log forgets the profiles shown so far, and only the
+  // latest read counts: a slow read of the previous log never replaces it.
+  const reads = useMemo(latestOnly, []);
   const load = useCallback(() => {
+    profiles.clear();
     setState({ status: "loading" });
-    loadDives()
-      .then((log) => setState({ status: "ok", log }))
-      .catch((failure) => setState({ status: "error", failure }));
+    reads(
+      loadDives(),
+      (log) => setState({ status: "ok", log }),
+      (failure) => setState({ status: "error", failure: failure as LoadError }),
+    );
+  }, [reads]);
+
+  // The dive log is read again whenever the application or its location
+  // changes, whichever way (Settings, the dive-log error screen, an import,
+  // the previous plugin's settings taken over). Another log starts every flow
+  // again: no dive checked, Create Collections at step 1, Tag Selection from
+  // scratch.
+  const source = settings.source;
+  const sourceKey = JSON.stringify(source);
+  const [sourceChanged] = useState(() => sourceWatch(initialSettings.source));
+  useEffect(() => {
+    if (sourceChanged(source)) {
+      setChosen(new Set());
+      setStep("dives");
+      setTagRun((n) => n + 1);
+    }
+    load();
+  }, [load, sourceKey, sourceChanged]);
+
+  // The back end refused an action on a dive log that is no longer the
+  // configured one: catch up with the settings, which reads the log again.
+  useEffect(() => {
+    onLogChanged(() => {
+      getSettings().then(setSettings);
+    });
   }, []);
 
-  // The dive log is read again whenever its location changes (here, or when
-  // the previous plugin's settings were taken over).
-  const sourceKey = JSON.stringify(settings.source);
-  useEffect(load, [load, sourceKey]);
+  // While Lightroom is being written to, the dive log cannot change.
+  const [writing, setWriting] = useState(false);
+  useEffect(() => {
+    lightroomWriting().then(setWriting);
+    const stop = onLightroomWriting(setWriting);
+    return () => {
+      stop.then((f) => f());
+    };
+  }, []);
 
   // Settings changed elsewhere (back end) reach this window too.
   useEffect(() => {
@@ -95,7 +138,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
         setSettings(s);
         setSaveError(null);
       })
-      .catch((e: unknown) => setSaveError(String(e)));
+      .catch((e: unknown) => setSaveError(e));
   }, []);
 
   const sort: Sort = settings.diveSort ?? "recent";
@@ -134,6 +177,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
           logState={state}
           lr={lr}
           info={info}
+          writing={writing}
           error={saveError}
           onChange={change}
         />

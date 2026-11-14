@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { isLogChanged } from "./diveLog";
 import type {
   AppInfo,
   ApplyOutcome,
@@ -10,6 +11,7 @@ import type {
   DiveLog,
   ImportCheck,
   LightroomStatus,
+  LogRef,
   Period,
   Sample,
   SelectionPreview,
@@ -17,14 +19,28 @@ import type {
   TagChoice,
 } from "./types";
 
+let logChanged = () => {};
+/** Calls `handler` when the back end refuses an action because the dive log is no longer the one shown. */
+export const onLogChanged = (handler: () => void) => {
+  logChanged = handler;
+};
+/** An action on the dive log `log`: refused (rejects with logChanged) when it is no longer the configured one. */
+function onLog<T>(call: Promise<T>): Promise<T> {
+  return call.catch((e: unknown) => {
+    if (isLogChanged(e)) logChanged();
+    throw e;
+  });
+}
+
 export const loadDives = () => invoke<DiveLog>("load_dives");
-export const diveProfile = (id: string) => invoke<Sample[]>("dive_profile", { id });
-/** Points DiveLens at another dive log; null: the application's standard location. */
+/** Profile of a dive of `log`; rejects with a ProfileError. */
+export const diveProfile = (log: LogRef, id: string) => onLog(invoke<Sample[]>("dive_profile", { log, id }));
+/** Points DiveLens at another dive log; null: the application's standard location. Rejects with a ChangeError. */
 export const setSourcePath = (path: string | null) => invoke<Settings>("set_source_path", { path });
 export const appInfo = () => invoke<AppInfo>("app_info");
 
 export const getSettings = () => invoke<Settings>("get_settings");
-/** Changes the settings named in `patch`; resolves with all of them. */
+/** Changes the settings named in `patch`; resolves with all of them, rejects with a ChangeError. */
 export const updateSettings = (patch: Partial<Settings>) => invoke<Settings>("update_settings", { patch });
 /** Writes the current settings to `path`; rejects with the reason. */
 export const exportSettings = (path: string) => invoke<void>("export_settings", { path });
@@ -38,6 +54,10 @@ export const onSettingsChanged = (handler: (s: Settings) => void): Promise<Unlis
 /** The catalog's collection sets; rejects with a CollectionsError. */
 export const collectionSets = () => invoke<CollectionSet[]>("collection_sets");
 export const lightroomStatus = () => invoke<LightroomStatus>("lightroom_status");
+/** Whether Lightroom is being written to (the dive log cannot change meanwhile). */
+export const lightroomWriting = () => invoke<boolean>("lightroom_writing");
+export const onLightroomWriting = (handler: (writing: boolean) => void): Promise<UnlistenFn> =>
+  listen<boolean>("lightroom-writing", (e) => handler(e.payload));
 export const initialScreen = () => invoke<string | null>("initial_screen");
 
 /** Calls `handler` on every change of the Lightroom link. */
@@ -48,8 +68,9 @@ export const onLightroomStatus = (handler: (s: LightroomStatus) => void): Promis
 export const onShowScreen = (handler: (screen: string) => void): Promise<UnlistenFn> =>
   listen<string>("show-screen", (e) => handler(e.payload));
 
-/** Tags the photos selected in Lightroom; rejects with a TagError. */
-export const tagSelection = (choice: TagChoice) => invoke<ApplyOutcome>("tag_selection", { choice });
+/** Tags the photos selected in Lightroom with data of `log`; rejects with a TagError. */
+export const tagSelection = (log: LogRef, choice: TagChoice) =>
+  onLog(invoke<ApplyOutcome>("tag_selection", { log, choice }));
 
 /** Progress of a catalog write: (photos done, total). */
 export const onApplyProgress = (handler: (done: number, total: number) => void): Promise<UnlistenFn> =>
@@ -61,12 +82,14 @@ export const selectionPreview = () => invoke<SelectionPreview>("selection_previe
 export const onSelectionPreview = (handler: (p: SelectionPreview) => void): Promise<UnlistenFn> =>
   listen<SelectionPreview>("selection-preview", (e) => handler(e.payload));
 
-/** Finds in Lightroom the photos of the chosen dives' period; rejects with a CollectionsError. */
-export const findCollectionPhotos = (diveIds: string[]) => invoke<Period>("find_collection_photos", { diveIds });
+/** Finds in Lightroom the photos of the period of dives of `log`; rejects with a CollectionsError. */
+export const findCollectionPhotos = (log: LogRef, diveIds: string[]) =>
+  onLog(invoke<Period>("find_collection_photos", { log, diveIds }));
 export const collectionsPreview = (choices: CollectionChoices) =>
   invoke<CollectionsPreview>("collections_preview", { choices });
 /** Suggested offset (minutes) per camera key; null when no offset fits. */
 export const suggestOffsets = (cameras: string[]) =>
   invoke<Record<string, number | null>>("suggest_offsets", { cameras });
-export const applyCollections = (choices: CollectionChoices) =>
-  invoke<CollectionsResult>("apply_collections", { choices });
+/** Writes the dives found with the photos, which must come from `log`; rejects with a CollectionsError. */
+export const applyCollections = (log: LogRef, choices: CollectionChoices) =>
+  onLog(invoke<CollectionsResult>("apply_collections", { log, choices }));

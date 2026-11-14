@@ -1,10 +1,11 @@
 // Dive detail card. Shared by Create Collections (step 1) and Tag Selection.
 
 import { lazy, Suspense, useEffect, useState } from "react";
-import { diveProfile } from "../api";
+import { isLogChanged } from "../diveLog";
 import { formatDepth, formatDiveSpan, formatDuration, formatGps, formatTemps } from "../format";
 import { t } from "../i18n";
-import type { Capabilities, Dive, Sample, Units } from "../types";
+import { profiles } from "../profiles";
+import type { Capabilities, Dive, LogRef, Sample, Units } from "../types";
 import { Icon } from "./Icon";
 import { ProfileChart } from "./ProfileChart";
 import { Stars } from "./Stars";
@@ -12,32 +13,32 @@ import { Stars } from "./Stars";
 // The map library is large: loaded the first time a dive with GPS shows.
 const DiveMap = lazy(() => import("./DiveMap"));
 
-// Profiles already loaded, by dive id (they never change while the app runs).
-const cache = new Map<string, Sample[]>();
+type ProfileState =
+  | { status: "loading" }
+  | { status: "ok"; samples: Sample[] }
+  | { status: "error"; logChanged: boolean };
 
-type ProfileState = { status: "loading" } | { status: "ok"; samples: Sample[] } | { status: "error" };
-
-function useProfile(dive: Dive): ProfileState {
+/** Profile of a dive of `log`, the dive log the screen shows. */
+function useProfile(log: LogRef, dive: Dive): ProfileState {
   const [state, setState] = useState<ProfileState>({ status: "loading" });
   useEffect(() => {
     if (!dive.hasProfile) return;
-    const cached = cache.get(dive.id);
+    const source = { kind: log.kind, path: log.path };
+    const cached = profiles.get(source, dive.id);
     if (cached) {
       setState({ status: "ok", samples: cached });
       return;
     }
     let live = true;
     setState({ status: "loading" });
-    diveProfile(dive.id)
-      .then((samples) => {
-        cache.set(dive.id, samples);
-        if (live) setState({ status: "ok", samples });
-      })
-      .catch(() => live && setState({ status: "error" }));
+    profiles
+      .load(source, dive.id)
+      .then((samples) => live && setState({ status: "ok", samples }))
+      .catch((e: unknown) => live && setState({ status: "error", logChanged: isLogChanged(e) }));
     return () => {
       live = false;
     };
-  }, [dive.id, dive.hasProfile]);
+  }, [log.kind, log.path, dive.id, dive.hasProfile]);
   return state;
 }
 
@@ -45,8 +46,8 @@ export function siteSubtitle(dive: Dive): string {
   return [dive.site.location, dive.site.country].filter(Boolean).join(" · ");
 }
 
-function Profile({ dive, units }: { dive: Dive; units: Units }) {
-  const state = useProfile(dive);
+function Profile({ log, dive, units }: { log: LogRef; dive: Dive; units: Units }) {
+  const state = useProfile(log, dive);
   if (!dive.hasProfile || (state.status === "ok" && state.samples.length < 2)) {
     return (
       <>
@@ -64,7 +65,11 @@ function Profile({ dive, units }: { dive: Dive; units: Units }) {
         <ProfileChart samples={state.samples} units={units} />
       ) : (
         <div className="profile-placeholder">
-          {state.status === "loading" ? t("detail.profileLoading") : t("detail.profileError")}
+          {state.status === "loading"
+            ? t("detail.profileLoading")
+            : state.status === "error" && state.logChanged
+              ? t("log.changed")
+              : t("detail.profileError")}
         </div>
       )}
       <figcaption>
@@ -98,7 +103,18 @@ function Temps({ low, high, units }: { low: number | null; high: number | null; 
   );
 }
 
-export function DiveDetail({ dive, units, capabilities }: { dive: Dive | null; units: Units; capabilities: Capabilities }) {
+export function DiveDetail({
+  log,
+  dive,
+  units,
+  capabilities,
+}: {
+  /** The dive log shown, whose profiles are read. */
+  log: LogRef;
+  dive: Dive | null;
+  units: Units;
+  capabilities: Capabilities;
+}) {
   if (!dive) {
     return (
       <aside className="card detail detail-empty">
@@ -123,7 +139,7 @@ export function DiveDetail({ dive, units, capabilities }: { dive: Dive | null; u
         {siteSubtitle(dive) && <span className="detail-place">{siteSubtitle(dive)}</span>}
         <span className="muted small">{formatDiveSpan(dive.start, dive.end)}</span>
       </div>
-      {capabilities.profile && <Profile dive={dive} units={units} />}
+      {capabilities.profile && <Profile log={log} dive={dive} units={units} />}
       <dl className="facts">
         <div>
           <dt className="lbl">{t("detail.duration")}</dt>

@@ -6,6 +6,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { onApplyProgress, onSelectionPreview, selectionPreview, tagSelection } from "../api";
 import { coveringDive } from "../covers";
+import { logRef } from "../diveLog";
 import { DiveDetail } from "../components/DiveDetail";
 import { DiveList } from "../components/DiveList";
 import { FilterBar } from "../components/FilterBar";
@@ -39,6 +40,8 @@ function failure(e: ApplyOutcome | TagError): string {
       return t("tag.err.linkLost");
     case "notConnected":
       return t("tag.err.notConnected");
+    case "logChanged":
+      return t("log.changedNothingWritten");
     default: {
       const detail = "outcome" in e ? (e.outcome === "failed" ? (e.detail ?? e.reason) : "") : JSON.stringify(e);
       return t("tag.err.other", { detail });
@@ -153,7 +156,7 @@ export function TagScreen({
           : { kind: "site", siteId: pick.siteId as string, lat: gps?.lat ?? null, lon: gps?.lon ?? null },
     };
     setRun({ state: "writing", done: 0, total: lr.selected });
-    tagSelection(choice)
+    tagSelection(logRef(log.source), choice)
       .then((outcome) =>
         setRun(outcome.outcome === "applied" ? { state: "done", count: outcome.count } : { state: "failed", message: failure(outcome) }),
       )
@@ -238,7 +241,7 @@ export function TagScreen({
                     )}
                   </div>
                 )}
-                <DiveDetail dive={focused} units={units} capabilities={capabilities} />
+                <DiveDetail log={log.source} dive={focused} units={units} capabilities={capabilities} />
               </div>
               <p className="muted small">{t("tag.diveDataWrites")}</p>
             </>

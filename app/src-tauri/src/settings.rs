@@ -264,6 +264,9 @@ pub enum ImportError {
     NotSettings,
     /// The imported settings could not be saved.
     NotSaved(String),
+    /// They name another dive log while Lightroom is being written to:
+    /// nothing was changed.
+    WriteInProgress,
 }
 
 /// Settings of the previous plugin (Lightroom plug-in preferences), as the

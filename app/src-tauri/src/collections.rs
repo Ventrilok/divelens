@@ -13,6 +13,7 @@ use divelens_core::tags::{
 use divelens_core::{Dive, Error};
 use serde::{Deserialize, Serialize};
 
+use crate::dive_log::{LogChanged, LogId};
 use crate::lightroom::FoundPhoto;
 use crate::offsets::{Offsets, camera_key, parse_time};
 
@@ -50,6 +51,10 @@ pub struct Session {
     pub cameras: Vec<Camera>,
     /// Photos of the period without a capture time (never placed).
     pub undated: usize,
+    /// The dive log the dives were read from (`None` until known).
+    log: Option<LogId>,
+    /// Profiles of the dives that have one, read with the dives, by dive id.
+    profiles: HashMap<String, Result<Vec<Sample>, Error>>,
 }
 
 /// What the screen shows once the photos are found.
@@ -184,7 +189,40 @@ impl Session {
             photos,
             cameras,
             undated,
+            log: None,
+            profiles: HashMap::new(),
         }
+    }
+
+    /// Keeps the dive log the dives were read from and the profiles read
+    /// with them: "Apply" writes these, never a later read of the log, and
+    /// names the application they come from (spec F5).
+    pub fn read_from(
+        mut self,
+        log: LogId,
+        profiles: HashMap<String, Result<Vec<Sample>, Error>>,
+    ) -> Self {
+        self.log = Some(log);
+        self.profiles = profiles;
+        self
+    }
+
+    /// The write request for "Apply", from the dives and profiles kept, with
+    /// their application's name. Refused unless they come from `log`, the
+    /// one the screen shows and the settings still point at.
+    pub fn write_request(
+        &self,
+        log: &LogId,
+        choices: &Choices,
+        units: Units,
+    ) -> Result<Result<CollectionsRequest, Error>, LogChanged> {
+        let kept = self.log.as_ref().ok_or(LogChanged)?;
+        if kept != log {
+            return Err(LogChanged);
+        }
+        Ok(self.request(choices, units, kept.kind.name(), |d| {
+            self.profiles.get(&d.id).cloned().unwrap_or(Ok(Vec::new()))
+        }))
     }
 
     pub fn period(&self, from: String, to: String) -> Period {
@@ -568,6 +606,106 @@ mod tests {
         // Dive B has no profile: photo there, fields empty.
         assert_eq!(request.groups[1].photos[0].photo_depth, None);
         assert!(!a.photos.iter().any(|p| p.id == "6"), "ignored camera");
+    }
+
+    fn log(kind: crate::settings::SourceKind, path: &str) -> LogId {
+        LogId {
+            kind,
+            path: path.into(),
+        }
+    }
+
+    fn ramp(depth_m: f64) -> Vec<Sample> {
+        vec![
+            Sample {
+                time_s: 0,
+                depth_m: 0.0,
+                temp_c: None,
+            },
+            Sample {
+                time_s: 3000,
+                depth_m,
+                temp_c: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn apply_writes_the_profiles_and_application_read_with_the_dives() {
+        use crate::settings::SourceKind;
+        let read = log(SourceKind::Subsurface, "/Logs/diver.xml");
+        let s = session(&Offsets::default()).read_from(
+            read.clone(),
+            HashMap::from([("A".to_string(), Ok(ramp(30.0)))]),
+        );
+        let request = s
+            .write_request(&read, &choices(10), Units::default())
+            .expect("same log")
+            .unwrap();
+        // The profile read with the dives: photo 1, 300 s in, 3.0 m.
+        let a = &request.groups[0];
+        let photo = a.photos.iter().find(|p| p.id == "1").unwrap();
+        assert_eq!(photo.photo_depth.as_deref(), Some("3.0 m"));
+        assert!(
+            request.groups.iter().all(|g| g.dive.source == "Subsurface"),
+            "the application the dives were read from"
+        );
+    }
+
+    #[test]
+    fn apply_is_refused_when_the_log_changed_since_the_dives_were_read() {
+        use crate::settings::SourceKind;
+        let read = log(SourceKind::Subsurface, "/Logs/diver.xml");
+        let s = session(&Offsets::default()).read_from(
+            read.clone(),
+            HashMap::from([("A".to_string(), Ok(ramp(30.0)))]),
+        );
+        let elsewhere = log(SourceKind::Subsurface, "/Logs/other.xml");
+        assert!(matches!(
+            s.write_request(&elsewhere, &choices(10), Units::default()),
+            Err(LogChanged)
+        ));
+        let other_app = log(SourceKind::MacDive, "/Logs/diver.xml");
+        assert!(matches!(
+            s.write_request(&other_app, &choices(10), Units::default()),
+            Err(LogChanged)
+        ));
+        // Dives of unknown origin are never written.
+        let unknown = session(&Offsets::default());
+        assert!(matches!(
+            unknown.write_request(&read, &choices(10), Units::default()),
+            Err(LogChanged)
+        ));
+    }
+
+    #[test]
+    fn a_profile_that_did_not_read_fails_apply_only_when_needed() {
+        use crate::settings::SourceKind;
+        let read = log(SourceKind::MacDive, "/Dives/MacDive.sqlite");
+        let s = session(&Offsets::default()).read_from(
+            read.clone(),
+            HashMap::from([("A".to_string(), Err(Error::BadProfile("garbled".into())))]),
+        );
+        // Dive A gets photos taken during the dive: its profile is needed.
+        assert!(matches!(
+            s.write_request(&read, &choices(0), Units::default()),
+            Ok(Err(Error::BadProfile(_)))
+        ));
+        // Only a photo at the surface before dive A (GoPro 09:20 − 25 min,
+        // in a 10-minute margin): its profile is not needed.
+        let c = Choices {
+            offsets: HashMap::from([("GoPro|".into(), -25)]),
+            ignored: BTreeSet::from(["iPhone|Z9".to_string(), "TG-7|A1".to_string()]),
+            margin_min: 10,
+        };
+        let request = s
+            .write_request(&read, &c, Units::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(request.groups.len(), 1);
+        assert_eq!(request.groups[0].photos[0].id, "4");
+        assert_eq!(request.groups[0].photos[0].photo_depth, None);
+        assert_eq!(request.groups[0].dive.source, "MacDive");
     }
 
     #[test]

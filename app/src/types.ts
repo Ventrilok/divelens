@@ -53,6 +53,12 @@ export interface SourceInfo {
   isDefaultPath: boolean;
 }
 
+/** The dive log a screen shows, named by every action on it (application and location). */
+export interface LogRef {
+  kind: SourceKind;
+  path: string;
+}
+
 export interface DiveLog {
   source: SourceInfo;
   /** Subsurface only: file or git storage. */
@@ -80,6 +86,9 @@ export interface LoadError {
   source: SourceInfo;
   error: ReaderError;
 }
+
+/** Why a dive profile was not read; logChanged: the screen shows another log than the configured one. */
+export type ProfileError = { error: "logChanged" } | { error: "source"; detail: ReaderError };
 
 export interface Units {
   depth: "m" | "ft";
@@ -121,7 +130,7 @@ export type ApplyOutcome =
   | { outcome: "failed"; reason: "noSelection" | "busy" | "badRequest" | "error" | string; detail: string | null };
 
 export type TagError =
-  | { error: "nothingChosen" | "notConnected" | "linkLost" | "badGps" | "unknownDive" | "unknownSite" }
+  | { error: "nothingChosen" | "notConnected" | "linkLost" | "badGps" | "unknownDive" | "unknownSite" | "logChanged" }
   | { error: "source"; detail: ReaderError };
 
 // --- Create Collections (app/src-tauri/src/collections.rs) ------------------
@@ -185,7 +194,7 @@ export interface CollectionsResult {
 }
 
 export type CollectionsError =
-  | { error: "nothingChosen" | "notConnected" | "linkLost" | "noPhotos" | "nothingToWrite" }
+  | { error: "nothingChosen" | "notConnected" | "linkLost" | "noPhotos" | "nothingToWrite" | "logChanged" }
   | { error: "source"; detail: ReaderError }
   | { error: "lightroom"; reason: string; detail: string | null };
 
@@ -218,7 +227,11 @@ export interface ImportCheck {
 export type ImportError =
   | { kind: "unreadable"; detail: string }
   | { kind: "notSettings" }
-  | { kind: "notSaved"; detail: string };
+  | { kind: "notSaved"; detail: string }
+  | { kind: "writeInProgress" };
+
+/** Why a setting was not changed; writeInProgress: it would switch the dive log during a write to Lightroom. */
+export type ChangeError = { kind: "notSaved"; detail: string } | { kind: "writeInProgress" };
 
 /** A collection set of the Lightroom catalog. */
 export interface CollectionSet {
