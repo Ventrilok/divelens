@@ -41,15 +41,87 @@ INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZRELATION
   VALUES (4, 'UUID-D', 14, 757381200, 60.0, 3, 'Shearwater Perdix 2', '  ');
 "#;
 
-fn fixture() -> (TempDir, MacDive) {
-    let dir = TempDir::new().unwrap();
-    let path = dir.path().join("Mac Dive ~ test.sqlite");
+/// The fictional database, in WAL mode like every Core Data store, closed. Its
+/// name holds what a `file:` URI must escape.
+fn database(dir: &Path) -> PathBuf {
+    let path = dir.join("Mac Dive ~ #1 100% été.sqlite");
     let conn = Connection::open(&path).unwrap();
+    conn.execute_batch("PRAGMA journal_mode = WAL;").unwrap();
     conn.execute_batch(SCHEMA).unwrap();
     conn.execute_batch(DATA).unwrap();
     drop(conn);
-    let md = MacDive::open(&path).unwrap();
+    path
+}
+
+fn fixture() -> (TempDir, MacDive) {
+    let dir = TempDir::new().unwrap();
+    let md = MacDive::open(&database(dir.path())).unwrap();
     (dir, md)
+}
+
+/// Names of the files in `dir`.
+fn files(dir: &Path) -> Vec<String> {
+    let mut names: Vec<_> = std::fs::read_dir(dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn reading_creates_no_file_next_to_the_database() {
+    let dir = TempDir::new().unwrap();
+    let path = database(dir.path());
+    let before = files(dir.path());
+    assert_eq!(before.len(), 1, "closed WAL database: no -wal, no -shm");
+    let md = MacDive::open(&path).unwrap();
+    assert_eq!(md.dives().unwrap().len(), 4);
+    md.sites().unwrap();
+    drop(md);
+    assert_eq!(files(dir.path()), before);
+}
+
+#[test]
+fn reads_dives_macdive_has_not_copied_into_the_database_yet() {
+    let dir = TempDir::new().unwrap();
+    let path = database(dir.path());
+    // MacDive open: its last dive is still in the -wal file only.
+    let macdive = Connection::open(&path).unwrap();
+    macdive
+        .execute_batch(
+            "PRAGMA wal_autocheckpoint = 0;
+             INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE) VALUES (9, 'UUID-NEW', 15, 771700000);",
+        )
+        .unwrap();
+    let md = MacDive::open(&path).unwrap();
+    let dives = md.dives().unwrap();
+    assert_eq!(dives.len(), 5);
+    assert_eq!(by_id(&dives, "UUID-NEW").number, Some(15));
+    drop(md);
+    drop(macdive);
+}
+
+#[test]
+#[cfg(not(windows))]
+fn immutable_uris_escape_the_path() {
+    assert_eq!(
+        immutable_uri(Path::new("/Users/diver/Mac Dive ~ #1 100% été.sqlite")).as_deref(),
+        Some("file:/Users/diver/Mac%20Dive%20~%20%231%20100%25%20%C3%A9t%C3%A9.sqlite?immutable=1")
+    );
+}
+
+#[test]
+#[cfg(windows)]
+fn immutable_uris_escape_the_path() {
+    assert_eq!(
+        immutable_uri(Path::new(r"C:\Logs\Mac Dive #1.sqlite")).as_deref(),
+        Some("file:/C:/Logs/Mac%20Dive%20%231.sqlite?immutable=1")
+    );
+    assert_eq!(
+        immutable_uri(Path::new(r"\\server\share\MacDive.sqlite")),
+        None
+    );
 }
 
 fn by_id<'a>(dives: &'a [Dive], id: &str) -> &'a Dive {
