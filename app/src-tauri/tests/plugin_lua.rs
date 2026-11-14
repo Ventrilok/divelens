@@ -618,8 +618,9 @@ mod retagging {
             retag(Before::Filed(&photo), None, &tag(&renumbered, "MacDive")),
             cleared(true)
         );
-        // Tagged earlier by "Tag Selection" (no depth): the altitude stays,
-        // even one equal to a depth Dive Lens could have written.
+        // Only the values the photo has are cleared. Tagged earlier by "Tag
+        // Selection": none, so nothing to clear, and the altitude stays even
+        // when it equals a depth Dive Lens could have written.
         let tagged = tag(&a, "MacDive");
         assert_eq!(
             retag(
@@ -627,9 +628,9 @@ mod retagging {
                 Some(-18.4),
                 &tag(&next_dive(), "MacDive")
             ),
-            cleared(false)
+            Vec::<String>::new()
         );
-        // Filed in the margin (no depth): the same.
+        // Filed in the margin: only a clock offset, no depth.
         let surface = filed(&a, "MacDive", None, Units::default());
         assert_eq!(
             retag(
@@ -637,6 +638,13 @@ mod retagging {
                 Some(-18.4),
                 &tag(&next_dive(), "MacDive")
             ),
+            ["plugin ClockOffset=nil"]
+        );
+        // Known miss, kept on purpose: 18.45 m is written "18.4 m" but its
+        // altitude is -18.5, so the altitude stays.
+        let half = filed(&a, "MacDive", Some(18.45), Units::default());
+        assert_eq!(
+            retag(Before::Filed(&half), None, &tag(&next_dive(), "MacDive")),
             cleared(false)
         );
     }
@@ -700,16 +708,25 @@ mod retagging {
         // gives back the altitude written from the exact depth.
         assert_eq!(feet(18.288), feet(18.44));
         assert_eq!(feet(18.44).as_deref(), Some("60 ft"));
-        let cases: [(Option<String>, Option<f64>, bool); 14] = [
+        assert_eq!(feet(30.48).as_deref(), Some("100 ft"));
+        assert_eq!(feet(9.2).as_deref(), Some("30 ft"));
+        // The known metres miss: the text rounds down, the altitude up.
+        assert_eq!(metres(18.45).as_deref(), Some("18.4 m"));
+        assert_eq!(altitude(18.45), -18.5);
+        let cases: [(Option<String>, Option<f64>, bool); 17] = [
             (metres(18.44), Some(altitude(18.44)), true),
             // As Lightroom may store it.
             (metres(18.44), Some(altitude(18.44) as f32 as f64), true),
             (metres(18.44), Some(-18.5), false),
             (metres(18.44), Some(-18.3), false),
             (metres(18.44), Some(18.4), false),
+            (metres(18.45), Some(altitude(18.45)), false),
             (metres(0.02), Some(altitude(0.02)), true),
             (feet(18.288), Some(altitude(18.288)), true),
             (feet(18.44), Some(altitude(18.44)), false),
+            // "100 ft" gives back -30.5; "30 ft" gives -9.1, not -9.2.
+            (feet(30.48), Some(altitude(30.48)), true),
+            (feet(9.2), Some(altitude(9.2)), false),
             // Before units: a number, in metres.
             (Some("18.4".into()), Some(altitude(18.4)), true),
             (Some(String::new()), Some(-18.4), false),

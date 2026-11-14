@@ -88,7 +88,7 @@ local DIVE_IDENTITY = { "Source", "StartDate", "DiveId" }
 
 --- DiveLens fields "Tag Selection" reads on each photo before writing a dive
 --- (see retagChanges).
-Tagging.RETAG_FIELDS = { "Source", "StartDate", "DiveId", "PhotoDepth" }
+Tagging.RETAG_FIELDS = { "Source", "StartDate", "DiveId", "PhotoDepth", "PhotoTemp", "PhotoElapsed", "ClockOffset" }
 
 local FT_PER_M = 3.28084 -- as core/src/tags.rs
 
@@ -135,15 +135,16 @@ end
 
 --- Extra changes for one photo of a "Tag Selection" request (`changes`, from
 --- Tagging.plan) when the photo already carries another dive (spec F8): its
---- own values belonged to that dive and are cleared. Its GPS altitude is
---- cleared only when it is exactly the one Dive Lens derived from the old
---- depth: the field is shared with the camera and the user, and Lightroom's
---- Undo does not restore it.
+--- own values belonged to that dive and are cleared (only those it has, so
+--- an empty list means nothing to clear). Its GPS altitude is cleared only
+--- when it is exactly the one Dive Lens derived from the old depth: the
+--- field is shared with the camera and the user, and Lightroom's Undo does
+--- not restore it.
 ---
 --- `photo` is what the photo carries before the write: the RETAG_FIELDS
---- values and `gpsAltitude` (metres or nil). Nothing (an empty list) for the
---- same dive (source, start and number all equal), a photo without dive
---- data, or a request writing only a location.
+--- values and `gpsAltitude` (metres or nil). Nothing for the same dive
+--- (source, start and number all equal), a photo without dive data, or a
+--- request writing only a location.
 function Tagging.retagChanges(photo, changes)
     if not Tagging.writesDive(changes) then return {} end
     photo = photo or {}
@@ -160,7 +161,9 @@ function Tagging.retagChanges(photo, changes)
     if not hasDive or same then return {} end
     local extra = {}
     for _, field in ipairs(PER_PHOTO) do
-        extra[#extra + 1] = { kind = "plugin", field = field, value = nil }
+        if filled(photo[field]) then
+            extra[#extra + 1] = { kind = "plugin", field = field, value = nil }
+        end
     end
     if Tagging.isDerivedAltitude(photo.gpsAltitude, filled(photo.PhotoDepth)) then
         extra[#extra + 1] = { kind = "raw", field = "gpsAltitude", value = nil }
