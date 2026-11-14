@@ -285,9 +285,11 @@ lists them all). `--app` takes the application's name. Without it, the tool
 tries the applications whose logs look like `<log>`, in the order of the
 list: those whose log can be a folder, for a folder (Subsurface); those whose
 files have its extension, for a file (`.xml` or `.ssrf`: Subsurface;
-`.sqlite`: MacDive); the first registered application (MacDive) for anything
-else. The first one that reads the log is used; when none does, the first
-one's error is shown. The tool prints the number of
+`.sqlite`: MacDive); every application, MacDive first, for anything else.
+The first one that opens the log is used. When none does, the tool shows the
+first error from an application that recognised the log (anything but
+"nothing there" or "not a dive log": a reader failing on its own kind of
+log), else the first error. The tool prints the number of
 dives and sites, decodes every profile (listing those that fail), reads the
 log twice to compare identifiers, reports what breaks the rules above, and
 says whether reading changed, created or removed any file of the log (sizes
