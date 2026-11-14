@@ -247,7 +247,9 @@ application" issue so that the approach can be discussed.
    in `core/fixtures/<application>/`, but files ending `.sqlite` or `.ssrf`
    are ignored by git there, as a guard against real logs: build a database
    from SQL in the tests, as MacDive's copy is, and name a Subsurface-style
-   XML copy `.xml`. In the reader's tests, add a function that writes the
+   XML copy `.xml`. If the application's logs end with another extension,
+   add it to `.gitignore` the same way, so that a real log cannot be
+   committed by mistake. In the reader's tests, add a function that writes the
    copy into a folder and returns the path to open, and a `conformance()`
    function giving the application's runs of the common tests: one per way
    the log can be stored, each with that function, the capabilities the
