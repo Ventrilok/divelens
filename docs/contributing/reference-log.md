@@ -27,7 +27,8 @@ The common tests read each copy and check that the reader:
 - gives **wall-clock times** exactly as the log holds them: the start and end
   the app receives are the literal times below, with no time zone, and the
   end is the start plus the duration. Nothing depends on the computer's time
-  zone;
+  zone: on macOS and Linux the tests run a second time, 14 hours ahead of
+  UTC;
 - gives **stable identifiers**: the same id for each dive and each site when
   the log is read again or opened again; no two dives share an id (even when
   they start at the same second); dives at the same site share its id;
