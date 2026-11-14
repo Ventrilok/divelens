@@ -50,7 +50,7 @@ body:
       description: |
         A fictional log holds dives you invent in the application for the purpose. An anonymised log is your real log with every name, site, place, GPS position, note, buddy and dive-computer serial number replaced; raw dive-computer downloads kept in the log can contain serial numbers too. Never share your log without anonymising it first.
 
-        Send the log by e-mail to [divelens@querton.com](mailto:divelens@querton.com), never attached to this issue. It is used only to test the new reader and is never added to the repository, whose test data is fictional only.
+        Send the log by e-mail to [divelens@querton.com](mailto:divelens@querton.com), never attached to this issue. It is used to test the new reader. The repository itself only ever holds fictional or properly anonymised test data, never a real log as it is.
       options:
         - Yes, I can make a fictional or anonymised log and send it by e-mail
         - Yes, by trying test versions on my own log, without sharing it

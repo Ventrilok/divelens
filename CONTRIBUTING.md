@@ -187,4 +187,4 @@ Use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choos
 Both remind you of the privacy rule above:
 
 - For a bug, describe the problem in the issue. If the Dive Lens log files are needed, you will be asked for them: send them by e-mail to [divelens@querton.com](mailto:divelens@querton.com), never in an issue. In the issue itself, paste at most the relevant lines, with site names, places, people's names and file paths removed.
-- For a new dive application, a fictional log, or your real log once anonymised, helps testing. Send it by e-mail to the same address, never attached to the issue. It is used only to test the new reader: it is never added to the repository, whose test data stays fictional.
+- For a new dive application, a fictional log, or your real log once anonymised, helps testing. Send it by e-mail to the same address, never attached to the issue. It is used to test the new reader. The repository itself only ever holds fictional or properly anonymised test data, never a real log as it is (see [Test data](#test-data-fictional-only)).
