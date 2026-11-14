@@ -31,7 +31,7 @@ DiveLens App.log. Crop or blur screenshots.
 - [ ] Core: `cargo clippy -p divelens-core -p libdivecomputer-sys --all-targets -- -D warnings` and `cargo test -p divelens-core`
 - [ ] App, front end or plug-in: `npm test` and `npm run build` (in `app/`), then `cargo clippy -p divelens --all-targets -- -D warnings` and `cargo test -p divelens`
 - [ ] Tried in Lightroom Classic (macOS / Windows):
-- [ ] Documentation only: no check needed
+- [ ] Documentation only: `cargo fmt --all --check` is the only check that applies
 
 ## Data and privacy
 

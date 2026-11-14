@@ -4,7 +4,7 @@ Thank you for your interest in Dive Lens. It links underwater photos in Adobe Li
 
 Bug reports, requests to support another dive application, fixes and documentation are all welcome.
 
-**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request stays visible to everyone, including in the history. Never share a real dive log, a dive-log database, what a tool prints from one, or the Dive Lens log files. See [Test data: fictional only](#test-data-fictional-only).
+**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share a real dive log, a dive-log database, what a tool prints from one, or the Dive Lens log files. See [Test data: fictional only](#test-data-fictional-only).
 
 ## Contents
 
