@@ -29,7 +29,7 @@
 //!
 //! **The output is personal data** (dates, places, positions, notes). It stays
 //! on this computer: never put it, even in part, in the repository, an issue
-//! or a pull request. Test data is always fictional
+//! or a pull request. Test data is always fictional or anonymised
 //! (`docs/contributing/reference-log.md`).
 
 use std::collections::{BTreeMap, HashSet};
