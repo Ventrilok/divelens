@@ -189,11 +189,12 @@ with nothing but a date, and a raw download libdivecomputer cannot decode
    `DiveSource` (`core/src/model.rs`) and has an `open(path)` that reads the
    log without writing anything.
 2. Write the reference log in the application's own format, from the tables
-   above, shaped exactly like what the application itself writes. Text files
-   go in `core/fixtures/<application>/`. Database files (`.sqlite`, `.ssrf`)
-   are ignored by git there, as a guard against real logs: build them from
-   SQL in the tests, as MacDive's copy is. In the reader's tests, add a
-   function that writes the copy into a folder and returns the path to open.
+   above, shaped exactly like what the application itself writes. Files go
+   in `core/fixtures/<application>/`, but files ending `.sqlite` or `.ssrf`
+   are ignored by git there, as a guard against real logs: build a database
+   from SQL in the tests, as MacDive's copy is, and name a Subsurface-style
+   XML copy `.xml`. In the reader's tests, add a function that writes the
+   copy into a folder and returns the path to open.
 3. Add a test at the bottom of `core/src/conformance.rs` calling `check`
    with that function and the reader's `open`.
 4. Run `cargo test -p divelens-core` until it passes. A failure lists every
