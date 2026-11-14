@@ -39,7 +39,7 @@ App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where a
 - Lint: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` (the app crate needs `app/dist`; core only: `cargo clippy -p divelens-core -p libdivecomputer-sys --all-targets -- -D warnings`)
 - Front-end type check (from `app/`): `npm run build` (runs `tsc`, then produces `app/dist`)
 - Front-end tests (from `app/`): `npm test` (runs in a UTC+14 time zone on purpose: dive times are wall-clock and must never shift)
-- Check the MacDive reader against a real database (local only, output is personal data): `cargo run -p divelens-core --example macdive_dump -- <path> [dive number]`
+- Check a reader against a real dive log, any application (local only; the output is personal data and never goes into the repository, an issue or a PR): `cargo run --release -p divelens-core --example verify_log -- [--app MacDive|Subsurface] <path> [dive number]`
 - App build (from `app/`): `npm ci`, then `npm run tauri build -- --bundles app` (macOS, skips the DMG) or `-- --no-bundle`
 - Dev window (from `app/`): `npm run tauri dev` (opens a window and keeps running)
 
