@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
@@ -393,6 +394,17 @@ fn send_line(stream: &mut TcpStream, message: &ToPlugin) -> std::io::Result<()> 
     stream.write_all(&line)
 }
 
+/// Number of the next request to the plugin. It never starts again while
+/// the app runs, not even when the link does: a photo search or a selection
+/// description the plugin kept from an earlier link session can never be
+/// taken for a newer one. (The plugin forgets them when the link resets,
+/// and the app forgets its own when it quits.)
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
+fn next_id() -> u64 {
+    NEXT_ID.fetch_add(1, Ordering::Relaxed)
+}
+
 /// Drops the requests waiting to be sent: whoever made one stops waiting
 /// for its answer (it gets none).
 pub fn drop_requests(commands: &Receiver<Command>) {
@@ -462,7 +474,6 @@ fn session(
     let mut reader = BufReader::new(incoming);
     let mut line = Vec::new();
     let mut pending: HashMap<u64, Pending> = HashMap::new();
-    let mut next_id = 1;
     loop {
         match reader.read_until(b'\n', &mut line) {
             Ok(0) => return End::Lost, // closed by the plugin
@@ -587,8 +598,7 @@ fn session(
             if !status.connected {
                 continue; // dropped: the caller learns the link is not up
             }
-            let id = next_id;
-            next_id += 1;
+            let id = next_id();
             let message = match &command {
                 Command::Apply { request, .. } => ToPlugin::Apply {
                     id,
@@ -819,6 +829,43 @@ mod tests {
             }),
             ..TagRequest::default()
         }
+    }
+
+    /// Runs one link session in which the app asks for the collection sets;
+    /// returns the request's number as the plugin received it.
+    fn one_session_request_id() -> u64 {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (id_tx, id_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin(move |lines, to_app| {
+            lines.next().unwrap();
+            write(to_app, &format!("{HELLO}\n"));
+            lines.next().unwrap(); // first ping: the app is connected
+            let (reply, sets) = std::sync::mpsc::channel();
+            commands.send(Command::ListSets { reply }).unwrap();
+            let id = next_request(lines)["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!("{{\"type\":\"sets\",\"id\":{id},\"sets\":[]}}\n"),
+            );
+            sets.recv().unwrap().unwrap();
+            id_tx.send(id).unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        assert_eq!(
+            run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {}),
+            End::Bye
+        );
+        plugin.join().unwrap();
+        id_rx.recv().unwrap()
+    }
+
+    #[test]
+    fn request_numbers_never_start_again_with_a_new_link() {
+        // An old selection description or photo search, numbered in a
+        // previous link session, can never match a request of this one.
+        let first = one_session_request_id();
+        let second = one_session_request_id();
+        assert!(second > first, "{second} after {first}");
     }
 
     #[test]
