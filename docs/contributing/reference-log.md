@@ -197,13 +197,19 @@ with nothing but a date, and a raw download libdivecomputer cannot decode
    are ignored by git there, as a guard against real logs: build a database
    from SQL in the tests, as MacDive's copy is, and name a Subsurface-style
    XML copy `.xml`. In the reader's tests, add a function that writes the
-   copy into a folder and returns the path to open.
+   copy into a folder and returns the path to open, and declare the tests
+   module `#[cfg(test)] pub(crate) mod tests;` so that the common tests can
+   reach it.
 3. Add a test at the bottom of `core/src/conformance.rs` calling `check`
-   with that function and the reader's `open`.
+   with that function, the reader's `open`, the capabilities the reader must
+   declare, and whether the application marks dives invalid.
 4. Run `cargo test -p divelens-core` until it passes. A failure lists every
    value that differs from this page.
-5. Check the reader against a real log on your own computer, with the tool
-   below.
+5. Register the application in the tool below
+   (`core/examples/verify_log.rs`): its name in `APPS`, how to open it in
+   `open`, and how to recognise its logs in `guess`.
+6. Check the reader against a real log on your own computer, with that
+   tool.
 
 ## Checking a reader against a real log
 
@@ -215,8 +221,10 @@ cargo run --release -p divelens-core --example verify_log -- [--app <application
 storage folder; without `--app`, a folder or an `.xml` or `.ssrf` file is
 read as Subsurface, anything else as MacDive. The tool prints the number of
 dives and sites, decodes every profile (listing those that fail), reads the
-log twice to compare identifiers, and reports what breaks the rules above.
-With a dive number, it also prints that dive and its profile.
+log twice to compare identifiers, reports what breaks the rules above, and
+says whether reading changed, created or removed any file of the log (sizes
+and hashes only, never contents). With a dive number, it also prints that
+dive and its profile.
 
 **Its output is personal data**: dates, places, positions, notes. It stays on
 your computer. Never put it, even in part, in the repository, an issue or a
