@@ -1,7 +1,9 @@
 // Shown instead of a screen when the dive log cannot be opened.
 
+import { useState } from "react";
 import { setSourcePath } from "../api";
 import { Icon } from "../components/Icon";
+import { changeErrorText } from "../diveLog";
 import { t } from "../i18n";
 import { chooseLog, errorKind, errorText } from "../sourceText";
 import type { LoadError } from "../types";
@@ -10,13 +12,20 @@ export function SourceError({ failure, onRetry }: { failure: LoadError; onRetry:
   const source = failure.source.kind;
   const kind = errorKind(source, failure.error);
   const canRetry = kind === "database" || kind === "oldFormat";
+  // Why the location chosen was not saved (a ChangeError), or null.
+  const [refused, setRefused] = useState<unknown>(null);
 
   const locate = async (folder: boolean) => {
     const picked = await chooseLog(source, failure.source.path, folder);
-    if (picked) {
+    if (!picked) return;
+    try {
       await setSourcePath(picked);
-      onRetry();
+    } catch (e) {
+      setRefused(e);
+      return;
     }
+    setRefused(null);
+    onRetry();
   };
 
   return (
@@ -29,6 +38,12 @@ export function SourceError({ failure, onRetry }: { failure: LoadError; onRetry:
         <p className="muted">{errorText(source, failure.error, "text")}</p>
         <p className="path">{failure.source.path}</p>
         {kind === "database" && <p className="path">{failure.error.detail}</p>}
+        {refused !== null && (
+          <p className="set-error" role="alert">
+            <Icon name="warn" size={16} />
+            {changeErrorText(refused)}
+          </p>
+        )}
         <div className="actions">
           {source === "subsurface" ? (
             <>

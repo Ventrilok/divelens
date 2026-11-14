@@ -18,6 +18,8 @@ export function importErrorText(error: unknown): string {
       return t("settings.importNotSettings");
     case "notSaved":
       return t("settings.importNotSaved", { detail: e.detail ?? "" });
+    case "writeInProgress":
+      return t("settings.logLocked");
     default:
       return t("settings.importNotSaved", { detail: String(error) });
   }

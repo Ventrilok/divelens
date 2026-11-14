@@ -380,6 +380,12 @@ fn send_line(stream: &mut TcpStream, message: &ToPlugin) -> std::io::Result<()> 
     stream.write_all(&line)
 }
 
+/// Drops the requests waiting to be sent: whoever made one stops waiting
+/// for its answer (it gets none).
+pub fn drop_requests(commands: &Receiver<Command>) {
+    while commands.try_recv().is_ok() {}
+}
+
 /// Runs one connection to the plugin until it ends; reports to `on_event`.
 /// Always reports a disconnected status before returning if it had reported
 /// a connected one.
@@ -391,7 +397,7 @@ pub fn run_session(
     on_event: &mut dyn FnMut(Event),
 ) -> End {
     // Requests made while the link was down are dropped, never sent late.
-    while commands.try_recv().is_ok() {}
+    drop_requests(commands);
     if link.protocol != PROTOCOL {
         return End::Protocol(link.protocol);
     }
@@ -662,6 +668,15 @@ mod tests {
     }
 
     const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":4,"type":"hello"}"#;
+
+    #[test]
+    fn dropped_requests_stop_their_callers_waiting() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (reply, answer) = std::sync::mpsc::channel();
+        commands.send(Command::ListSets { reply }).unwrap();
+        drop_requests(&inbox);
+        assert!(answer.recv().is_err(), "no answer will come");
+    }
 
     #[test]
     fn reads_link_file() {

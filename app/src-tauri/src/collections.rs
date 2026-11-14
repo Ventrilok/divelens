@@ -13,6 +13,7 @@ use divelens_core::tags::{
 use divelens_core::{Dive, Error};
 use serde::{Deserialize, Serialize};
 
+use crate::dive_log::{LogChanged, LogId};
 use crate::lightroom::FoundPhoto;
 use crate::offsets::{Offsets, camera_key, parse_time};
 
@@ -50,12 +51,19 @@ pub struct Session {
     pub cameras: Vec<Camera>,
     /// Photos of the period without a capture time (never placed).
     pub undated: usize,
+    /// The dive log the dives were read from (`None` until known).
+    log: Option<LogId>,
+    /// Profiles of the dives that have one, read with the dives, by dive id.
+    profiles: HashMap<String, Result<Vec<Sample>, Error>>,
 }
 
 /// What the screen shows once the photos are found.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Period {
+    /// Number of the search (see [`Searches`]): the live counts, "Suggest"
+    /// and "Apply" name it.
+    pub search: u64,
     /// First and last day searched, `YYYY-MM-DD`.
     pub from: String,
     pub to: String,
@@ -111,6 +119,52 @@ pub struct Preview {
     pub outside: usize,
     /// Photos of ignored cameras.
     pub ignored: usize,
+}
+
+/// The photo searches of "Create Collections". The screen numbers each one,
+/// in the order it asks for them; only the latest one keeps its session, and
+/// every later step (live counts, "Suggest", "Apply") names the search it
+/// works on. A slower, older search (more dives, more profiles to read) can
+/// then never replace the newer one the screen shows.
+#[derive(Default)]
+pub struct Searches {
+    started: u64,
+    kept: Option<(u64, Session)>,
+}
+
+impl Searches {
+    /// Starts search `number`, unless a search numbered as high or higher
+    /// started already (the screen asked for this one earlier).
+    pub fn start(&mut self, number: u64) -> bool {
+        if number <= self.started {
+            return false;
+        }
+        self.started = number;
+        true
+    }
+
+    /// No newer search started since search `number`.
+    pub fn is_latest(&self, number: u64) -> bool {
+        number == self.started
+    }
+
+    /// Keeps the session of search `number`, unless a newer search started
+    /// since. Returns whether it was kept.
+    pub fn finish(&mut self, number: u64, session: Session) -> bool {
+        if number != self.started {
+            return false;
+        }
+        self.kept = Some((number, session));
+        true
+    }
+
+    /// The session of search `number`; `None` when another one is kept.
+    pub fn get(&self, number: u64) -> Option<&Session> {
+        match &self.kept {
+            Some((kept, session)) if *kept == number => Some(session),
+            _ => None,
+        }
+    }
 }
 
 /// First and last day to search for, `YYYY-MM-DD`.
@@ -184,11 +238,46 @@ impl Session {
             photos,
             cameras,
             undated,
+            log: None,
+            profiles: HashMap::new(),
         }
     }
 
-    pub fn period(&self, from: String, to: String) -> Period {
+    /// Keeps the dive log the dives were read from and the profiles read
+    /// with them: "Apply" writes these, never a later read of the log, and
+    /// names the application they come from (spec F5).
+    pub fn read_from(
+        mut self,
+        log: LogId,
+        profiles: HashMap<String, Result<Vec<Sample>, Error>>,
+    ) -> Self {
+        self.log = Some(log);
+        self.profiles = profiles;
+        self
+    }
+
+    /// The write request for "Apply", from the dives and profiles kept, with
+    /// their application's name. Refused unless they come from `log`, the
+    /// one the screen shows and the settings still point at.
+    pub fn write_request(
+        &self,
+        log: &LogId,
+        choices: &Choices,
+        units: Units,
+    ) -> Result<Result<CollectionsRequest, Error>, LogChanged> {
+        let kept = self.log.as_ref().ok_or(LogChanged)?;
+        if kept != log {
+            return Err(LogChanged);
+        }
+        Ok(self.request(choices, units, kept.kind.name(), |d| {
+            self.profiles.get(&d.id).cloned().unwrap_or(Ok(Vec::new()))
+        }))
+    }
+
+    /// What the screen shows of search `search`.
+    pub fn period(&self, search: u64, from: String, to: String) -> Period {
         Period {
+            search,
             from,
             to,
             photos: self.photos.len() + self.undated,
@@ -570,6 +659,106 @@ mod tests {
         assert!(!a.photos.iter().any(|p| p.id == "6"), "ignored camera");
     }
 
+    fn log(kind: crate::settings::SourceKind, path: &str) -> LogId {
+        LogId {
+            kind,
+            path: path.into(),
+        }
+    }
+
+    fn ramp(depth_m: f64) -> Vec<Sample> {
+        vec![
+            Sample {
+                time_s: 0,
+                depth_m: 0.0,
+                temp_c: None,
+            },
+            Sample {
+                time_s: 3000,
+                depth_m,
+                temp_c: None,
+            },
+        ]
+    }
+
+    #[test]
+    fn apply_writes_the_profiles_and_application_read_with_the_dives() {
+        use crate::settings::SourceKind;
+        let read = log(SourceKind::Subsurface, "/Logs/diver.xml");
+        let s = session(&Offsets::default()).read_from(
+            read.clone(),
+            HashMap::from([("A".to_string(), Ok(ramp(30.0)))]),
+        );
+        let request = s
+            .write_request(&read, &choices(10), Units::default())
+            .expect("same log")
+            .unwrap();
+        // The profile read with the dives: photo 1, 300 s in, 3.0 m.
+        let a = &request.groups[0];
+        let photo = a.photos.iter().find(|p| p.id == "1").unwrap();
+        assert_eq!(photo.photo_depth.as_deref(), Some("3.0 m"));
+        assert!(
+            request.groups.iter().all(|g| g.dive.source == "Subsurface"),
+            "the application the dives were read from"
+        );
+    }
+
+    #[test]
+    fn apply_is_refused_when_the_log_changed_since_the_dives_were_read() {
+        use crate::settings::SourceKind;
+        let read = log(SourceKind::Subsurface, "/Logs/diver.xml");
+        let s = session(&Offsets::default()).read_from(
+            read.clone(),
+            HashMap::from([("A".to_string(), Ok(ramp(30.0)))]),
+        );
+        let elsewhere = log(SourceKind::Subsurface, "/Logs/other.xml");
+        assert!(matches!(
+            s.write_request(&elsewhere, &choices(10), Units::default()),
+            Err(LogChanged)
+        ));
+        let other_app = log(SourceKind::MacDive, "/Logs/diver.xml");
+        assert!(matches!(
+            s.write_request(&other_app, &choices(10), Units::default()),
+            Err(LogChanged)
+        ));
+        // Dives of unknown origin are never written.
+        let unknown = session(&Offsets::default());
+        assert!(matches!(
+            unknown.write_request(&read, &choices(10), Units::default()),
+            Err(LogChanged)
+        ));
+    }
+
+    #[test]
+    fn a_profile_that_did_not_read_fails_apply_only_when_needed() {
+        use crate::settings::SourceKind;
+        let read = log(SourceKind::MacDive, "/Dives/MacDive.sqlite");
+        let s = session(&Offsets::default()).read_from(
+            read.clone(),
+            HashMap::from([("A".to_string(), Err(Error::BadProfile("garbled".into())))]),
+        );
+        // Dive A gets photos taken during the dive: its profile is needed.
+        assert!(matches!(
+            s.write_request(&read, &choices(0), Units::default()),
+            Ok(Err(Error::BadProfile(_)))
+        ));
+        // Only a photo at the surface before dive A (GoPro 09:20 − 25 min,
+        // in a 10-minute margin): its profile is not needed.
+        let c = Choices {
+            offsets: HashMap::from([("GoPro|".into(), -25)]),
+            ignored: BTreeSet::from(["iPhone|Z9".to_string(), "TG-7|A1".to_string()]),
+            margin_min: 10,
+        };
+        let request = s
+            .write_request(&read, &c, Units::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(request.groups.len(), 1);
+        assert_eq!(request.groups[0].photos[0].id, "4");
+        assert_eq!(request.groups[0].photos[0].photo_depth, None);
+        assert_eq!(request.groups[0].dive.source, "MacDive");
+    }
+
     #[test]
     fn remembers_offsets_of_cameras_with_photos_written() {
         let s = session(&Offsets::default());
@@ -582,6 +771,79 @@ mod tests {
         assert_eq!(offsets.get("GoPro|"), None, "nothing written");
         assert_eq!(offsets.get("iPhone|Z9"), None, "ignored");
         assert_eq!(offsets.get("Nikon|"), Some(60), "other cameras kept");
+    }
+
+    #[test]
+    fn a_slower_older_search_never_replaces_the_newer_one() {
+        use crate::settings::SourceKind;
+        let read = log(SourceKind::Subsurface, "/Logs/diver.xml");
+        let mut searches = Searches::default();
+        // Many dives checked, Next: this search reads every profile, slowly.
+        let older = 1_700_000_000_001;
+        assert!(searches.start(older));
+        // Back to step 1, only dive B kept, Next: a quicker search.
+        let newer = older + 1;
+        assert!(searches.start(newer));
+        // Done reading its profiles, the older one does not even ask
+        // Lightroom: the plug-in keeps the photos of the newer one only.
+        assert!(!searches.is_latest(older));
+        assert!(searches.is_latest(newer));
+        let only_b = |s: Session| {
+            let dives = s.dives.iter().filter(|d| d.id == "B").cloned().collect();
+            let found = vec![photo("3", "2025-12-31T04:40:00", Some("TG-7"), Some("A1"))];
+            Session::new(10, dives, found, &Offsets::default())
+                .read_from(read.clone(), HashMap::new())
+        };
+        assert!(searches.finish(newer, only_b(session(&Offsets::default()))));
+        // The older one finishes last: dropped, the newer one stays.
+        let all = session(&Offsets::default()).read_from(read.clone(), HashMap::new());
+        assert!(!searches.finish(older, all));
+        assert!(
+            searches.get(older).is_none(),
+            "its counts and Apply are refused"
+        );
+        let kept = searches.get(newer).expect("the screen's search");
+        let request = kept
+            .write_request(&read, &choices(0), Units::default())
+            .unwrap()
+            .unwrap();
+        let written: Vec<_> = request
+            .groups
+            .iter()
+            .map(|g| g.collection.as_str())
+            .collect();
+        assert_eq!(
+            written,
+            ["702 - Site 702"],
+            "never the dives unchecked since"
+        );
+    }
+
+    #[test]
+    fn a_newer_search_replaces_the_kept_one() {
+        let mut searches = Searches::default();
+        let first = 7;
+        assert!(searches.start(first));
+        assert!(searches.finish(first, session(&Offsets::default())));
+        let second = 8;
+        assert!(searches.start(second));
+        assert!(searches.get(first).is_some(), "until the next one finishes");
+        assert!(searches.finish(second, session(&Offsets::default())));
+        assert!(searches.get(first).is_none());
+        assert!(searches.get(second).is_some());
+    }
+
+    #[test]
+    fn the_screen_sets_the_order_of_its_searches() {
+        let mut searches = Searches::default();
+        // The dev window runs each effect twice: the abandoned first search
+        // may reach the back end after the live one, and is refused.
+        assert!(searches.start(11));
+        assert!(!searches.start(10), "asked for earlier");
+        assert!(!searches.start(11), "the same search twice");
+        assert!(searches.is_latest(11));
+        assert!(!searches.finish(10, session(&Offsets::default())));
+        assert!(searches.get(10).is_none());
     }
 
     #[test]

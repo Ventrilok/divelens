@@ -6,7 +6,9 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { onApplyProgress, onSelectionPreview, selectionPreview, tagSelection } from "../api";
 import { coveringDive } from "../covers";
+import { logRef } from "../diveLog";
 import { DiveDetail } from "../components/DiveDetail";
+import { LogNotice } from "../components/LogNotice";
 import { DiveList } from "../components/DiveList";
 import { FilterBar } from "../components/FilterBar";
 import { NO_PICK, pickAround, SitePicker, type SitePick } from "../components/SitePicker";
@@ -50,12 +52,17 @@ export function TagScreen({
   log,
   lr,
   sort,
+  notice,
+  onDismissNotice,
   onCancel,
 }: {
   log: DiveLog;
   lr: LightroomStatus;
   /** Same order as the dive list of Create Collections (one list everywhere). */
   sort: Sort;
+  /** Why the screen started again (the dive log changed), shown once. */
+  notice: string | null;
+  onDismissNotice: () => void;
   onCancel: () => void;
 }) {
   const units = log.units;
@@ -152,8 +159,9 @@ export function TagScreen({
           ? { kind: "diveSite" }
           : { kind: "site", siteId: pick.siteId as string, lat: gps?.lat ?? null, lon: gps?.lon ?? null },
     };
+    onDismissNotice();
     setRun({ state: "writing", done: 0, total: lr.selected });
-    tagSelection(choice)
+    tagSelection(logRef(log.source), choice)
       .then((outcome) =>
         setRun(
           outcome.outcome === "applied"
@@ -174,6 +182,7 @@ export function TagScreen({
           <p className="muted">{t("tag.subtitle")}</p>
         </div>
       </header>
+      {notice && <LogNotice text={notice} onDismiss={onDismissNotice} />}
 
       <section className="card tag-selection" aria-label={t("tag.live")}>
         <div className="tag-selection-text">
@@ -242,7 +251,7 @@ export function TagScreen({
                     )}
                   </div>
                 )}
-                <DiveDetail dive={focused} units={units} capabilities={capabilities} />
+                <DiveDetail log={log.source} dive={focused} units={units} capabilities={capabilities} />
               </div>
               <p className="muted small">{t("tag.diveDataWrites")}</p>
             </>
