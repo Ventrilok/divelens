@@ -251,15 +251,40 @@ local function formatDate(iso)
     return LrDate.formatShortDate(t) .. " " .. LrDate.formatMediumTime(t)
 end
 
--- Writes planned changes on one photo, inside a catalog write.
+-- Writes one planned change on a photo, inside a catalog write.
+local function writeChange(photo, change)
+    if change.kind == "plugin" then
+        photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
+    else
+        photo:setRawMetadata(change.field, change.value)
+    end
+end
+
 local function write(photo, changes)
-    for _, change in ipairs(changes) do
-        if change.kind == "plugin" then
-            photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
+    for _, change in ipairs(changes) do writeChange(photo, change) end
+end
+
+-- Clears what a photo kept from another dive (Tagging.retagChanges, which
+-- lists only values the photo has). Returns whether something was cleared,
+-- and whether the GPS altitude was.
+local function clearOtherDive(photo, extra)
+    local cleared, altitude = false, false
+    for _, change in ipairs(extra) do
+        if change.kind == "raw" and change.field == "gpsAltitude" then
+            -- When in doubt, leave it: an altitude Lightroom refuses to clear
+            -- stays, and the rest of the write goes on.
+            local ok, err = LrTasks.pcall(writeChange, photo, change)
+            if ok then
+                cleared, altitude = true, true
+            else
+                Log.warn("GPS altitude kept on photo %s: %s", tostring(photo.localIdentifier), tostring(err))
+            end
         else
-            photo:setRawMetadata(change.field, change.value)
+            writeChange(photo, change)
+            cleared = true
         end
     end
+    return cleared, altitude
 end
 
 -- What the photos carry before a dive is written on them, for
@@ -294,15 +319,16 @@ local function applyTags(s, message)
     if not catalog:getTargetPhoto() then return fail("noSelection") end
     local photos = catalog:getTargetPhotos()
     local total = #photos
-    local moved = 0
+    local cleared, altitudes = 0, 0
     local ok, status = LrTasks.pcall(function()
         return catalog:withWriteAccessDo(LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)", function()
             local before = Tagging.writesDive(changes) and photosBefore(catalog, photos) or {}
             for i, photo in ipairs(photos) do
                 local extra = before[photo] and Tagging.retagChanges(before[photo], changes) or {}
                 write(photo, changes)
-                write(photo, extra)
-                if #extra > 0 then moved = moved + 1 end
+                local any, altitude = clearOtherDive(photo, extra)
+                if any then cleared = cleared + 1 end
+                if altitude then altitudes = altitudes + 1 end
                 if i % PROGRESS_EVERY == 0 and i < total then
                     send(s, { type = "progress", id = id, done = i, total = total })
                     LrTasks.yield()
@@ -313,8 +339,9 @@ local function applyTags(s, message)
     s.lastHeard = LrDate.currentTime() -- the app's pings waited during the write
     if not ok then return fail("error", tostring(status)) end
     if status ~= "executed" then return fail("busy") end
-    Log.info("tagged %d photos (%d moved from another dive)", total, moved)
-    send(s, { type = "applied", id = id, count = total })
+    Log.info("tagged %d photos; another dive's values cleared on %d (GPS altitude on %d)", total, cleared, altitudes)
+    -- altitudesCleared: the app's Undo reminder then mentions the altitude.
+    send(s, { type = "applied", id = id, count = total, altitudesCleared = altitudes })
 end
 
 -- Create Collections ----------------------------------------------------------

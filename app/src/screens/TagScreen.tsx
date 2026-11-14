@@ -21,7 +21,7 @@ const THUMBNAILS = 6;
 type Run =
   | { state: "idle" }
   | { state: "writing"; done: number; total: number }
-  | { state: "done"; count: number }
+  | { state: "done"; count: number; altitudesCleared: number }
   | { state: "failed"; message: string };
 
 function siteLine(site: Site): string {
@@ -155,7 +155,11 @@ export function TagScreen({
     setRun({ state: "writing", done: 0, total: lr.selected });
     tagSelection(choice)
       .then((outcome) =>
-        setRun(outcome.outcome === "applied" ? { state: "done", count: outcome.count } : { state: "failed", message: failure(outcome) }),
+        setRun(
+          outcome.outcome === "applied"
+            ? { state: "done", count: outcome.count, altitudesCleared: outcome.altitudesCleared }
+            : { state: "failed", message: failure(outcome) },
+        ),
       )
       .catch((e: TagError) => setRun({ state: "failed", message: failure(e) }));
   };
@@ -292,7 +296,9 @@ export function TagScreen({
       {run.state === "done" && (
         <div className="notice notice-ok" role="status">
           <span>
-            <span className="strong">{tn("tag.done", run.count)}</span> {t("tag.undoHint")}
+            <span className="strong">{tn("tag.done", run.count)}</span>{" "}
+            {/* Undo does not restore an altitude cleared from another dive's depth (spec F7, F8). */}
+            {t(run.altitudesCleared > 0 ? "coll.undoHintAltitude" : "tag.undoHint")}
           </span>
           <button type="button" className="btn btn-g" onClick={() => setRun({ state: "idle" })}>
             {t("tag.dismiss")}

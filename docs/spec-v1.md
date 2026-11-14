@@ -270,7 +270,8 @@ Photo déjà rattachée à une autre plongée **[Décidé, 2026-11-14]** :
 - **Même plongée** : application source, début et n° de plongée identiques tous les trois. Un n° vide des deux côtés compte comme identique. Rien d'autre n'est alors touché.
 - Une photo sans données de plongée n'a rien à effacer. Le lieu seul (« Données de plongée » décochée) ne touche à rien d'autre.
 - La vérification se fait au moment de l'écriture, d'après la plongée que porte la photo, dans la même écriture (une seule étape d'annulation).
-- « Annuler » dans Lightroom remet les valeurs par photo effacées, pas l'altitude.
+- « Annuler » dans Lightroom remet les valeurs par photo effacées, pas l'altitude. En application de F7 (le rappel après écriture le dit), quand l'écriture a effacé au moins une altitude, le bandeau reprend le rappel de « Créer les collections » avec altitude : « sauf le GPS et l'altitude ».
+- Si Lightroom refuse d'effacer une altitude, elle reste et le reste de l'écriture se fait.
 - La photo reste dans la collection de l'ancienne plongée : c'est à l'utilisateur de la déplacer. Pas de changement de collection automatique.
 - Détails **[Proposé]** : « sans données de plongée » = ni source, ni début, ni n° ; un champ vidé à la main dans Lightroom compte comme vide ; une profondeur sans unité (format d'avant les unités) se lit en mètres.
 
