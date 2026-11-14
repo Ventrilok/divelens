@@ -143,6 +143,14 @@ Chaque modification est enregistrée immédiatement.
 - **Placer dans** : la racine du catalogue ou un ensemble de collections existant (Lightroom doit être connecté pour les parcourir).
 - **Regrouper dans l'ensemble** : « Dive Lens » par défaut, créé si besoin ; laissez vide pour ranger les collections directement à l'emplacement choisi. Un aperçu montre le chemin obtenu. Les collections déjà créées restent où elles sont.
 
+**Sauvegarde des réglages**
+- **Exporter ou importer** : pour retrouver vos réglages sur un autre ordinateur, ou après une réinstallation.
+- **Exporter…** les enregistre dans un fichier, nommé « Réglages Dive Lens.json » sauf si vous choisissez un autre nom. Le fichier contient : l'application de plongée et l'emplacement du carnet de chacune, la langue, les unités, l'option altitude GPS, l'emplacement des collections, le niveau du journal et l'ordre de la liste des plongées. Les décalages d'horloge retenus pour chaque appareil n'y figurent pas : ils restent sur cet ordinateur.
+- **Importer…** demande confirmation avant de rien changer : **Remplacer** met les réglages du fichier à la place de tous ceux de cet écran, **Annuler** les laisse tels quels.
+- Si le carnet du fichier n'est pas sur cet ordinateur, Dive Lens le signale et garde son emplacement jusqu'à ce que vous indiquiez le bon (**Choisir…**, ou **Choisir un fichier…** / **Choisir un dossier…** pour Subsurface). Si l'ensemble de collections choisi dans **Placer dans** n'est pas dans ce catalogue, Créer les collections le signale : choisissez un autre emplacement dans les réglages.
+- Un fichier qui ne ressemble pas à un fichier de réglages Dive Lens est refusé, et rien ne change. Un fichier exporté par une version antérieure de Dive Lens reste importable.
+- Après un import, Dive Lens ne reprend plus les réglages de l'ancien module (section 1) : ce sont ceux du fichier qui sont gardés.
+
 **Diagnostic**
 - **Niveau du journal** : Normal ou Détaillé. À augmenter seulement pour signaler un problème.
 - **Afficher le journal** : ouvre le dossier des deux journaux, celui de l'application (`DiveLens App.log`) et celui du module Lightroom (`DiveLens.log`).
@@ -174,7 +182,7 @@ Les champs Dive Lens restent dans le catalogue Lightroom : ils ne sont pas écri
 
 **Passer de MacDive à Subsurface.** Rien à migrer. Relancer une plongée retrouve sa collection quand le nom « numéro - site » est identique ; sinon une nouvelle collection est créée à côté. Les décalages d'horloge sont mémorisés séparément pour chaque application.
 
-**Signaler un problème.** Passez **Réglages › Diagnostic › Niveau du journal** sur **Détaillé**, reproduisez le problème, puis **Afficher le journal** et envoyez les deux fichiers.
+**Signaler un problème.** Passez **Réglages › Diagnostic › Niveau du journal** sur **Détaillé**, reproduisez le problème, puis **Afficher le journal** : le dossier contient les deux journaux. Ne les joignez jamais à un ticket GitHub : le dépôt est public, et les journaux contiennent vos sites de plongée et des chemins de fichiers. Décrivez le problème et collez seulement les lignes utiles, après avoir retiré les noms de sites, de lieux et de personnes, et les chemins de fichiers.
 
 ---
 

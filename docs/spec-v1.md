@@ -327,6 +327,8 @@ Diffusion **[Décidé]** : un seul texte source, publié à deux endroits :
 
 **Texte source [2026-11-13]** : premier jet dans `docs/user/en.md` et `docs/user/fr.md`, un fichier par langue, à relire par le propriétaire. Il reprend les libellés exacts de l'application et de Lightroom, et ajoute au contenu ci-dessus le premier lancement d'une version non signée (Mac : « Ouvrir quand même » ; Windows : « Exécuter quand même », WebView2) et les champs Dive Lens dans Lightroom. L'export des réglages n'y figure pas tant que F11 n'est pas livré. Restent à faire : l'embarquer dans l'application, le publier sur querton.com et les liens « ? ».
 
+**Sauvegarde des réglages [2026-11-14]** : F11 étant livré, le guide la décrit dans la section Réglages (contenu, export, import, carnet introuvable, fin de la reprise de l'ancien module après un import).
+
 ### F13 — Mises à jour automatiques
 
 **[Décidé : oui]** L'application vérifie s'il existe une nouvelle version de Dive Lens et propose de l'installer.
