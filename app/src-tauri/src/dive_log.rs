@@ -10,33 +10,40 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use divelens_core::apps::{self, DiveApp, Os};
 use serde::{Deserialize, Serialize};
 
-use crate::settings::{Settings, SourceKind};
+use crate::settings::Settings;
 
 /// The dive log some settings point at.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceInfo {
-    pub kind: SourceKind,
+    /// The application in use, written as its id.
+    #[serde(rename = "kind", with = "apps::id")]
+    pub app: &'static DiveApp,
     pub path: PathBuf,
     pub is_default_path: bool,
 }
 
 impl SourceInfo {
-    /// The log `settings` point at: the application in use on this computer
-    /// and its location (`standard` gives an application's standard one).
-    pub fn of(settings: &Settings, standard: impl FnOnce(SourceKind) -> PathBuf) -> Self {
-        let kind = settings.source.kind();
-        match settings.source.path(kind) {
+    /// The log `settings` point at on `os`: the application in use there and
+    /// its location (`standard` gives an application's standard one).
+    pub fn of(
+        settings: &Settings,
+        os: Os,
+        standard: impl FnOnce(&'static DiveApp) -> PathBuf,
+    ) -> Self {
+        let app = settings.source.app(os);
+        match settings.source.location(app) {
             Some(path) => SourceInfo {
-                kind,
+                app,
                 path: path.clone(),
                 is_default_path: false,
             },
             None => SourceInfo {
-                kind,
-                path: standard(kind),
+                app,
+                path: standard(app),
                 is_default_path: true,
             },
         }
@@ -44,16 +51,20 @@ impl SourceInfo {
 
     pub fn id(&self) -> LogId {
         LogId {
-            kind: self.kind,
+            app: self.app,
             path: self.path.clone(),
         }
     }
 }
 
 /// The dive log configured in the settings folder `dir`, as every action
-/// checks it. Only the settings are read, never the log itself.
-pub fn configured(dir: &Path, standard: impl FnOnce(SourceKind) -> PathBuf) -> SourceInfo {
-    SourceInfo::of(&Settings::load(dir), standard)
+/// checks it on `os`. Only the settings are read, never the log itself.
+pub fn configured(
+    dir: &Path,
+    os: Os,
+    standard: impl FnOnce(&'static DiveApp) -> PathBuf,
+) -> SourceInfo {
+    SourceInfo::of(&Settings::load(dir), os, standard)
 }
 
 /// A dive log by application and location, as a screen names the log it
@@ -61,7 +72,9 @@ pub fn configured(dir: &Path, standard: impl FnOnce(SourceKind) -> PathBuf) -> S
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogId {
-    pub kind: SourceKind,
+    /// The application, written as its id.
+    #[serde(rename = "kind", with = "apps::id")]
+    pub app: &'static DiveApp,
     pub path: PathBuf,
 }
 
@@ -72,7 +85,7 @@ pub struct LogChanged;
 impl LogId {
     /// Refuses unless this is the configured log.
     pub fn check(&self, configured: &SourceInfo) -> Result<(), LogChanged> {
-        if self.kind == configured.kind && self.path == configured.path {
+        if self.app == configured.app && self.path == configured.path {
             Ok(())
         } else {
             Err(LogChanged)
@@ -166,19 +179,23 @@ impl Drop for Writing<'_> {
 mod tests {
     use super::*;
     use crate::settings::DepthChoice;
+    use divelens_core::{macdive, subsurface};
     use std::path::Path;
     use std::sync::Arc;
     use std::time::{Duration, SystemTime};
 
-    fn standard(kind: SourceKind) -> PathBuf {
-        match kind {
-            SourceKind::MacDive => "/Users/diver/Library/MacDive/MacDive.sqlite".into(),
-            SourceKind::Subsurface => "/Users/diver/Subsurface/diver.xml".into(),
+    /// The system the tests run as: both applications are available.
+    const OS: Os = Os::MacOs;
+
+    fn standard(app: &DiveApp) -> PathBuf {
+        match app.id {
+            "macDive" => "/Users/diver/Library/MacDive/MacDive.sqlite".into(),
+            _ => "/Users/diver/Subsurface/diver.xml".into(),
         }
     }
 
     fn log_of(s: &Settings) -> LogId {
-        SourceInfo::of(s, standard).id()
+        SourceInfo::of(s, OS, standard).id()
     }
 
     fn temp_dir(name: &str) -> PathBuf {
@@ -189,32 +206,33 @@ mod tests {
         dir
     }
 
-    fn on(kind: SourceKind, path: &Path) -> Settings {
+    fn on(app: &DiveApp, path: &Path) -> Settings {
         let mut s = Settings::default();
-        s.source.kind = kind;
-        s.source.set_path(kind, Some(path.to_path_buf()));
+        s.source.kind = app.id.into();
+        s.source.set_location(app, Some(path.to_path_buf()));
         s
     }
 
     #[test]
     fn standard_location_when_none_is_chosen() {
         let mut s = Settings::default();
-        s.source.kind = SourceKind::Subsurface;
-        let info = SourceInfo::of(&s, standard);
-        assert_eq!(info.kind, SourceKind::Subsurface);
-        assert_eq!(info.path, standard(SourceKind::Subsurface));
+        s.source.kind = "subsurface".into();
+        let info = SourceInfo::of(&s, OS, standard);
+        assert_eq!(info.app, &subsurface::APP);
+        assert_eq!(info.path, standard(&subsurface::APP));
         assert!(info.is_default_path);
         // The standard file chosen by hand is the same log.
-        s.source.subsurface_path = Some(standard(SourceKind::Subsurface));
-        assert!(info.id().check(&SourceInfo::of(&s, standard)).is_ok());
+        s.source
+            .set_location(&subsurface::APP, Some(standard(&subsurface::APP)));
+        assert!(info.id().check(&SourceInfo::of(&s, OS, standard)).is_ok());
     }
 
     /// What the actions do: a read (profile, photo search) checks the log
     /// named against the configured one, a write starts through `begin`.
     fn accepted(writes: &Writes, shown: &LogId, settings_dir: &Path) -> bool {
-        let read = shown.check(&configured(settings_dir, standard)).is_ok();
+        let read = shown.check(&configured(settings_dir, OS, standard)).is_ok();
         let write = writes
-            .begin(shown, || configured(settings_dir, standard))
+            .begin(shown, || configured(settings_dir, OS, standard))
             .is_ok();
         assert_eq!(read, write);
         read
@@ -227,11 +245,11 @@ mod tests {
         let file = dir.join("diver.xml");
         std::fs::write(&file, "<divelog/>").unwrap();
         Settings::update(&settings_dir, |s| {
-            *s = on(SourceKind::Subsurface, &file);
+            *s = on(&subsurface::APP, &file);
         })
         .unwrap();
         let writes = Writes::new(|_| {});
-        let shown = configured(&settings_dir, standard).id();
+        let shown = configured(&settings_dir, OS, standard).id();
         assert!(accepted(&writes, &shown, &settings_dir));
 
         // The dive application saves the log again: new content, new
@@ -247,7 +265,8 @@ mod tests {
 
         // Another file chosen in Settings: refused.
         Settings::update(&settings_dir, |s| {
-            s.source.subsurface_path = Some(dir.join("other.xml"));
+            s.source
+                .set_location(&subsurface::APP, Some(dir.join("other.xml")));
         })
         .unwrap();
         assert!(!accepted(&writes, &shown, &settings_dir));
@@ -259,21 +278,34 @@ mod tests {
         let dir = temp_dir("other");
         let a = dir.join("a.xml");
         let b = dir.join("b.xml");
-        let shown = SourceInfo::of(&on(SourceKind::Subsurface, &a), standard).id();
-        let elsewhere = SourceInfo::of(&on(SourceKind::Subsurface, &b), standard);
+        let shown = SourceInfo::of(&on(&subsurface::APP, &a), OS, standard).id();
+        let elsewhere = SourceInfo::of(&on(&subsurface::APP, &b), OS, standard);
         assert_eq!(shown.check(&elsewhere), Err(LogChanged));
-        if !cfg!(windows) {
-            // Same location, other application (MacDive exists on macOS only).
-            let other_app = SourceInfo::of(&on(SourceKind::MacDive, &a), standard);
-            assert_eq!(shown.check(&other_app), Err(LogChanged));
-        }
+        // Same location, other application (MacDive exists on macOS only).
+        let mut other_app = on(&macdive::APP, &a);
+        assert_eq!(
+            shown.check(&SourceInfo::of(&other_app, Os::MacOs, standard)),
+            Err(LogChanged)
+        );
+        // On Windows, the same settings read Subsurface's location.
+        other_app
+            .source
+            .set_location(&subsurface::APP, Some(a.clone()));
+        assert!(
+            shown
+                .check(&SourceInfo::of(&other_app, Os::Windows, standard))
+                .is_ok()
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
     fn the_log_cannot_change_during_a_write() {
-        let start = on(SourceKind::Subsurface, Path::new("/Logs/a.xml"));
-        let to_b = |s: &mut Settings| s.source.subsurface_path = Some("/Logs/b.xml".into());
+        let start = on(&subsurface::APP, Path::new("/Logs/a.xml"));
+        let to_b = |s: &mut Settings| {
+            s.source
+                .set_location(&subsurface::APP, Some("/Logs/b.xml".into()))
+        };
         let to_feet = |s: &mut Settings| s.units.depth = DepthChoice::Feet;
 
         let mut s = start.clone();
@@ -287,13 +319,16 @@ mod tests {
         assert_eq!(s.units.depth, DepthChoice::Feet);
         // Without a write, the log changes.
         assert_eq!(guarded_change(false, &mut s, to_b, log_of), Ok(()));
-        assert_eq!(s.source.subsurface_path, Some("/Logs/b.xml".into()));
+        assert_eq!(
+            s.source.location(&subsurface::APP),
+            Some(&PathBuf::from("/Logs/b.xml"))
+        );
     }
 
     #[test]
     fn an_import_naming_another_log_is_refused_whole_during_a_write() {
-        let start = on(SourceKind::Subsurface, Path::new("/Logs/a.xml"));
-        let mut imported = on(SourceKind::Subsurface, Path::new("/Logs/b.xml"));
+        let start = on(&subsurface::APP, Path::new("/Logs/a.xml"));
+        let mut imported = on(&subsurface::APP, Path::new("/Logs/b.xml"));
         imported.units.depth = DepthChoice::Feet;
         let mut s = start.clone();
         let file = imported.clone();
@@ -317,8 +352,8 @@ mod tests {
         let told = Arc::new(Mutex::new(Vec::new()));
         let heard = told.clone();
         let writes = Writes::new(move |on| heard.lock().unwrap().push(on));
-        let a = SourceInfo::of(&on(SourceKind::Subsurface, Path::new("/a.xml")), standard);
-        let b = SourceInfo::of(&on(SourceKind::Subsurface, Path::new("/b.xml")), standard);
+        let a = SourceInfo::of(&on(&subsurface::APP, Path::new("/a.xml")), OS, standard);
+        let b = SourceInfo::of(&on(&subsurface::APP, Path::new("/b.xml")), OS, standard);
 
         assert!(writes.begin(&a.id(), || b.clone()).is_err(), "stale log");
         assert!(!writes.in_progress());

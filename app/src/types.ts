@@ -42,10 +42,41 @@ export interface Capabilities {
   profile: boolean;
 }
 
-export type SourceKind = "macDive" | "subsurface";
+/** A dive application, by its id ("macDive", "subsurface"…): see DiveApp. */
+export type SourceKind = string;
 
-/** How a Subsurface log is stored. */
-export type Storage = { kind: "xml" } | { kind: "git"; branch: string };
+/** A reader error as the screens tell it. */
+export interface Problem {
+  title: string;
+  text: string;
+}
+
+/** What the screens say of a dive application, in one language (core/src/apps.rs, Texts). */
+export interface AppTexts {
+  /** What the log is called ("MacDive database"), the title of its location in Settings. */
+  log: string;
+  logHint: string;
+  /** While the log is read. */
+  reading: string;
+  /** Once the log is read, by the format the reader reports (DiveLog.format); {dives} and {sites} for the counts. */
+  read: Record<string, string>;
+  /** File chooser: the kind of file shown. */
+  fileType: string;
+  /** Error screen: the button choosing the log elsewhere when it is a file or a folder, not either; null: "Choose…". */
+  locate: string | null;
+  /** By reader error kind: notFound, notADiveLog and database at least; any other kind reads as database. */
+  problems: Record<string, Problem>;
+}
+
+/** A dive application available on this system, as the back end describes it (core/src/apps.rs). */
+export interface DiveApp {
+  id: SourceKind;
+  /** Its name, as shown and written on photos. */
+  name: string;
+  /** The log is a file with one of these extensions (null: never a file), and/or a folder. */
+  choose: { file: string[] | null; folder: boolean };
+  texts: { en: AppTexts; fr: AppTexts };
+}
 
 export interface SourceInfo {
   kind: SourceKind;
@@ -61,8 +92,8 @@ export interface LogRef {
 
 export interface DiveLog {
   source: SourceInfo;
-  /** Subsurface only: file or git storage. */
-  storage: Storage | null;
+  /** How the log is stored, as its reader tells (a key of AppTexts.read). */
+  format: string;
   capabilities: Capabilities;
   dives: Dive[];
   /** Every named site of the log, including sites with no dive yet. */
@@ -206,8 +237,8 @@ export type Sort = "recent" | "oldest" | "depth";
 
 export interface Settings {
   version: number;
-  /** Application, and the location chosen for each (null: standard). */
-  source: { kind: SourceKind; macDivePath: string | null; subsurfacePath: string | null };
+  /** Application chosen, and the location chosen for each, by id (none: its standard location). */
+  source: { kind: SourceKind; locations: Record<SourceKind, string> };
   units: { depth: "source" | "m" | "ft"; temp: "source" | "c" | "f" };
   language: "system" | "en" | "fr";
   depthToAltitude: boolean;

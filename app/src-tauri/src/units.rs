@@ -3,21 +3,15 @@
 //! always store metric values; only the application's preferences say what
 //! the diver reads. Preferences are only read, never written.
 //!
-//! - MacDive: global preference `units` of `com.mintsoftware.MacDive2`:
-//!   0 = m and °C, 1 = ft and °F, 2 (Canadian) = ft and °C, anything else =
-//!   m and °C.
-//! - Subsurface: its separate depth (`Units/length`: 0 = m, 1 = ft) and
-//!   temperature (`Units/temperature`: 0 = °C, 1 = °F, 2 = K shown as °C)
-//!   settings, stored by Qt in a property list on a Mac and in the registry
-//!   on Windows. Subsurface rewrites both when its unit system changes. When
-//!   one is missing, its `Units/unit_system` (0 metric, 1 imperial,
-//!   2 personalized) decides; with nothing at all, Subsurface's default:
-//!   metric.
-//! - Preferences not found (application not installed, log copied from
-//!   another computer): m and °C.
+//! Each application says where its preferences are and what they mean
+//! (`divelens_core::apps::Preferences`); this reads them where the system
+//! keeps them: a property list on a Mac, the registry on Windows. Keys are
+//! written as Qt does, `Group/key`. Preferences not found (application not
+//! installed, log copied from another computer): m and °C.
 
 use std::path::{Path, PathBuf};
 
+use divelens_core::apps::Preferences;
 use divelens_core::tags::{DepthUnit, TempUnit, Units};
 use serde::Serialize;
 
@@ -50,46 +44,23 @@ const METRIC: Units = Units {
     temp: TempUnit::Celsius,
 };
 
-/// MacDive's `units` preference value to units.
-pub fn macdive(value: Option<i64>) -> Units {
-    match value {
-        Some(1) => Units {
-            depth: DepthUnit::Feet,
-            temp: TempUnit::Fahrenheit,
-        },
-        Some(2) => Units {
-            depth: DepthUnit::Feet,
-            temp: TempUnit::Celsius,
-        },
-        _ => METRIC,
+/// Units an application shows, from its preferences on this computer
+/// (`home`: the diver's home folder).
+pub fn read(prefs: &Preferences, home: &Path) -> Units {
+    #[cfg(windows)]
+    {
+        let _ = home;
+        read_windows(prefs)
+    }
+    #[cfg(not(windows))]
+    {
+        read_mac(prefs, home)
     }
 }
-
-/// Subsurface's unit settings to units.
-pub fn subsurface(length: Option<i64>, temperature: Option<i64>, system: Option<i64>) -> Units {
-    let imperial = system == Some(1);
-    Units {
-        depth: match length {
-            Some(1) => DepthUnit::Feet,
-            Some(_) => DepthUnit::Metres,
-            None if imperial => DepthUnit::Feet,
-            None => DepthUnit::Metres,
-        },
-        temp: match temperature {
-            Some(1) => TempUnit::Fahrenheit,
-            Some(_) => TempUnit::Celsius,
-            None if imperial => TempUnit::Fahrenheit,
-            None => TempUnit::Celsius,
-        },
-    }
-}
-
-const MACDIVE_DOMAIN: &str = "com.mintsoftware.MacDive2";
-/// Qt names Subsurface's preferences after its organization domain.
-const SUBSURFACE_DOMAIN: &str = "org.hohndel.subsurface.Subsurface";
 
 /// Where a Mac application keeps its preferences: the usual folder, or its
 /// sandbox container.
+#[cfg_attr(windows, allow(dead_code))]
 fn mac_preference_files(home: &Path, domain: &str) -> [PathBuf; 2] {
     let file = format!("{domain}.plist");
     [
@@ -101,14 +72,8 @@ fn mac_preference_files(home: &Path, domain: &str) -> [PathBuf; 2] {
     ]
 }
 
-/// The first readable preference file of a Mac application.
-fn read_mac_preferences(home: &Path, domain: &str) -> Option<plist::Dictionary> {
-    mac_preference_files(home, domain)
-        .iter()
-        .find_map(|path| plist::Value::from_file(path).ok()?.into_dictionary())
-}
-
 /// A number, possibly stored as text (Qt does both).
+#[cfg_attr(windows, allow(dead_code))]
 fn number(value: Option<&plist::Value>) -> Option<i64> {
     match value? {
         plist::Value::Integer(i) => i.as_signed(),
@@ -118,66 +83,66 @@ fn number(value: Option<&plist::Value>) -> Option<i64> {
     }
 }
 
-/// MacDive's units, from its preferences in `home`.
-pub fn read_macdive(home: &Path) -> Units {
-    let prefs = read_mac_preferences(home, MACDIVE_DOMAIN);
-    macdive(prefs.as_ref().and_then(|p| number(p.get("units"))))
+/// Qt writes `Group/key` as `Group.key` in a property list.
+#[cfg_attr(windows, allow(dead_code))]
+fn mac_key(key: &str) -> String {
+    key.replace('/', ".")
 }
 
-/// Subsurface's units, from its preferences in `home` (Mac).
+/// An application's units, from the first readable preference file in
+/// `home` (Mac).
 #[cfg_attr(windows, allow(dead_code))]
-pub fn read_subsurface_mac(home: &Path) -> Units {
-    let Some(prefs) = read_mac_preferences(home, SUBSURFACE_DOMAIN) else {
+fn read_mac(prefs: &Preferences, home: &Path) -> Units {
+    let Some(domain) = prefs.mac_domain else {
         return METRIC;
     };
-    // Qt writes "Group/key" as "Group.key" in a property list.
-    subsurface(
-        number(prefs.get("Units.length")),
-        number(prefs.get("Units.temperature")),
-        number(prefs.get("Units.unit_system")),
-    )
-}
-
-/// Subsurface's units, from the registry (Windows).
-#[cfg(windows)]
-pub fn read_subsurface_windows() -> Units {
-    use winreg::RegKey;
-    use winreg::enums::HKEY_CURRENT_USER;
-    let Ok(key) =
-        RegKey::predef(HKEY_CURRENT_USER).open_subkey(r"Software\Subsurface\Subsurface\Units")
+    let Some(dict) = mac_preference_files(home, domain)
+        .iter()
+        .find_map(|path| plist::Value::from_file(path).ok()?.into_dictionary())
     else {
         return METRIC;
     };
+    (prefs.units)(&|key| number(dict.get(&mac_key(key))))
+}
+
+/// Qt keeps `Group/key` as the value `key` of the subkey `Group` of the
+/// application's registry key `root`: the key to open, and the value's name.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn registry_value<'a>(root: &str, key: &'a str) -> (String, &'a str) {
+    match key.rsplit_once('/') {
+        Some((group, name)) => (format!(r"{root}\{}", group.replace('/', r"\")), name),
+        None => (root.to_string(), key),
+    }
+}
+
+/// An application's units, from the registry (Windows).
+#[cfg(windows)]
+fn read_windows(prefs: &Preferences) -> Units {
+    use winreg::RegKey;
+    use winreg::enums::HKEY_CURRENT_USER;
+    let Some(root) = prefs.windows_key else {
+        return METRIC;
+    };
+    let user = RegKey::predef(HKEY_CURRENT_USER);
+    if user.open_subkey(root).is_err() {
+        return METRIC;
+    }
     // Qt stores numbers as DWORD or as text depending on its version.
-    let number = |name: &str| -> Option<i64> {
+    let value = |key: &str| -> Option<i64> {
+        let (path, name) = registry_value(root, key);
+        let key = user.open_subkey(path).ok()?;
         key.get_value::<u32, _>(name)
             .ok()
             .map(i64::from)
             .or_else(|| key.get_value::<String, _>(name).ok()?.trim().parse().ok())
     };
-    subsurface(
-        number("length"),
-        number("temperature"),
-        number("unit_system"),
-    )
-}
-
-/// Units of Subsurface on this computer.
-pub fn read_subsurface(home: &Path) -> Units {
-    #[cfg(windows)]
-    {
-        let _ = home;
-        read_subsurface_windows()
-    }
-    #[cfg(not(windows))]
-    {
-        read_subsurface_mac(home)
-    }
+    (prefs.units)(&value)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use divelens_core::{macdive, subsurface};
 
     const FEET_F: Units = Units {
         depth: DepthUnit::Feet,
@@ -187,38 +152,6 @@ mod tests {
         depth: DepthUnit::Feet,
         temp: TempUnit::Celsius,
     };
-
-    #[test]
-    fn macdive_values() {
-        assert_eq!(macdive(Some(0)), METRIC);
-        assert_eq!(macdive(Some(1)), FEET_F);
-        assert_eq!(macdive(Some(2)), FEET_C);
-        assert_eq!(macdive(Some(7)), METRIC, "unknown value");
-        assert_eq!(macdive(None), METRIC, "missing value");
-    }
-
-    #[test]
-    fn subsurface_values() {
-        assert_eq!(subsurface(Some(0), Some(0), None), METRIC);
-        assert_eq!(subsurface(Some(1), Some(1), None), FEET_F);
-        assert_eq!(subsurface(Some(1), Some(0), None), FEET_C);
-        assert_eq!(subsurface(Some(5), Some(9), None), METRIC, "unknown values");
-        assert_eq!(subsurface(None, None, None), METRIC, "nothing set");
-        assert_eq!(subsurface(None, None, Some(1)), FEET_F);
-        assert_eq!(
-            subsurface(None, None, Some(2)),
-            METRIC,
-            "personalized, nothing set"
-        );
-        // Separate settings win over the unit system.
-        assert_eq!(
-            subsurface(Some(0), None, Some(1)),
-            Units {
-                depth: DepthUnit::Metres,
-                temp: TempUnit::Fahrenheit,
-            }
-        );
-    }
 
     fn home(name: &str) -> PathBuf {
         let dir =
@@ -240,16 +173,17 @@ mod tests {
     #[test]
     fn reads_macdive_preferences() {
         let dir = home("macdive");
-        assert_eq!(read_macdive(&dir), METRIC, "no preferences");
+        let md = &macdive::APP.preferences;
+        assert_eq!(read_mac(md, &dir), METRIC, "no preferences");
         let file = dir.join("Library/Preferences/com.mintsoftware.MacDive2.plist");
         for (value, expected) in [(0, METRIC), (1, FEET_F), (2, FEET_C), (42, METRIC)] {
             write_prefs(&file, &[("units", plist::Value::Integer(value.into()))]);
-            assert_eq!(read_macdive(&dir), expected, "units = {value}");
+            assert_eq!(read_mac(md, &dir), expected, "units = {value}");
         }
         write_prefs(&file, &[("other", plist::Value::Boolean(true))]);
-        assert_eq!(read_macdive(&dir), METRIC, "key absent");
+        assert_eq!(read_mac(md, &dir), METRIC, "key absent");
         std::fs::write(&file, b"not a plist").unwrap();
-        assert_eq!(read_macdive(&dir), METRIC, "unreadable");
+        assert_eq!(read_mac(md, &dir), METRIC, "unreadable");
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -260,14 +194,15 @@ mod tests {
             "Library/Containers/com.mintsoftware.MacDive2/Data/Library/Preferences/com.mintsoftware.MacDive2.plist",
         );
         write_prefs(&file, &[("units", plist::Value::Integer(2.into()))]);
-        assert_eq!(read_macdive(&dir), FEET_C);
+        assert_eq!(read_mac(&macdive::APP.preferences, &dir), FEET_C);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
     fn reads_subsurface_mac_preferences() {
         let dir = home("subsurface");
-        assert_eq!(read_subsurface_mac(&dir), METRIC, "no preferences");
+        let ss = &subsurface::APP.preferences;
+        assert_eq!(read_mac(ss, &dir), METRIC, "no preferences");
         let file = dir.join("Library/Preferences/org.hohndel.subsurface.Subsurface.plist");
         write_prefs(
             &file,
@@ -276,17 +211,55 @@ mod tests {
                 ("Units.temperature", plist::Value::String("0".into())),
             ],
         );
-        assert_eq!(read_subsurface_mac(&dir), FEET_C);
+        assert_eq!(read_mac(ss, &dir), FEET_C);
         write_prefs(
             &file,
             &[("Units.unit_system", plist::Value::Integer(1.into()))],
         );
-        assert_eq!(read_subsurface_mac(&dir), FEET_F);
+        assert_eq!(read_mac(ss, &dir), FEET_F);
         write_prefs(
             &file,
             &[("MainWindow.geometry", plist::Value::Boolean(true))],
         );
-        assert_eq!(read_subsurface_mac(&dir), METRIC, "units never set");
+        assert_eq!(read_mac(ss, &dir), METRIC, "units never set");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn qt_keys_on_each_system() {
+        assert_eq!(mac_key("Units/length"), "Units.length");
+        assert_eq!(mac_key("units"), "units");
+        let root = subsurface::APP.preferences.windows_key.unwrap();
+        assert_eq!(root, r"Software\Subsurface\Subsurface");
+        assert_eq!(
+            registry_value(root, "Units/length"),
+            (
+                r"Software\Subsurface\Subsurface\Units".to_string(),
+                "length"
+            )
+        );
+        assert_eq!(
+            registry_value(root, "Units/unit_system"),
+            (
+                r"Software\Subsurface\Subsurface\Units".to_string(),
+                "unit_system"
+            )
+        );
+        assert_eq!(
+            registry_value(r"Software\Blue", "units"),
+            (r"Software\Blue".to_string(), "units")
+        );
+    }
+
+    #[test]
+    fn no_preferences_on_a_system_means_metric() {
+        let none = Preferences {
+            mac_domain: None,
+            windows_key: None,
+            units: |_| FEET_F,
+        };
+        let dir = home("none");
+        assert_eq!(read_mac(&none, &dir), METRIC);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

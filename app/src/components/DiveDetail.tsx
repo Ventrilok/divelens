@@ -4,6 +4,7 @@ import { lazy, Suspense, useEffect, useState } from "react";
 import { formatDepth, formatDiveSpan, formatDuration, formatGps, formatTemps } from "../format";
 import { t } from "../i18n";
 import { profiles } from "../profiles";
+import { sourceName } from "../sourceText";
 import type { Capabilities, Dive, LogRef, Sample, Units } from "../types";
 import { Icon } from "./Icon";
 import { ProfileChart } from "./ProfileChart";
@@ -122,7 +123,7 @@ export function DiveDetail({
         <span className="lbl">
           {label}
           {dive.invalid && (
-            <span className="badge badge-invalid" title={t("list.invalidHint")}>
+            <span className="badge badge-invalid" title={t("list.invalidHint", { source: sourceName(log.kind) })}>
               {t("list.invalid")}
             </span>
           )}

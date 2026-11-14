@@ -269,7 +269,7 @@ impl Session {
         if kept != log {
             return Err(LogChanged);
         }
-        Ok(self.request(choices, units, kept.kind.name(), |d| {
+        Ok(self.request(choices, units, kept.app.name, |d| {
             self.profiles.get(&d.id).cloned().unwrap_or(Ok(Vec::new()))
         }))
     }
@@ -476,6 +476,7 @@ mod tests {
     use super::*;
     use chrono::NaiveDate;
     use divelens_core::Site;
+    use divelens_core::{macdive, subsurface};
 
     fn at(d: u32, h: u32, m: u32) -> NaiveDateTime {
         NaiveDate::from_ymd_opt(2025, 12, d)
@@ -659,9 +660,9 @@ mod tests {
         assert!(!a.photos.iter().any(|p| p.id == "6"), "ignored camera");
     }
 
-    fn log(kind: crate::settings::SourceKind, path: &str) -> LogId {
+    fn log(app: &'static divelens_core::apps::DiveApp, path: &str) -> LogId {
         LogId {
-            kind,
+            app,
             path: path.into(),
         }
     }
@@ -683,8 +684,7 @@ mod tests {
 
     #[test]
     fn apply_writes_the_profiles_and_application_read_with_the_dives() {
-        use crate::settings::SourceKind;
-        let read = log(SourceKind::Subsurface, "/Logs/diver.xml");
+        let read = log(&subsurface::APP, "/Logs/diver.xml");
         let s = session(&Offsets::default()).read_from(
             read.clone(),
             HashMap::from([("A".to_string(), Ok(ramp(30.0)))]),
@@ -705,18 +705,17 @@ mod tests {
 
     #[test]
     fn apply_is_refused_when_the_log_changed_since_the_dives_were_read() {
-        use crate::settings::SourceKind;
-        let read = log(SourceKind::Subsurface, "/Logs/diver.xml");
+        let read = log(&subsurface::APP, "/Logs/diver.xml");
         let s = session(&Offsets::default()).read_from(
             read.clone(),
             HashMap::from([("A".to_string(), Ok(ramp(30.0)))]),
         );
-        let elsewhere = log(SourceKind::Subsurface, "/Logs/other.xml");
+        let elsewhere = log(&subsurface::APP, "/Logs/other.xml");
         assert!(matches!(
             s.write_request(&elsewhere, &choices(10), Units::default()),
             Err(LogChanged)
         ));
-        let other_app = log(SourceKind::MacDive, "/Logs/diver.xml");
+        let other_app = log(&macdive::APP, "/Logs/diver.xml");
         assert!(matches!(
             s.write_request(&other_app, &choices(10), Units::default()),
             Err(LogChanged)
@@ -731,8 +730,7 @@ mod tests {
 
     #[test]
     fn a_profile_that_did_not_read_fails_apply_only_when_needed() {
-        use crate::settings::SourceKind;
-        let read = log(SourceKind::MacDive, "/Dives/MacDive.sqlite");
+        let read = log(&macdive::APP, "/Dives/MacDive.sqlite");
         let s = session(&Offsets::default()).read_from(
             read.clone(),
             HashMap::from([("A".to_string(), Err(Error::BadProfile("garbled".into())))]),
@@ -775,8 +773,7 @@ mod tests {
 
     #[test]
     fn a_slower_older_search_never_replaces_the_newer_one() {
-        use crate::settings::SourceKind;
-        let read = log(SourceKind::Subsurface, "/Logs/diver.xml");
+        let read = log(&subsurface::APP, "/Logs/diver.xml");
         let mut searches = Searches::default();
         // Many dives checked, Next: this search reads every profile, slowly.
         let older = 1_700_000_000_001;

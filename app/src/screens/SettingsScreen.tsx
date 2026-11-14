@@ -10,18 +10,17 @@ import { flattenSets, pathKey, placeLabel, setExists } from "../collectionPlace"
 import { Icon } from "../components/Icon";
 import { changeErrorText } from "../diveLog";
 import { systemLang, t, tn } from "../i18n";
-import { chooseLog, errorText, sourceName } from "../sourceText";
-import type {
-  AppInfo,
-  CollectionSet,
-  DiveLog,
-  ImportCheck,
-  LightroomStatus,
-  LoadError,
-  Settings,
-  SourceInfo,
-  SourceKind,
-} from "../types";
+import {
+  appOf,
+  appTexts,
+  availableApps,
+  chooseButtons,
+  chooseLog,
+  errorText,
+  readText,
+  withLocation,
+} from "../sourceText";
+import type { AppInfo, CollectionSet, DiveLog, ImportCheck, LightroomStatus, LoadError, Settings, SourceInfo } from "../types";
 
 const SOURCE_CODE = "https://github.com/Ventrilok/divelens";
 
@@ -67,54 +66,55 @@ function Segmented<T extends string>({
 function SourceSection({
   settings,
   logState,
-  info,
   writing,
   onChange,
 }: {
   settings: Settings;
   logState: LogState;
-  info: AppInfo | null;
   /** Lightroom is being written to: the dive log cannot change. */
   writing: boolean;
   onChange: (p: Patch) => void;
 }) {
   const source = logState.status === "ok" ? logState.log.source : logState.status === "error" ? logState.failure.source : null;
-  // The application in use (on Windows, always Subsurface).
-  const kind: SourceKind = source?.kind ?? settings.source.kind;
-  const ss = kind === "subsurface";
-  const setPath = (path: string | null) =>
-    onChange({ source: { ...settings.source, [ss ? "subsurfacePath" : "macDivePath"]: path } });
+  // The application in use, as the back end resolves it (the one chosen
+  // when this system has it).
+  const app = appOf(source?.kind ?? settings.source.kind);
+  const texts = appTexts(app);
+  const setPath = (path: string | null) => onChange({ source: withLocation(settings.source, app, path) });
   const choose = async (folder: boolean) => {
-    const picked = await chooseLog(kind, source?.path, folder);
+    const picked = await chooseLog(app, source?.path, folder);
     if (picked) setPath(picked);
   };
+  // One button next to the location, or a row of them (a file or a folder).
+  const buttons = chooseButtons(app).map((b) => (
+    <button key={b.label} type="button" className="btn btn-s" disabled={writing} onClick={() => choose(b.folder)}>
+      {b.label}
+    </button>
+  ));
 
   let state: React.ReactNode;
   if (logState.status === "loading") {
-    state = <span className="set-state muted">{t(ss ? "settings.ssLoading" : "settings.baseLoading")}</span>;
+    state = <span className="set-state muted">{texts.reading}</span>;
   } else if (logState.status === "ok") {
     const counts = {
       dives: tn("source.dives", logState.log.dives.length),
       sites: tn("settings.sites", logState.log.sites.length),
     };
-    const storage = logState.log.storage;
-    const key = storage?.kind === "git" ? "settings.gitOk" : storage?.kind === "xml" ? "settings.xmlOk" : "settings.baseOk";
     state = (
       <span className="set-state">
         <Icon name="check" size={14} className="accent" />
-        {t(key, counts)}
+        {readText(app, logState.log.format, counts)}
       </span>
     );
   } else {
     state = (
       <span className="set-state set-warn">
         <Icon name="warn" size={14} />
-        {errorText(kind, logState.failure.error, "title")}
+        {errorText(app, logState.failure.error, "title")}
       </span>
     );
   }
 
-  const windows = info?.os === "windows";
   return (
     <section className="card" aria-labelledby="s-src">
       <h2 id="s-src" className="sec">
@@ -124,34 +124,24 @@ function SourceSection({
         <select
           className="inp set-select"
           aria-label={t("settings.app")}
-          value={kind}
+          value={app.id}
           disabled={writing}
-          onChange={(e) => onChange({ source: { ...settings.source, kind: e.target.value as SourceKind } })}
+          onChange={(e) => onChange({ source: { ...settings.source, kind: e.target.value } })}
         >
-          {!windows && <option value="macDive">{sourceName("macDive")}</option>}
-          <option value="subsurface">{sourceName("subsurface")}</option>
+          {availableApps().map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
         </select>
       </Row>
-      <Row title={t(ss ? "settings.ssBase" : "settings.base")} hint={t(ss ? "settings.ssBaseHint" : "settings.baseHint")} top>
+      <Row title={texts.log} hint={texts.logHint} top>
         <div className="set-path">
           <div className="set-path-row">
-            <input className="inp" aria-label={t(ss ? "settings.ssBase" : "settings.base")} value={source?.path ?? ""} readOnly />
-            {!ss && (
-              <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(false)}>
-                {t("settings.choose")}
-              </button>
-            )}
+            <input className="inp" aria-label={texts.log} value={source?.path ?? ""} readOnly />
+            {buttons.length === 1 && buttons}
           </div>
-          {ss && (
-            <div className="set-path-row">
-              <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(false)}>
-                {t("errSs.chooseFile")}
-              </button>
-              <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(true)}>
-                {t("errSs.chooseFolder")}
-              </button>
-            </div>
-          )}
+          {buttons.length > 1 && <div className="set-path-row">{buttons}</div>}
           <div className="set-path-row set-path-state">
             {state}
             {source && !source.isDefaultPath && (
@@ -313,9 +303,10 @@ function BackupSection({
   };
   const choose = async (folder: boolean) => {
     if (!missing) return;
-    const picked = await chooseLog(missing.kind, undefined, folder);
+    const app = appOf(missing.kind);
+    const picked = await chooseLog(app, undefined, folder);
     if (!picked) return;
-    onChange({ source: { ...settings.source, [missing.kind === "subsurface" ? "subsurfacePath" : "macDivePath"]: picked } });
+    onChange({ source: withLocation(settings.source, app, picked) });
     setMissing(null);
   };
   // Once the dive log reads (chosen here or in the Dive log section), the
@@ -362,20 +353,11 @@ function BackupSection({
           <div className="set-explain" role="alert">
             <span className="set-warn">{t("settings.importedMissing", { path: missing.path })}</span>
             <div className="set-actions">
-              {missing.kind === "subsurface" ? (
-                <>
-                  <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(false)}>
-                    {t("errSs.chooseFile")}
-                  </button>
-                  <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(true)}>
-                    {t("errSs.chooseFolder")}
-                  </button>
-                </>
-              ) : (
-                <button type="button" className="btn btn-s" disabled={writing} onClick={() => choose(false)}>
-                  {t("settings.choose")}
+              {chooseButtons(appOf(missing.kind)).map((b) => (
+                <button key={b.label} type="button" className="btn btn-s" disabled={writing} onClick={() => choose(b.folder)}>
+                  {b.label}
                 </button>
-              )}
+              ))}
             </div>
           </div>
         )}
@@ -408,9 +390,9 @@ export function SettingsScreen({
   error: unknown;
   onChange: (patch: Patch) => void;
 }) {
-  const appName = sourceName(
+  const appName = appOf(
     logState.status === "ok" ? logState.log.source.kind : logState.status === "error" ? logState.failure.source.kind : settings.source.kind,
-  );
+  ).name;
   const sourceUnits = logState.status === "ok" ? logState.log.sourceUnits : null;
   const asSource = (unit: string | null) =>
     unit ? t("settings.asSource", { source: appName, unit }) : t("settings.asSourceBare", { source: appName });
@@ -427,7 +409,7 @@ export function SettingsScreen({
           </p>
         )}
 
-        <SourceSection settings={settings} logState={logState} info={info} writing={writing} onChange={onChange} />
+        <SourceSection settings={settings} logState={logState} writing={writing} onChange={onChange} />
 
         <section className="card" aria-labelledby="s-aff">
           <h2 id="s-aff" className="sec">

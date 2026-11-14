@@ -27,7 +27,8 @@ export function logChangedNotice(current: Key | null, applied: boolean): Key {
  * shown, as the back end resolved it. Nothing needs reading again then.
  */
 export function sameLogSetting(before: Settings["source"], after: Settings["source"], kindInUse: SourceKind): boolean {
-  const path = (s: Settings["source"]) => (kindInUse === "subsurface" ? s.subsurfacePath : s.macDivePath);
+  // No location: the standard one.
+  const path = (s: Settings["source"]) => s.locations[kindInUse] ?? null;
   return before.kind === after.kind && path(before) === path(after);
 }
 

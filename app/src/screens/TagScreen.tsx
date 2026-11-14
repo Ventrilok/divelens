@@ -7,6 +7,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { onApplyProgress, onSelectionPreview, selectionPreview, tagSelection } from "../api";
 import { coveringDive } from "../covers";
 import { logRef } from "../diveLog";
+import { sourceName } from "../sourceText";
 import { DiveDetail } from "../components/DiveDetail";
 import { LogNotice } from "../components/LogNotice";
 import { DiveList } from "../components/DiveList";
@@ -240,6 +241,7 @@ export function TagScreen({
                     mark={covering ? { id: covering.id, label: t("tag.covers") } : null}
                     capabilities={capabilities}
                     units={units}
+                    source={sourceName(log.source.kind)}
                   />
                 ) : (
                   <div className="card list-card list-empty">

@@ -126,6 +126,7 @@ export function DivesScreen({
             onToggleAll={toggleAll}
             capabilities={capabilities}
             units={units}
+            source={sourceName(log.source.kind)}
           />
         ) : (
           <div className="card list-card list-empty">
