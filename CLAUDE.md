@@ -28,7 +28,7 @@ V1 sources: MacDive (SQLite, macOS) and Subsurface (XML file and git-based stora
 - The plugin's pure-Lua parts (JSON, framing, manifest, fields) are tested under Lua 5.1 from `app/src-tauri/tests/plugin_lua.rs`.
 - Cargo workspace at the root: one `target/` and one `Cargo.lock` for its three crates (`core`, `libdivecomputer-sys`, `app/src-tauri`).
 
-App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where app settings live). Version is set once in `app/package.json`.
+App bundle identifier: `com.querton.divelens.desktop` (fixed: it decides where app settings live). The product version is set only in `app/package.json`, with `npm run set-version <version>` from `app/`, which copies it to `Info.lua`, `Cargo.toml` and `Cargo.lock` (a test fails when a copy differs; see CONTRIBUTING.md, "Version numbers").
 
 ## Commands
 
