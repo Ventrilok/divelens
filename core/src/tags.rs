@@ -69,12 +69,22 @@ pub struct LocationTags {
     pub lon: Option<f64>,
 }
 
-/// Everything one "Apply" writes. At least one part is present.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+/// Everything one "Tag Selection › Apply" writes. At least one of `dive`
+/// and `location` is present.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TagRequest {
     pub dive: Option<DiveTags>,
     pub location: Option<LocationTags>,
+    /// The selection the per-photo values were computed for, as the plugin
+    /// numbered it when it described it; `None`: no per-photo values (no
+    /// dive, or a dive without a profile). The plugin then writes only if
+    /// the photos selected at that moment are exactly those.
+    pub selection: Option<u64>,
+    /// Per-photo values of the photos taken during the dive (spec F6, F8).
+    /// The other photos of the selection are not listed: they get the dive
+    /// data without per-photo values, nor a clock offset.
+    pub photos: Vec<PhotoTags>,
 }
 
 /// Per-photo fields (spec F6, section 7). `None` clears the field: a photo
@@ -128,9 +138,21 @@ impl CollectionsRequest {
     /// Copies each photo's depth to its GPS altitude, negative (spec F7).
     /// Photos without a depth keep their altitude.
     pub fn copy_depth_to_altitude(&mut self) {
-        for photo in self.groups.iter_mut().flat_map(|g| &mut g.photos) {
-            photo.gps_altitude = photo.depth_m.map(altitude);
-        }
+        copy_depth_to_altitude(self.groups.iter_mut().flat_map(|g| &mut g.photos));
+    }
+}
+
+impl TagRequest {
+    /// Copies the depth of each photo taken during the dive to its GPS
+    /// altitude, negative (spec F7), as Create Collections does.
+    pub fn copy_depth_to_altitude(&mut self) {
+        copy_depth_to_altitude(&mut self.photos);
+    }
+}
+
+fn copy_depth_to_altitude<'a>(photos: impl IntoIterator<Item = &'a mut PhotoTags>) {
+    for photo in photos {
+        photo.gps_altitude = photo.depth_m.map(altitude);
     }
 }
 
@@ -344,13 +366,43 @@ mod tests {
     #[test]
     fn request_serializes_for_the_plugin() {
         let request = TagRequest {
-            dive: None,
             location: Some(LocationTags::new(&dive().site, None, None)),
+            ..TagRequest::default()
         };
         let json = serde_json::to_value(&request).unwrap();
         assert_eq!(json["dive"], serde_json::Value::Null);
         assert_eq!(json["location"]["city"], "North Reef");
         assert_eq!(json["location"]["lat"], 12.5);
+        // No per-photo values: no selection named, no photo listed.
+        assert_eq!(json["selection"], serde_json::Value::Null);
+        assert_eq!(json["photos"], serde_json::json!([]));
+    }
+
+    #[test]
+    fn tag_request_copies_depth_to_altitude_of_the_photos_listed() {
+        let point = PhotoPoint {
+            elapsed_s: 60,
+            depth_m: 12.34,
+            temp_c: Some(26.0),
+        };
+        let mut request = TagRequest {
+            dive: Some(DiveTags::new(&dive(), Units::default(), "MacDive")),
+            location: None,
+            selection: Some(7),
+            photos: vec![PhotoTags::new(
+                "1".into(),
+                Some(point),
+                240,
+                Units::default(),
+            )],
+        };
+        let json = serde_json::to_value(&request).unwrap();
+        assert_eq!(json["selection"], 7);
+        assert_eq!(json["photos"][0]["photoDepth"], "12.3 m");
+        assert_eq!(json["photos"][0]["clockOffset"], "+04:00");
+        assert_eq!(json["photos"][0]["gpsAltitude"], serde_json::Value::Null);
+        request.copy_depth_to_altitude();
+        assert_eq!(request.photos[0].gps_altitude, Some(-12.3));
     }
 
     #[test]

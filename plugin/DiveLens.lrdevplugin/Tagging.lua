@@ -11,9 +11,18 @@ request carries one, otherwise the photo keeps its altitude.
 A "tag the selection" request that writes a dive on a photo already carrying
 another one also clears that photo's own values (retagChanges).
 
+When the dive has a profile, a "tag the selection" request also carries the
+per-photo values of the photos taken during the dive (planPhotos), computed
+by the app for the selection the plugin described to it (`selection`): it is
+written only on exactly those photos (sameSelection). Those values replace
+what the other dive left (notOverwritten); the other photos get the dive
+data alone.
+
 Request (built by the app, see core/src/tags.rs):
-  dive:     { diveId, start, end, duration, maxDepth, tempHigh, tempLow, rating } or null
-  location: { country, city, location, lat, lon } or null
+  dive:      { diveId, start, end, duration, maxDepth, tempHigh, tempLow, rating } or null
+  location:  { country, city, location, lat, lon } or null
+  selection: number of the selection description the values are for, or null
+  photos:    { { id, photoDepth, photoTemp, photoElapsed, clockOffset, gpsAltitude }, ... }
 
 Rules:
   - DiveLens fields describe one dive: a missing value clears the field.
@@ -212,6 +221,73 @@ function Tagging.progress(total, every)
     return p
 end
 
+-- One photo's own values, as the app sent them (core/src/tags.rs,
+-- PhotoTags): its per-photo fields (a missing value clears the field), its
+-- clock offset, and its GPS altitude when there is one to write. Returns the
+-- photo's id and its changes, or nil and a reason.
+local function photoChanges(photo)
+    if type(photo) ~= "table" or not text(photo.id) or not text(photo.clockOffset) then
+        return nil, "bad photo"
+    end
+    local changes = {
+        { kind = "plugin", field = "PhotoDepth", value = text(photo.photoDepth) },
+        { kind = "plugin", field = "PhotoTemp", value = text(photo.photoTemp) },
+        { kind = "plugin", field = "PhotoElapsed", value = text(photo.photoElapsed) },
+        { kind = "plugin", field = "ClockOffset", value = text(photo.clockOffset) },
+    }
+    local altitude = value(photo.gpsAltitude)
+    if type(altitude) == "number" then
+        changes[#changes + 1] = { kind = "raw", field = "gpsAltitude", value = altitude }
+    end
+    return photo.id, changes
+end
+
+--- The per-photo values of a "Tag Selection" request:
+--- { selection = number of the selection described, photos = { [id] =
+--- changes } } for the photos taken during the dive; nil when the request
+--- carries none (no `selection`: no dive, or a dive without a profile); nil
+--- and a reason when it is not usable.
+function Tagging.planPhotos(request)
+    if type(request) ~= "table" then return nil, "bad request" end
+    local selection = value(request.selection)
+    if selection == nil then return nil end
+    if type(selection) ~= "number" then return nil, "bad selection" end
+    if not value(request.dive) then return nil, "bad dive" end
+    local byId = {}
+    for _, photo in ipairs(value(request.photos) or {}) do
+        local id, changes = photoChanges(photo)
+        if not id then return nil, changes end
+        byId[id] = changes
+    end
+    return { selection = selection, photos = byId }
+end
+
+--- `extra` (from retagChanges) without what `own`, a photo's per-photo
+--- changes (planPhotos), writes again: a photo taken during the dive gets
+--- its new values instead of having the other dive's cleared. The other
+--- dive's GPS altitude is still cleared when no new one is written (the
+--- copy to the altitude is off), as for the photos outside the dive.
+function Tagging.notOverwritten(extra, own)
+    local set = {}
+    for _, c in ipairs(own or {}) do set[c.kind .. ":" .. c.field] = true end
+    local kept = {}
+    for _, c in ipairs(extra) do
+        if not set[c.kind .. ":" .. c.field] then kept[#kept + 1] = c end
+    end
+    return kept
+end
+
+--- True when `photos`, those selected now, are exactly the photos of
+--- `described` ({ count = n, photos = { [id] = photo } }), the selection
+--- described to the app for its per-photo values. `idOf` gives a photo's id.
+function Tagging.sameSelection(described, photos, idOf)
+    if type(described) ~= "table" or #photos ~= described.count then return false end
+    for _, photo in ipairs(photos) do
+        if not described.photos[idOf(photo)] then return false end
+    end
+    return true
+end
+
 --- Changes for one dive of a "Create Collections" request:
 --- { collection = name, common = changes for every photo,
 ---   photos = { { id = photo id, changes = per-photo changes }, ... } },
@@ -223,20 +299,9 @@ local function planGroup(group, formatDate)
     if not value(group.dive) then return nil, "bad dive" end
     local photos = {}
     for _, photo in ipairs(value(group.photos) or {}) do
-        if type(photo) ~= "table" or not text(photo.id) or not text(photo.clockOffset) then
-            return nil, "bad photo"
-        end
-        local changes = {
-            { kind = "plugin", field = "PhotoDepth", value = text(photo.photoDepth) },
-            { kind = "plugin", field = "PhotoTemp", value = text(photo.photoTemp) },
-            { kind = "plugin", field = "PhotoElapsed", value = text(photo.photoElapsed) },
-            { kind = "plugin", field = "ClockOffset", value = text(photo.clockOffset) },
-        }
-        local altitude = value(photo.gpsAltitude)
-        if type(altitude) == "number" then
-            changes[#changes + 1] = { kind = "raw", field = "gpsAltitude", value = altitude }
-        end
-        photos[#photos + 1] = { id = photo.id, changes = changes }
+        local id, changes = photoChanges(photo)
+        if not id then return nil, changes end
+        photos[#photos + 1] = { id = id, changes = changes }
     end
     return { collection = group.collection, common = common, photos = photos }
 end

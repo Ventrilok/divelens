@@ -6,8 +6,9 @@
 //! the catalog name and the live photo selection. Messages are one JSON object
 //! per line. The app pings every few seconds; silence means the link is lost.
 //!
-//! Requests (tag the selection, find the photos of a period, list the
-//! collection sets, write the collections, set the log level) go to the plugin through a channel of [`Command`]s; each
+//! Requests (describe and tag the selection, find the photos of a period,
+//! list the collection sets, write the collections, set the log level) go
+//! to the plugin through a channel of [`Command`]s; each
 //! carries its own reply channel. A request made while the link is down, or
 //! cut by a lost link, gets no reply: its channel is dropped, which the caller
 //! sees as "link lost". Requests are never retried.
@@ -30,7 +31,7 @@ use crate::settings::{Legacy, LogLevel};
 /// Name of the link file, written by the plugin in the app's settings folder.
 pub const LINK_FILE: &str = "lightroom-link.json";
 /// Version of the message set; both sides must agree.
-pub const PROTOCOL: u32 = 5;
+pub const PROTOCOL: u32 = 6;
 
 /// Content of the link file.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -169,6 +170,12 @@ pub enum Command {
     FindPhotos {
         from: String,
         to: String,
+        reply: Sender<Result<PhotoSearch, ApplyOutcome>>,
+    },
+    /// The photos selected in Lightroom now (Tag Selection's per-photo
+    /// values). The plugin keeps them: an "Apply" naming this search writes
+    /// only if the selection is still exactly these photos.
+    DescribeSelection {
         reply: Sender<Result<PhotoSearch, ApplyOutcome>>,
     },
     /// Write collections, dive data and per-photo values in one Undo step.
@@ -316,6 +323,9 @@ enum ToPlugin<'a> {
         id: u64,
         from: &'a str,
         to: &'a str,
+    },
+    DescribeSelection {
+        id: u64,
     },
     ApplyCollections {
         id: u64,
@@ -585,6 +595,7 @@ fn session(
                     request: request.as_ref(),
                 },
                 Command::FindPhotos { from, to, .. } => ToPlugin::FindPhotos { id, from, to },
+                Command::DescribeSelection { .. } => ToPlugin::DescribeSelection { id },
                 Command::ApplyCollections { request, .. } => {
                     ToPlugin::ApplyCollections { id, request }
                 }
@@ -596,7 +607,9 @@ fn session(
             }
             let waiting = match command {
                 Command::Apply { reply, .. } => Pending::Apply(reply),
-                Command::FindPhotos { reply, .. } => Pending::Find(reply, Vec::new()),
+                Command::FindPhotos { reply, .. } | Command::DescribeSelection { reply } => {
+                    Pending::Find(reply, Vec::new())
+                }
                 Command::ApplyCollections { reply, .. } => Pending::Collections(reply),
                 Command::ListSets { reply } => Pending::Sets(reply),
                 Command::SetLogLevel(_) => continue,
@@ -663,7 +676,7 @@ mod tests {
         stream.write_all(text.as_bytes()).unwrap();
     }
 
-    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":5,"type":"hello"}"#;
+    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":6,"type":"hello"}"#;
 
     #[test]
     fn dropped_requests_stop_their_callers_waiting() {
@@ -797,7 +810,6 @@ mod tests {
 
     fn request() -> TagRequest {
         TagRequest {
-            dive: None,
             location: Some(divelens_core::tags::LocationTags {
                 country: Some("Atlantis".into()),
                 city: None,
@@ -805,7 +817,97 @@ mod tests {
                 lat: Some(12.5),
                 lon: Some(-45.25),
             }),
+            ..TagRequest::default()
         }
+    }
+
+    #[test]
+    fn the_plugin_speaks_the_same_protocol() {
+        let link = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../plugin/DiveLens.lrdevplugin/Link.lua"),
+        )
+        .unwrap();
+        assert!(
+            link.contains(&format!("\nlocal PROTOCOL = {PROTOCOL}\n")),
+            "raise PROTOCOL in Link.lua and lightroom.rs together"
+        );
+    }
+
+    #[test]
+    fn describes_the_selection_then_tags_it_with_per_photo_values() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (result_tx, result_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin(move |lines, to_app| {
+            lines.next().unwrap();
+            write(to_app, &format!("{HELLO}\n"));
+            lines.next().unwrap(); // first ping: the app is connected
+            let (reply, found) = std::sync::mpsc::channel();
+            commands.send(Command::DescribeSelection { reply }).unwrap();
+            let describe = next_request(lines);
+            assert_eq!(describe["type"], "describeSelection");
+            let id = describe["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"photos\",\"id\":{id},\"done\":true,\"photos\":[{{\"id\":\"11\",\"time\":\"2025-12-30T05:02:00\",\"model\":\"TG-7\"}}]}}\n"
+                ),
+            );
+            let selection = found.recv().unwrap().unwrap();
+            let point = divelens_core::profile::PhotoPoint {
+                elapsed_s: 120,
+                depth_m: 8.0,
+                temp_c: None,
+            };
+            let (reply, outcome) = std::sync::mpsc::channel();
+            commands
+                .send(Command::Apply {
+                    request: Box::new(TagRequest {
+                        selection: Some(selection.search),
+                        photos: vec![divelens_core::tags::PhotoTags::new(
+                            "11".into(),
+                            Some(point),
+                            240,
+                            divelens_core::tags::Units::default(),
+                        )],
+                        ..request()
+                    }),
+                    reply,
+                })
+                .unwrap();
+            let apply = next_request(lines);
+            assert_eq!(apply["type"], "apply");
+            assert_eq!(apply["selection"].as_u64(), Some(selection.search));
+            assert_eq!(apply["photos"][0]["id"], "11");
+            assert_eq!(apply["photos"][0]["photoDepth"], "8.0 m");
+            assert_eq!(apply["photos"][0]["clockOffset"], "+04:00");
+            let id = apply["id"].as_u64().unwrap();
+            // The selection changed in Lightroom since: nothing written.
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"applyFailed\",\"id\":{id},\"reason\":\"selectionChanged\"}}\n"
+                ),
+            );
+            result_tx
+                .send((selection, outcome.recv().unwrap()))
+                .unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {});
+        plugin.join().unwrap();
+        assert_eq!(end, End::Bye);
+        let (selection, outcome) = result_rx.recv().unwrap();
+        assert_eq!(selection.photos.len(), 1);
+        assert_eq!(selection.photos[0].model.as_deref(), Some("TG-7"));
+        assert_eq!(
+            outcome,
+            ApplyOutcome::Failed {
+                reason: "selectionChanged".into(),
+                detail: None
+            }
+        );
+        assert!(!outcome.half_written());
     }
 
     /// Connects, waits for the app's first ping (so the app knows it is
@@ -1085,7 +1187,7 @@ mod tests {
             lines.next().unwrap();
             write(
                 to_app,
-                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":5,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
+                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":6,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
             );
             write(to_app, "\n");
             lines.next().unwrap(); // first ping: the app is connected

@@ -241,6 +241,7 @@ fn tagging_plan_writes_dive_fields_and_clears_missing_ones() {
     let lines = plan(&TagRequest {
         dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
         location: Some(LocationTags::new(&dive.site, None, None)),
+        ..TagRequest::default()
     })
     .unwrap();
     assert_eq!(
@@ -272,13 +273,15 @@ fn tagging_plan_location_only_and_bad_requests() {
     let lines = plan(&TagRequest {
         dive: None,
         location: Some(LocationTags::new(&site, None, None)),
+        ..TagRequest::default()
     })
     .unwrap();
     assert_eq!(lines, ["raw country=Atlantis", "raw location=Coral Garden"]);
     assert_eq!(
         plan(&TagRequest {
             dive: None,
-            location: None
+            location: None,
+            ..TagRequest::default()
         }),
         Err("nothing to write".into())
     );
@@ -494,6 +497,7 @@ fn tagging_writes_gps_in_a_write_of_its_own() {
     let both = TagRequest {
         dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
         location: Some(LocationTags::new(&dive.site, None, None)),
+        ..TagRequest::default()
     };
     // The same changes as the plan, the GPS moved to the second write.
     let mut planned: Vec<String> = plan(&both).unwrap();
@@ -508,6 +512,7 @@ fn tagging_writes_gps_in_a_write_of_its_own() {
     let place = TagRequest {
         dive: None,
         location: Some(LocationTags::new(&dive.site, None, None)),
+        ..TagRequest::default()
     };
     assert_eq!(
         tag_writes(&place),
@@ -524,6 +529,7 @@ fn tagging_writes_gps_in_a_write_of_its_own() {
     let no_gps = TagRequest {
         dive: None,
         location: Some(LocationTags::new(&site, None, None)),
+        ..TagRequest::default()
     };
     assert_eq!(
         tag_writes(&no_gps),
@@ -532,6 +538,7 @@ fn tagging_writes_gps_in_a_write_of_its_own() {
     let dive_only = TagRequest {
         dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
         location: None,
+        ..TagRequest::default()
     };
     assert!(tag_writes(&dive_only).iter().all(|l| l.starts_with("1 ")));
 }
@@ -727,10 +734,18 @@ fn retag_lua(
         -- What Link.lua reads on the photo before writing.
         local current = { gpsAltitude = photo.gpsAltitude }
         for _, field in ipairs(Tagging.RETAG_FIELDS) do current[field] = photo[field] end
-        local changes = assert(Tagging.plan(Json.decode(input), date))
+        local request = Json.decode(input)
+        local changes = assert(Tagging.plan(request, date))
         local extra = Tagging.retagChanges(current, changes)
-        -- What Link.lua writes: the request, then what the other dive left.
-        if split then return writes(changes, extra) end
+        -- The photo is "1": its per-photo values when the request lists it
+        -- (taken during the dive), which replace what the other dive left.
+        local perPhoto, bad = Tagging.planPhotos(request)
+        assert(not bad, bad)
+        local own = perPhoto and perPhoto.photos["1"]
+        if own then extra = Tagging.notOverwritten(extra, own) end
+        -- What Link.lua writes: the request, what the other dive left, then
+        -- the photo's own values.
+        if split then return writes(changes, extra, own or {}) end
         local lines = {}
         for i, c in ipairs(extra) do
             lines[i] = ("%s %s=%s"):format(c.kind, c.field, tostring(c.value))
@@ -802,6 +817,7 @@ mod retagging {
         TagRequest {
             dive: Some(DiveTags::new(dive, Units::default(), source)),
             location: Some(LocationTags::new(&dive.site, None, None)),
+            ..TagRequest::default()
         }
     }
 
@@ -896,6 +912,7 @@ mod retagging {
         let dive_only = TagRequest {
             dive: Some(DiveTags::new(&next_dive(), Units::default(), "MacDive")),
             location: None,
+            ..TagRequest::default()
         };
         let lines = retag_writes(Before::Filed(&photo), None, &dive_only);
         assert_eq!(part(&lines, "2 "), ["raw gpsAltitude=nil"]);
@@ -947,6 +964,7 @@ mod retagging {
         let location_only = TagRequest {
             dive: None,
             location: Some(LocationTags::new(&next_dive().site, None, None)),
+            ..TagRequest::default()
         };
         assert_eq!(retag(Before::Filed(&photo), None, &location_only), none);
         // A photo without dive data: nothing to clear, its altitude kept.
@@ -1010,6 +1028,239 @@ mod retagging {
             assert_eq!(got, want, "{photo_depth:?} {alt:?}");
         }
     }
+
+    /// "Tag Selection" of `dive` with per-photo values: photo "1" listed
+    /// when `inside` (taken during the dive), its depth copied to the
+    /// altitude when `altitude`.
+    fn tag_with_values(dive: &Dive, inside: bool, altitude: bool) -> TagRequest {
+        let point = PhotoPoint {
+            elapsed_s: 160,
+            depth_m: 10.0,
+            temp_c: Some(25.0),
+        };
+        let mut request = TagRequest {
+            selection: Some(5),
+            photos: if inside {
+                vec![PhotoTags::new(
+                    "1".into(),
+                    Some(point),
+                    241,
+                    Units::default(),
+                )]
+            } else {
+                Vec::new()
+            },
+            ..tag(dive, "MacDive")
+        };
+        if altitude {
+            request.copy_depth_to_altitude();
+        }
+        request
+    }
+
+    const OWN: [&str; 4] = [
+        "plugin PhotoDepth=10.0 m",
+        "plugin PhotoTemp=25.0°C",
+        "plugin PhotoElapsed=02:40",
+        "plugin ClockOffset=+04:01",
+    ];
+
+    /// The first write's lines after the 9 dive fields, country and
+    /// location, and the second write's lines.
+    fn tail_and_second(lines: &[String]) -> (Vec<String>, Vec<String>) {
+        let first: Vec<String> = lines
+            .iter()
+            .filter_map(|l| l.strip_prefix("1 ").map(str::to_string))
+            .collect();
+        assert_eq!(
+            first[9..11],
+            ["raw country=Atlantis", "raw location=Coral Garden"]
+        );
+        let second = lines
+            .iter()
+            .filter_map(|l| l.strip_prefix("2 ").map(str::to_string))
+            .collect();
+        (first[11..].to_vec(), second)
+    }
+
+    #[test]
+    fn per_photo_values_in_and_outside_the_dive_same_or_other_dive() {
+        let a = sample_dive();
+        // Filed by Create Collections in dive A at 18.44 m, its depth copied
+        // to the altitude (-18.4).
+        let photo = filed(&a, "MacDive", Some(18.44), Units::default());
+        let b = next_dive();
+        let gps = "raw gps=12.5,-45.25";
+        let check = |dive: &Dive, inside: bool, altitude: bool, first: &[&str], second: &[&str]| {
+            let lines = retag_writes(
+                Before::Filed(&photo),
+                None,
+                &tag_with_values(dive, inside, altitude),
+            );
+            let (tail, got) = tail_and_second(&lines);
+            assert_eq!(tail, first, "first write, {inside} {altitude}");
+            assert_eq!(got, second, "second write, {inside} {altitude}");
+        };
+        // Another dive, photo in the dive: its new values replace the old
+        // ones (nothing cleared first). The altitude: the new depth with the
+        // option, else the old one cleared (Dive Lens derived it).
+        check(&b, true, true, &OWN, &[gps, "raw gpsAltitude=-10"]);
+        check(&b, true, false, &OWN, &[gps, "raw gpsAltitude=nil"]);
+        // Another dive, photo outside: the old dive's values cleared, as
+        // without per-photo values; no clock offset written.
+        check(&b, false, true, &CLEARED, &[gps, "raw gpsAltitude=nil"]);
+        check(&b, false, false, &CLEARED, &[gps, "raw gpsAltitude=nil"]);
+        // Same dive, photo in the dive: rewritten with the offset shown.
+        check(&a, true, true, &OWN, &[gps, "raw gpsAltitude=-10"]);
+        // Without the option, the altitude it has stays.
+        check(&a, true, false, &OWN, &[gps]);
+        // Same dive, photo outside: its values stay as they are.
+        check(&a, false, true, &[], &[gps]);
+        check(&a, false, false, &[], &[gps]);
+    }
+
+    #[test]
+    fn per_photo_values_on_a_photo_without_dive_data() {
+        let b = next_dive();
+        // Taken during the dive: its values and clock offset, the altitude
+        // only with the option.
+        let lines = retag_writes(
+            Before::Nothing,
+            Some(-3.0),
+            &tag_with_values(&b, true, false),
+        );
+        let (tail, second) = tail_and_second(&lines);
+        assert_eq!(tail, OWN);
+        assert_eq!(
+            second,
+            ["raw gps=12.5,-45.25"],
+            "the camera's altitude stays"
+        );
+        let lines = retag_writes(
+            Before::Nothing,
+            Some(-3.0),
+            &tag_with_values(&b, true, true),
+        );
+        assert_eq!(
+            tail_and_second(&lines).1,
+            ["raw gps=12.5,-45.25", "raw gpsAltitude=-10"]
+        );
+        // Outside the dive: the dive data alone.
+        let lines = retag_writes(Before::Nothing, None, &tag_with_values(&b, false, true));
+        let (tail, second) = tail_and_second(&lines);
+        assert!(tail.is_empty(), "{tail:?}");
+        assert_eq!(second, ["raw gps=12.5,-45.25"]);
+        // Dive data only, no location: the altitude alone in the second
+        // write, the per-photo values in the first.
+        let mut dive_only = tag_with_values(&b, true, true);
+        dive_only.location = None;
+        let lines = retag_writes(
+            Before::Filed(&filed(
+                &sample_dive(),
+                "MacDive",
+                Some(18.44),
+                Units::default(),
+            )),
+            None,
+            &dive_only,
+        );
+        let first: Vec<&String> = lines.iter().filter(|l| l.starts_with("1 ")).collect();
+        assert_eq!(first.len(), 9 + OWN.len());
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|l| l.starts_with("2 "))
+                .collect::<Vec<_>>(),
+            ["2 raw gpsAltitude=-10"]
+        );
+    }
+}
+
+#[test]
+fn tag_selection_plans_per_photo_values_and_checks_the_selection() {
+    use divelens_core::profile::PhotoPoint;
+    use divelens_core::tags::{DiveTags, PhotoTags, TagRequest, Units};
+    let dive = sample_dive();
+    let point = PhotoPoint {
+        elapsed_s: 160,
+        depth_m: 10.0,
+        temp_c: None,
+    };
+    let request = TagRequest {
+        dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
+        selection: Some(12),
+        photos: vec![PhotoTags::new(
+            "41".into(),
+            Some(point),
+            -30,
+            Units::default(),
+        )],
+        ..TagRequest::default()
+    };
+    let lua = lua();
+    lua.globals()
+        .set("input", serde_json::to_string(&request).unwrap())
+        .unwrap();
+    lua.globals()
+        .set(
+            "location_only",
+            serde_json::to_string(&TagRequest {
+                location: Some(divelens_core::tags::LocationTags::new(
+                    &dive.site, None, None,
+                )),
+                ..TagRequest::default()
+            })
+            .unwrap(),
+        )
+        .unwrap();
+    run(
+        &lua,
+        r#"
+        local Json = require "Json"
+        local Tagging = require "Tagging"
+        local plan = assert(Tagging.planPhotos(Json.decode(input)))
+        assert(plan.selection == 12)
+        local own = plan.photos["41"]
+        local lines = {}
+        for i, c in ipairs(own) do lines[i] = ("%s %s=%s"):format(c.kind, c.field, tostring(c.value)) end
+        assert(table.concat(lines, ";") == "plugin PhotoDepth=10.0 m;plugin PhotoTemp=nil;"
+            .. "plugin PhotoElapsed=02:40;plugin ClockOffset=-00:30", table.concat(lines, ";"))
+        -- No selection named: no per-photo values, as before.
+        local none, why = Tagging.planPhotos(Json.decode(location_only))
+        assert(none == nil and why == nil)
+        -- Not usable: nothing is written.
+        local bad = Json.decode(input)
+        bad.photos[1].clockOffset = Json.null
+        assert(select(2, Tagging.planPhotos(bad)) == "bad photo")
+        bad = Json.decode(input)
+        bad.selection = "12"
+        assert(select(2, Tagging.planPhotos(bad)) == "bad selection")
+        bad = Json.decode(input)
+        bad.dive = Json.null
+        assert(select(2, Tagging.planPhotos(bad)) == "bad dive")
+
+        -- Written only on exactly the photos described to the app.
+        local function photo(n) return { localIdentifier = n } end
+        local function id(p) return tostring(p.localIdentifier) end
+        local described = { count = 2, photos = { ["41"] = photo(41), ["42"] = photo(42) } }
+        assert(Tagging.sameSelection(described, { photo(42), photo(41) }, id))
+        assert(not Tagging.sameSelection(described, { photo(41) }, id), "one photo less")
+        assert(not Tagging.sameSelection(described, { photo(41), photo(42), photo(43) }, id), "one more")
+        assert(not Tagging.sameSelection(described, { photo(41), photo(43) }, id), "another one")
+        assert(not Tagging.sameSelection(nil, { photo(41) }, id), "none described")
+
+        -- Only the changes a photo's own values write again are dropped.
+        local extra = {
+            { kind = "plugin", field = "PhotoDepth" }, { kind = "plugin", field = "ClockOffset" },
+            { kind = "raw", field = "gpsAltitude" },
+        }
+        local kept = Tagging.notOverwritten(extra, own)
+        assert(#kept == 1 and kept[1].field == "gpsAltitude")
+        own[#own + 1] = { kind = "raw", field = "gpsAltitude", value = -10 }
+        assert(#Tagging.notOverwritten(extra, own) == 0)
+        assert(#Tagging.notOverwritten(extra, nil) == 3)
+        "#,
+    );
 }
 
 #[test]
