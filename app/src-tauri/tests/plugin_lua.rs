@@ -427,7 +427,9 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
 /// lists of planned changes (Tagging.splitGps), as "1 kind field=value" and
 /// "2 kind field=value" lines. It checks what must always hold: the GPS and
 /// the altitude only in the second write, never in a write with a location
-/// text field, and every change kept, once, in its order.
+/// text field, and every change kept, once, in its order. `checked(first,
+/// second)` makes the same lines and the first two checks, for writes
+/// Tagging made itself (Tagging.photoWrites).
 const WRITES_LUA: &str = r#"
 local Tagging = require "Tagging"
 local TEXT = { country = true, city = true, location = true }
@@ -443,13 +445,20 @@ local function has(list, fields)
     end
     return false
 end
-function writes(...)
-    local lists = { ... }
-    local first, second = Tagging.splitGps(...)
+function checked(first, second)
     assert(not has(first, GPS), "GPS or altitude in the first write")
     for _, w in ipairs { first, second } do
         assert(not (has(w, GPS) and has(w, TEXT)), "GPS with a location text field")
     end
+    local out = {}
+    for _, c in ipairs(first) do out[#out + 1] = "1 " .. line(c) end
+    for _, c in ipairs(second) do out[#out + 1] = "2 " .. line(c) end
+    return out
+end
+function writes(...)
+    local lists = { ... }
+    local first, second = Tagging.splitGps(...)
+    local out = checked(first, second)
     local i, j = 1, 1
     for _, list in ipairs(lists) do
         for _, c in ipairs(list) do
@@ -463,9 +472,6 @@ function writes(...)
         end
     end
     assert(first[i] == nil and second[j] == nil, "change added")
-    local out = {}
-    for _, c in ipairs(first) do out[#out + 1] = "1 " .. line(c) end
-    for _, c in ipairs(second) do out[#out + 1] = "2 " .. line(c) end
     return out
 end
 "#;
@@ -736,16 +742,15 @@ fn retag_lua(
         for _, field in ipairs(Tagging.RETAG_FIELDS) do current[field] = photo[field] end
         local request = Json.decode(input)
         local changes = assert(Tagging.plan(request, date))
-        local extra = Tagging.retagChanges(current, changes)
         -- The photo is "1": its per-photo values when the request lists it
-        -- (taken during the dive), which replace what the other dive left.
+        -- (taken during the dive).
         local perPhoto, bad = Tagging.planPhotos(request)
         assert(not bad, bad)
         local own = perPhoto and perPhoto.photos["1"]
-        if own then extra = Tagging.notOverwritten(extra, own) end
-        -- What Link.lua writes: the request, what the other dive left, then
-        -- the photo's own values.
-        if split then return writes(changes, extra, own or {}) end
+        -- What Link.lua writes, as it makes it.
+        if split then return checked(Tagging.photoWrites(changes, current, own)) end
+        assert(not own, "what the other dive leaves, without per-photo values only")
+        local extra = Tagging.retagChanges(current, changes)
         local lines = {}
         for i, c in ipairs(extra) do
             lines[i] = ("%s %s=%s"):format(c.kind, c.field, tostring(c.value))
@@ -1239,15 +1244,38 @@ fn tag_selection_plans_per_photo_values_and_checks_the_selection() {
         bad.dive = Json.null
         assert(select(2, Tagging.planPhotos(bad)) == "bad dive")
 
-        -- Written only on exactly the photos described to the app.
+        -- Written only on exactly the photos described to the app, each as
+        -- many times.
         local function photo(n) return { localIdentifier = n } end
         local function id(p) return tostring(p.localIdentifier) end
-        local described = { count = 2, photos = { ["41"] = photo(41), ["42"] = photo(42) } }
+        local described = Tagging.photoSet({ photo(41), photo(42) }, id)
+        assert(described.count == 2 and described.ids["41"] == 1)
         assert(Tagging.sameSelection(described, { photo(42), photo(41) }, id))
         assert(not Tagging.sameSelection(described, { photo(41) }, id), "one photo less")
         assert(not Tagging.sameSelection(described, { photo(41), photo(42), photo(43) }, id), "one more")
         assert(not Tagging.sameSelection(described, { photo(41), photo(43) }, id), "another one")
+        assert(not Tagging.sameSelection(described, { photo(41), photo(41) }, id), "one twice, one missing")
+        local twice = Tagging.photoSet({ photo(41), photo(41), photo(42) }, id)
+        assert(Tagging.sameSelection(twice, { photo(41), photo(42), photo(41) }, id))
+        assert(not Tagging.sameSelection(twice, { photo(41), photo(42), photo(42) }, id), "counts differ")
         assert(not Tagging.sameSelection(nil, { photo(41) }, id), "none described")
+        assert(Tagging.sameSelection(Tagging.photoSet({}, id), {}, id))
+
+        -- One photo's writes: its own values replace what the other dive
+        -- left; it is told whether it carried another dive's values.
+        local changes = assert(Tagging.plan(Json.decode(input), function(iso) return iso end))
+        local other = { Source = "MacDive", StartDate = "another start", DiveId = "699", PhotoDepth = "3.0 m" }
+        local first, second, replaced = Tagging.photoWrites(changes, other, own)
+        assert(replaced and #second == 0)
+        local fields = {}
+        for _, c in ipairs(first) do fields[#fields + 1] = c.field .. "=" .. tostring(c.value) end
+        local text = table.concat(fields, ";")
+        assert(not text:find("PhotoDepth=nil", 1, true), text)
+        assert(text:find("PhotoDepth=10.0 m", 1, true) and text:find("ClockOffset=-00:30", 1, true), text)
+        first, second, replaced = Tagging.photoWrites(changes, other, nil)
+        assert(replaced and first[#first].field == "PhotoDepth" and first[#first].value == nil)
+        first, second, replaced = Tagging.photoWrites(changes, nil, nil)
+        assert(not replaced and #first == #changes and #second == 0)
 
         -- Only the changes a photo's own values write again are dropped.
         local extra = {

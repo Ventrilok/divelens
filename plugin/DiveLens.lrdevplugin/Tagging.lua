@@ -16,7 +16,7 @@ per-photo values of the photos taken during the dive (planPhotos), computed
 by the app for the selection the plugin described to it (`selection`): it is
 written only on exactly those photos (sameSelection). Those values replace
 what the other dive left (notOverwritten); the other photos get the dive
-data alone.
+data alone. photoWrites puts one photo's changes together.
 
 Request (built by the app, see core/src/tags.rs):
   dive:      { diveId, start, end, duration, maxDepth, tempHigh, tempLow, rating } or null
@@ -277,13 +277,45 @@ function Tagging.notOverwritten(extra, own)
     return kept
 end
 
---- True when `photos`, those selected now, are exactly the photos of
---- `described` ({ count = n, photos = { [id] = photo } }), the selection
---- described to the app for its per-photo values. `idOf` gives a photo's id.
-function Tagging.sameSelection(described, photos, idOf)
-    if type(described) ~= "table" or #photos ~= described.count then return false end
+--- One photo of a "Tag Selection" write, as Link.lua makes it: `changes`
+--- (from plan) for every photo; what the other dive the photo carried left
+--- (retagChanges, from `before`, what the photo carries; nil: nothing read);
+--- and the photo's own values, `own` (from planPhotos; nil: none, the photo
+--- is not in the dive), which replace what the other dive left. Returns the
+--- changes of the first catalog write, those of the second (GPS and
+--- altitude, Tagging.splitGps), and whether the photo carried another
+--- dive's values (cleared or replaced).
+function Tagging.photoWrites(changes, before, own)
+    local extra = before and Tagging.retagChanges(before, changes) or {}
+    local replaced = #extra > 0
+    if own then extra = Tagging.notOverwritten(extra, own) end
+    local first, second = Tagging.splitGps(changes, extra, own or {})
+    return first, second, replaced
+end
+
+--- The photos of a selection as a multiset, for sameSelection: { count =
+--- number of photos, ids = { [id] = times it appears } }. `idOf` gives a
+--- photo's id.
+function Tagging.photoSet(photos, idOf)
+    local ids = {}
     for _, photo in ipairs(photos) do
-        if not described.photos[idOf(photo)] then return false end
+        local id = idOf(photo)
+        ids[id] = (ids[id] or 0) + 1
+    end
+    return { count = #photos, ids = ids }
+end
+
+--- True when `photos`, those selected now, are exactly the photos of `set`
+--- (photoSet), each as many times: the selection described to the app for
+--- its per-photo values. `idOf` gives a photo's id.
+function Tagging.sameSelection(set, photos, idOf)
+    if type(set) ~= "table" or #photos ~= set.count then return false end
+    local now = Tagging.photoSet(photos, idOf).ids
+    for id, n in pairs(now) do
+        if set.ids[id] ~= n then return false end
+    end
+    for id, n in pairs(set.ids) do
+        if now[id] ~= n then return false end
     end
     return true
 end

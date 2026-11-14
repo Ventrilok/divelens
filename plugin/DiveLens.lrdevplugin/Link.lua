@@ -168,14 +168,31 @@ local function describePhotos(photos)
     return list
 end
 
+local function photoId(photo)
+    return tostring(photo.localIdentifier)
+end
+
+-- The selected `photos` as described to the app (describePhotos), and as a
+-- set (Tagging.photoSet). Lightroom's metadata is read once per selection:
+-- kept with the photos it describes, and reused while the selection is
+-- exactly those photos (for the live selection and describeSelection).
+local function describedSelection(s, photos)
+    local kept = s.selectionDescribed
+    if kept and Tagging.sameSelection(kept.set, photos, photoId) then return kept.list, kept.set end
+    local list = #photos > 0 and describePhotos(photos) or {}
+    local set = Tagging.photoSet(photos, photoId)
+    s.selectionDescribed = { set = set, list = list }
+    return list, set
+end
+
 -- Earliest and latest capture times of the selection, wall-clock
 -- "YYYY-MM-DDTHH:MM:SS" (or nil), overall and per camera (the app applies
--- each camera's remembered clock offset).
-local function timeRange(photos)
-    if #photos == 0 then return nil end
+-- each camera's remembered clock offset). `list`: the photos described.
+local function timeRange(list)
+    if #list == 0 then return nil end
     local first, last
     local cameras, order = {}, {}
-    for _, p in ipairs(describePhotos(photos)) do
+    for _, p in ipairs(list) do
         local t = p.time
         if t then
             if not first or t < first then first = t end
@@ -227,7 +244,7 @@ local function pushSelection(s, force)
     if not force and signature == s.selectionSignature then return end
     s.selectionVersion = s.selectionVersion + 1
     s.thumbnailOutbox = {}
-    local from, to, cameras = timeRange(photos)
+    local from, to, cameras = timeRange((describedSelection(s, photos)))
     if send(s, {
         type = "selection", count = #photos, version = s.selectionVersion, from = from, to = to,
         cameras = (cameras and #cameras > 0) and cameras or Json.emptyArray,
@@ -354,10 +371,6 @@ local function photosBefore(catalog, photos)
     return before
 end
 
-local function photoId(photo)
-    return tostring(photo.localIdentifier)
-end
-
 -- Tags the photos selected in Lightroom now (not when the app last looked),
 -- in two catalog writes under one Undo name, the GPS and altitude in the
 -- second (Tagging.splitGps, writeGpsLater), so one Undo reverts it all. A
@@ -385,7 +398,7 @@ local function applyTags(s, message)
     if perPhoto then
         local described = s.described
         if not (described and described.id == perPhoto.selection) then return fail("staleSelection") end
-        if not Tagging.sameSelection(described, photos, photoId) then return fail("selectionChanged") end
+        if not Tagging.sameSelection(described.set, photos, photoId) then return fail("selectionChanged") end
     end
     local total = #photos
     local undoName = LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)"
@@ -395,14 +408,10 @@ local function applyTags(s, message)
         return catalog:withWriteAccessDo(undoName, function()
             local before = Tagging.writesDive(changes) and photosBefore(catalog, photos) or {}
             for _, photo in ipairs(photos) do
-                local extra = before[photo] and Tagging.retagChanges(before[photo], changes) or {}
-                if #extra > 0 then cleared = cleared + 1 end
                 local own = perPhoto and perPhoto.photos[photoId(photo)]
-                if own then
-                    withValues = withValues + 1
-                    extra = Tagging.notOverwritten(extra, own)
-                end
-                local now, afterwards = Tagging.splitGps(changes, extra, own or {})
+                if own then withValues = withValues + 1 end
+                local now, afterwards, replaced = Tagging.photoWrites(changes, before[photo], own)
+                if replaced then cleared = cleared + 1 end
                 write(photo, now)
                 if #afterwards > 0 then later[#later + 1] = { photo = photo, changes = afterwards } end
                 advance(s, id, total, progress)
@@ -448,10 +457,8 @@ end
 -- only if the selection is still exactly these photos (applyTags).
 local function describeSelection(s, message)
     local photos = selection()
-    local byId = {}
-    for _, photo in ipairs(photos) do byId[photoId(photo)] = photo end
-    s.described = { id = message.id, count = #photos, photos = byId }
-    local list = #photos > 0 and describePhotos(photos) or {}
+    local list, set = describedSelection(s, photos)
+    s.described = { id = message.id, set = set }
     Log.debug("selection described: %d photos", #list)
     sendPhotos(s, message.id, list)
 end
@@ -694,6 +701,7 @@ local function closeSockets(s)
     s.selectionSignature = nil
     s.search = nil -- photo ids belong to one app session
     s.described = nil
+    s.selectionDescribed = nil
     s.thumbnailRequests = {}
     s.thumbnailOutbox = {}
     s.framing = Framing.new()
