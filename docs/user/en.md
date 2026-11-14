@@ -116,7 +116,7 @@ What is written: with **Dive data**, the dive number, start, end, duration, max 
 
 - A value the chosen dive does not have (temperature, rating…) clears the old Dive Lens value on the photo, so the fields always describe a single dive.
 - A site without country, city or GPS leaves the values already on the photo untouched (a GPS position from a phone stays).
-- A photo that already carries a **different** dive loses that dive's own values: depth, temperature, elapsed time and clock offset. Its GPS altitude is cleared only if it is the one Dive Lens copied from the old depth; any other altitude stays. The photo stays in its collection: move it yourself if needed.
+- With **Dive data**, a photo that already carries a **different** dive loses that dive's own values: depth, temperature, elapsed time and clock offset. Its GPS altitude is cleared only if it is the one Dive Lens copied from the old depth; any other altitude stays. The photo stays in its collection: move it yourself if needed.
 - **Edit › Undo** in Lightroom reverts it in one step, except the GPS (and the altitude, when one was cleared): Lightroom does not restore those.
 
 ---
@@ -126,9 +126,11 @@ What is written: with **Dive data**, the dive number, start, end, duration, max 
 Every change is saved at once.
 
 **Dive log**
-- **Application**: MacDive or Subsurface (Subsurface only on Windows).
+- **Application**: MacDive or Subsurface. Only the applications available on your system are offered: on Windows, Subsurface. The application is changed only here, never from Create Collections or Tag Selection.
 - **MacDive database** / **Subsurface log**: the standard location is used unless you choose another. A Subsurface log is either a file (.xml or .ssrf) or the folder of its git storage (cloud storage keeps one on your computer). Under the location, Dive Lens shows whether the log is valid and how many dives and sites it holds.
 - Each application keeps its own location: switching from one to the other and back finds yours again.
+- **One dive log at a time.** Changing the application or the log starts everything again: Create Collections goes back to step 1 with no dive ticked, and Tag Selection starts from scratch. This holds however the log changes: here, by importing settings, from the screen shown when the dive log cannot be read, or when Dive Lens takes over the previous plug-in's settings on connecting to Lightroom (section 1).
+- While Dive Lens is writing to Lightroom, the dive log cannot change: **Application**, **Choose…** (or **Choose a file…** / **Choose a folder…**), **Standard location**, **Import…** and **Replace** are greyed, with the note "Writing to Lightroom: the dive log can be changed once the write is done."
 
 **Display**
 - **Language**: the system's by default. The menus and fields inside Lightroom follow Lightroom's language.
@@ -149,6 +151,7 @@ Every change is saved at once.
 - **Export…** saves them in a file, named "Dive Lens settings.json" unless you choose another name. The file holds: the dive application and the log location of each one, language, units, the GPS altitude option, where the collections go, the log level and the order of the dive list. The clock offsets remembered for each camera are not in it: they stay on this computer.
 - **Import…** asks before changing anything: **Replace** puts the file's settings in place of every setting on this screen, **Cancel** leaves them as they are.
 - If the file's dive log is not on this computer, Dive Lens says so and keeps its location until you choose the right one (**Choose…**, or **Choose a file…** / **Choose a folder…** for Subsurface). If the collection set chosen in **Place in** is not in this catalog, Create Collections says so: choose another place in Settings.
+- A file from a Mac that uses MacDive, imported on Windows: Dive Lens uses Subsurface, the application available there, and keeps the MacDive location: these settings, exported again and imported on a Mac, still use MacDive there.
 - A file that does not look like a Dive Lens settings file is refused, and nothing changes. A file exported by an earlier version of Dive Lens can still be imported.
 - After an import, Dive Lens no longer takes over the previous plug-in's settings (section 1): the imported settings are the ones kept.
 
@@ -176,6 +179,8 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 **A dive has no photo.** Check the camera clock: use **Suggest**, or set the difference by hand. If a camera clock or the dive computer's clock was changed during the trip, run the days before and after the change as two separate groups, each with its own offset (**Handle dive N separately** on the summary does this for the dives left without photos).
 
 **"MacDive database not found".** The database may have moved, for example to iCloud: use **Locate the database…** or **Settings › Choose…**. If it is in iCloud, check that it is downloaded on this Mac.
+
+**"The dive log has changed…".** The dive log in use changed (in Settings, for example) while Dive Lens was working with the previous one, so the action was refused. After **Apply**, the orange notice reads "The dive log has changed. Nothing was written: start again." After an action that writes nothing (finding the photos, showing a profile), it reads "The dive log has changed: start again." It shows on step 1 of Create Collections or on Tag Selection, until you click **Close** or move on. Choose the dives again: they now come from the new log.
 
 **"Lightroom not connected".** Open Lightroom Classic, check in **File › Plug-in Manager** that Dive Lens is enabled, then choose one of the Dive Lens menus again.
 

@@ -116,7 +116,7 @@ Ce qui est écrit : avec **Données de plongée**, le n° de plongée, le début
 
 - Une valeur absente de la plongée choisie (température, note…) efface l'ancienne valeur Dive Lens de la photo : les champs décrivent toujours une seule plongée.
 - Un site sans pays, ville ou GPS ne touche pas aux valeurs déjà présentes sur la photo (une position GPS venue d'un téléphone est conservée).
-- Une photo qui porte déjà une **autre** plongée perd les valeurs propres à celle-ci : profondeur, température, temps écoulé et décalage d'horloge. Son altitude GPS n'est effacée que si c'est celle que Dive Lens a copiée depuis l'ancienne profondeur ; toute autre altitude est conservée. La photo reste dans sa collection : à vous de la déplacer si besoin.
+- Avec **Données de plongée**, une photo qui porte déjà une **autre** plongée perd les valeurs propres à celle-ci : profondeur, température, temps écoulé et décalage d'horloge. Son altitude GPS n'est effacée que si c'est celle que Dive Lens a copiée depuis l'ancienne profondeur ; toute autre altitude est conservée. La photo reste dans sa collection : à vous de la déplacer si besoin.
 - **Édition › Annuler** dans Lightroom défait tout en une fois, sauf le GPS (et l'altitude, quand elle a été effacée) : Lightroom ne les remet pas.
 
 ---
@@ -126,9 +126,11 @@ Ce qui est écrit : avec **Données de plongée**, le n° de plongée, le début
 Chaque modification est enregistrée immédiatement.
 
 **Carnet de plongée**
-- **Application** : MacDive ou Subsurface (Subsurface seulement sur Windows).
+- **Application** : MacDive ou Subsurface. Seules les applications disponibles sur votre système sont proposées : sur Windows, Subsurface. L'application se change seulement ici, jamais depuis Créer les collections ni Tagger la sélection.
 - **Base MacDive** / **Carnet Subsurface** : l'emplacement standard est utilisé, sauf si vous en choisissez un autre. Un carnet Subsurface est soit un fichier (.xml ou .ssrf), soit le dossier de son stockage git (le stockage en ligne en garde une copie sur votre ordinateur). Sous l'emplacement, Dive Lens indique si le carnet est valide et combien il contient de plongées et de sites.
 - Chaque application garde son emplacement : passer de l'une à l'autre puis revenir retrouve le vôtre.
+- **Un seul carnet à la fois.** Changer d'application ou de carnet remet tout à zéro : Créer les collections revient à l'étape 1, sans aucune plongée cochée, et Tagger la sélection repart de zéro. C'est vrai quelle que soit la façon dont le carnet change : ici, par un import des réglages, depuis l'écran affiché quand le carnet ne peut pas être lu, ou quand Dive Lens reprend les réglages de l'ancien module en se connectant à Lightroom (section 1).
+- Pendant que Dive Lens écrit dans Lightroom, le carnet ne peut pas changer : **Application**, **Choisir…** (ou **Choisir un fichier…** / **Choisir un dossier…**), **Emplacement standard**, **Importer…** et **Remplacer** sont grisés, avec la mention « Écriture dans Lightroom en cours : le carnet de plongée pourra être changé une fois celle-ci terminée. »
 
 **Affichage**
 - **Langue** : par défaut, celle du système. Les menus et les champs dans Lightroom suivent la langue de Lightroom.
@@ -149,6 +151,7 @@ Chaque modification est enregistrée immédiatement.
 - **Exporter…** les enregistre dans un fichier, nommé « Réglages Dive Lens.json » sauf si vous choisissez un autre nom. Le fichier contient : l'application de plongée et l'emplacement du carnet de chacune, la langue, les unités, l'option altitude GPS, l'emplacement des collections, le niveau du journal et l'ordre de la liste des plongées. Les décalages d'horloge retenus pour chaque appareil n'y figurent pas : ils restent sur cet ordinateur.
 - **Importer…** demande confirmation avant de rien changer : **Remplacer** met les réglages du fichier à la place de tous ceux de cet écran, **Annuler** les laisse tels quels.
 - Si le carnet du fichier n'est pas sur cet ordinateur, Dive Lens le signale et garde son emplacement jusqu'à ce que vous indiquiez le bon (**Choisir…**, ou **Choisir un fichier…** / **Choisir un dossier…** pour Subsurface). Si l'ensemble de collections choisi dans **Placer dans** n'est pas dans ce catalogue, Créer les collections le signale : choisissez un autre emplacement dans les réglages.
+- Un fichier venu d'un Mac réglé sur MacDive, importé sur Windows : Dive Lens utilise Subsurface, l'application disponible sur Windows, et garde l'emplacement MacDive : ces réglages, exportés à nouveau puis importés sur un Mac, y utilisent toujours MacDive.
 - Un fichier qui ne ressemble pas à un fichier de réglages Dive Lens est refusé, et rien ne change. Un fichier exporté par une version antérieure de Dive Lens reste importable.
 - Après un import, Dive Lens ne reprend plus les réglages de l'ancien module (section 1) : ce sont ceux du fichier qui sont gardés.
 
@@ -176,6 +179,8 @@ Les champs Dive Lens restent dans le catalogue Lightroom : ils ne sont pas écri
 **Une plongée n'a aucune photo.** Vérifiez l'horloge de l'appareil : utilisez **Suggérer**, ou réglez l'écart à la main. Si l'horloge d'un appareil ou de l'ordinateur de plongée a été changée pendant le voyage, traitez les jours d'avant et d'après le changement en deux groupes séparés, chacun avec son décalage (**Traiter la plongée N à part**, sur le récapitulatif, le fait pour les plongées restées sans photo).
 
 **« Base MacDive introuvable ».** La base a peut-être été déplacée, par exemple dans iCloud : utilisez **Localiser la base…** ou **Réglages › Choisir…**. Si elle est dans iCloud, vérifiez qu'elle est bien téléchargée sur ce Mac.
+
+**« Le carnet de plongée a changé… ».** Le carnet en service a changé (dans les réglages, par exemple) pendant que Dive Lens travaillait sur le précédent : l'action a donc été refusée. Après **Appliquer**, le bandeau orange indique « Le carnet de plongée a changé. Rien n'a été écrit : recommencez. » Après une action qui n'écrit rien (recherche des photos, affichage d'une courbe), il indique « Le carnet de plongée a changé : recommencez. » Il s'affiche à l'étape 1 de Créer les collections ou dans Tagger la sélection, jusqu'à ce que vous cliquiez sur **Fermer** ou passiez à la suite. Choisissez à nouveau les plongées : elles viennent maintenant du nouveau carnet.
 
 **« Lightroom déconnecté ».** Ouvrez Lightroom Classic, vérifiez dans **Fichier › Gestionnaire de modules externes** que Dive Lens est activé, puis choisissez à nouveau un des menus Dive Lens.
 

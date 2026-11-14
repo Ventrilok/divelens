@@ -20,6 +20,7 @@ Bug reports, requests to support another dive application, fixes and documentati
 - [What must never be renamed](#what-must-never-be-renamed)
 - [The libdivecomputer submodule](#the-libdivecomputer-submodule)
 - [Reporting a bug or asking for a dive application](#reporting-a-bug-or-asking-for-a-dive-application)
+- [Adding a dive application](#adding-a-dive-application)
 
 ## How Dive Lens is built
 
@@ -36,7 +37,7 @@ Repository layout:
 | `third_party/libdivecomputer/` | libdivecomputer itself, as a git submodule pinned to a validated commit. |
 | `app/` | The Tauri 2 app: front end in `app/src`, Rust side in `app/src-tauri` (crate `divelens`). |
 | `plugin/DiveLens.lrdevplugin/` | The Lightroom plug-in, shipped as plain Lua source (no compile step). |
-| `docs/` | Specification and user guide. |
+| `docs/` | Specification, user guide, and pages for contributors in `docs/contributing/`. |
 
 The three Rust crates form one Cargo workspace at the root, with a single `target/` folder and a single `Cargo.lock`.
 
@@ -79,6 +80,7 @@ From the repository root:
 | Lint, everything | `cargo clippy --workspace --all-targets -- -D warnings` (needs `app/dist`) |
 | Lint, core only | `cargo clippy -p divelens-core -p libdivecomputer-sys --all-targets -- -D warnings` |
 | Lint, app | `cargo clippy -p divelens --all-targets -- -D warnings` (needs `app/dist`) |
+| Check a reader against a real dive log | `cargo run --release -p divelens-core --example verify_log -- [--app <application>] <log> [dive number]` (on your own computer only: see [Adding a dive application](#adding-a-dive-application)) |
 
 From `app/`:
 
@@ -129,7 +131,7 @@ Continuous integration runs the same checks on **macOS and Windows** for every p
 
 - The description is imperative ("add", not "added"), lower-case, without a trailing period, and the whole line is at most 72 characters.
 - Types: `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `style`, `revert`.
-- The scope is optional: `core`, `macdive`, `subsurface`, `app`, `plugin`, `link` (the app ↔ plug-in connection), `spec`, `deps`.
+- The scope is optional: `core`, `macdive`, `subsurface`, `app`, `plugin`, `link` (the app ↔ plug-in connection), `spec`, `deps`. Each new dive application gets its own scope, its name in lower case (`bluedive`, for example).
 - Examples: `fix(subsurface): read dives without a site`, `docs: describe the settings backup in the user guide`.
 - Keep unrelated changes in separate commits, and leave out of a commit anything that does not belong to it.
 - Never commit build output or generated files.
@@ -185,7 +187,7 @@ So:
 - Test fixtures are **fictional** (invented dives, sites and people) or properly **anonymised**. The Subsurface fixtures are in `core/fixtures/`; the MacDive test databases are built by the tests themselves, in `core/src/macdive/tests.rs`.
 - Never commit, attach or paste:
   - a real dive log or dive-log database (MacDive database, Subsurface file or git storage, or any other application's);
-  - output produced from a real dive log;
+  - output produced from a real dive log, or values copied from one (dates, sites, positions, names);
   - the log files `DiveLens.log` and `DiveLens App.log`;
   - an exported settings file ("Dive Lens settings.json" or "Réglages Dive Lens.json"): it holds the full paths of your dive logs, with your user name, and your collection-set names. If it really helps, paste its content with those replaced;
   - screenshots showing real dive sites, GPS positions, names or file paths (crop or blur them).
@@ -216,9 +218,48 @@ The app bundle identifier `com.querton.divelens.desktop` never changes either, f
 Use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choose):
 
 - **Bug report**: something does not work as expected.
-- **Support a new dive application**: you would like Dive Lens to read another dive log. If you want to write that reader yourself, open this issue first so the approach can be discussed.
+- **Support a new dive application**: you would like Dive Lens to read another dive log. If you want to write that reader yourself, open this issue first so the approach can be discussed, then see [Adding a dive application](#adding-a-dive-application).
 
 Both remind you of the privacy rule above:
 
 - For a bug, describe the problem in the issue. If the Dive Lens log files are needed, you will be asked for them: send them only by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number, never in an issue. In the issue itself, paste at most the relevant lines, with site names, places, people's names and file paths removed.
 - For a new dive application, a fictional log, or your real log once anonymised, helps testing. Send it by e-mail to the same address, with the issue number, never attached to the issue. It is used to test the new reader. The repository itself only ever holds fictional or properly anonymised test data, never a real log as it is (see [Test data](#test-data-fictional-or-anonymised)).
+
+## Adding a dive application
+
+Dive Lens reads a dive application through two pieces, both in `core/`: a **reader**, which translates the application's log into the common dive format, and a **description** of the application. The app builds Settings, the file chooser and the dive-log error screen from the description: nothing else in the app or its screens names an application. The steps, in order, are in [Adding a reader](docs/contributing/reference-log.md#adding-a-reader); this section says what each piece is for.
+
+**Contributing from outside the project? Open an issue first.** Before writing code, open a [Support a new dive application](https://github.com/Ventrilok/divelens/issues/new/choose) issue and say you want to write the reader, so that the approach can be discussed: where the application keeps its log, how it stores it, what it holds. A log to test with goes privately by e-mail, never in the issue (see [Reporting a bug or asking for a dive application](#reporting-a-bug-or-asking-for-a-dive-application)). A new application is something divers see, in Settings and in the Source field written on photos: it is a product decision. The specification lists the next ones in section 8, "Sources suivantes".
+
+### The kit
+
+- **The description**: a `pub static APP: DiveApp` in `core/src/<application>/app.rs`, copied from `core/src/skeleton/app.rs`; `DiveApp` is defined in `core/src/apps.rs`. It holds everything the app needs besides the reader: the id settings files keep (camelCase, never changed), the name written on photos (never translated), the systems the application runs on, its standard log location, whether the diver chooses a file (with its extensions), a folder or either, where its unit preferences are read, its clock-offsets file, every text the screens show for it in English and French, and its runs of the common tests. Adding it to `ALL` in `core/src/apps.rs` registers it. Add it at the end of `ALL`, unless the issue decided otherwise: the order there is the order of Settings, and the first application available on a system is the default.
+- **The reader**: `core/src/<application>.rs`, copied from the example reader `core/src/skeleton.rs` (built only with the tests, never offered in the app). It implements `DiveSource` (`core/src/model.rs`) and has an `open(path)`. Each place to change is marked `ADAPT:`. Whatever the application stores, the reader gives:
+  - **wall-clock times**, exactly as the log holds them, never converted with the computer's time zone;
+  - **metric units**: depths in metres, temperatures in °C, converted when the application stores feet or Fahrenheit;
+  - **stable ids**: the same id for each dive and each site every time the log is read, and never one id for two dives (not the start time when the application has an id of its own: two dives can start at the same second);
+  - **profiles sorted by time**;
+  - **no profile, no samples**: a dive without a profile has none, with no samples at all, never an empty or made-up profile;
+  - **read-only**: the log is opened without writing, and no file next to it is changed, created or removed, temporary files included (a SQLite log goes through `crate::sqlite::open_read_only`, as in the example);
+  - values **as the application shows them**, and nothing for what it cannot provide: its `Capabilities` declare what it lacks.
+
+  The details are in [What every reader must do](docs/contributing/reference-log.md#what-every-reader-must-do).
+- **The reference log**: the ten fictional dives every reader reads, written by the reader's tests (`core/src/<application>/tests.rs`, copied from `core/src/skeleton/tests.rs`) in the application's own format, shaped exactly like what the application writes. Its values, its traps and where its files go are in [The reference log](docs/contributing/reference-log.md): write it from that page, never from a real log.
+- **The common tests** (`core/src/conformance.rs`): they open each copy of the reference log as the app opens it, compare every dive, site and profile with the expected values (`core/src/conformance/reference.rs`), and check that ids stay the same when the log is read again, that an unknown dive is an error, and that no file of the log was changed, created or removed. On macOS and Linux they run a second time, 14 hours ahead of UTC. The test `every_registered_application` runs every application in `ALL`, once per storage format its description declares: registering the description is enough, there is nothing to add to the tests. Other tests check the description itself: every text present in English and French, none empty, the same placeholders in both, and an id, name and offsets file no other application has. Run `cargo test -p divelens-core` until it passes; a failure lists every value that differs.
+- **The local check**, once the tests pass: read a real log on your own computer with the command below. Give `--app` (the application's name) for a new application: without it, the tool picks the application from the path, and another registered application whose logs look the same may get the log first.
+
+  ```sh
+  cargo run --release -p divelens-core --example verify_log -- --app <application> <log> [dive number]
+  ```
+
+  It reads the log of any registered application, decodes every profile, compares ids across two reads, reports what breaks the rules above, and says whether reading touched any file of the log ([details](docs/contributing/reference-log.md#checking-a-reader-against-a-real-log)). **Its output is personal data**: dates, places, positions, notes. It stays on your computer: never put it, even in part, in the repository, an issue or a pull request. Describe the result in words instead.
+
+### Pull request checklist
+
+- [ ] From outside the project: the "Support a new dive application" issue is linked ("Closes #12").
+- [ ] `cargo fmt --all --check`, core clippy and `cargo test -p divelens-core` pass, and CI is green on macOS and Windows.
+- [ ] The reference log is written in the application's format, and the branch holds no real log, no part of one and no `verify_log` output.
+- [ ] `verify_log` was run on a real log, and the pull request gives the result in words (for example "every profile decodes, ids are stable, no file changed").
+- [ ] Every text of the description is written in English and in French, with "Dive Lens" in two words.
+- [ ] The pull request's "Visible choices" section names what divers will see: the application in Settings, its name in the Source field, its texts.
+- [ ] The README and the user guide (`docs/user/`, English and French) name the application where they name the others.
