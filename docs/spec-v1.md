@@ -381,6 +381,8 @@ Contenu du format commun pour une plongée :
 - site, lieu, pays, latitude et longitude ;
 - la courbe de plongée : temps, profondeur, température, si disponible.
 
+**Carnet de référence [Proposé, 2026-11-14]** : chaque lecteur lit le même carnet fictif de dix plongées et passe les mêmes tests communs ; lire un carnet n'y crée ni n'y modifie aucun fichier, y compris les fichiers temporaires d'une base SQLite.
+
 ### MacDive (V1)
 
 - Base SQLite lue **en lecture seule**, à l'emplacement donné par l'utilisateur. La base peut se trouver dans iCloud.
