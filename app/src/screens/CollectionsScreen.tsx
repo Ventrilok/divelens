@@ -69,7 +69,8 @@ function failure(e: CollectionsError): string {
     case "lightroom":
       if (e.reason === "busy") return t("coll.err.busy");
       // Written but for the GPS and altitude: Undo, then apply again.
-      if (e.reason === "gpsNotWritten") return t("coll.err.gpsNotWritten");
+      if (e.reason === "gpsNotWritten")
+        return e.detail ? t("coll.err.gpsNotWrittenDetail", { detail: e.detail }) : t("coll.err.gpsNotWritten");
       if (e.reason === "staleSearch") return t("coll.err.noPhotos");
       if (e.reason === "parentNotFound") return t("coll.parentMissing", { path: e.detail ?? "" });
       return t("coll.err.other", { detail: e.detail ?? e.reason });

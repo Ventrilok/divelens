@@ -223,6 +223,15 @@ pub enum ApplyOutcome {
     },
 }
 
+impl ApplyOutcome {
+    /// Failed after the first catalog write: the photos carry everything
+    /// but the GPS and altitude (dive data, location, per-photo values,
+    /// clock offsets, collections).
+    pub fn half_written(&self) -> bool {
+        matches!(self, Self::Failed { reason, .. } if reason == "gpsNotWritten")
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 enum FromPlugin {
@@ -888,11 +897,25 @@ mod tests {
         run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {});
         plugin.join().unwrap();
         let outcome = outcome_rx.recv().unwrap();
+        assert!(outcome.half_written());
         // As the front end reads it, to show its own text.
         assert_eq!(
             serde_json::to_value(&outcome).unwrap(),
             serde_json::json!({ "outcome": "failed", "reason": "gpsNotWritten", "detail": "aborted" })
         );
+    }
+
+    #[test]
+    fn only_a_missing_gps_write_is_half_written() {
+        let failed = |reason: &str| ApplyOutcome::Failed {
+            reason: reason.into(),
+            detail: None,
+        };
+        assert!(failed("gpsNotWritten").half_written());
+        for reason in ["busy", "error", "noSelection", "staleSearch", "badRequest"] {
+            assert!(!failed(reason).half_written(), "{reason}");
+        }
+        assert!(!ApplyOutcome::Applied { count: 3 }.half_written());
     }
 
     #[test]

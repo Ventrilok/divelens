@@ -38,9 +38,11 @@ function failure(e: ApplyOutcome | TagError): string {
       return t("tag.err.noSelection");
     case "busy":
       return t("tag.err.busy");
-    case "gpsNotWritten":
+    case "gpsNotWritten": {
       // Written but for the GPS and altitude: Undo, then apply again.
-      return t("tag.err.gpsNotWritten");
+      const detail = "outcome" in e && e.outcome === "failed" ? e.detail : null;
+      return detail ? t("tag.err.gpsNotWrittenDetail", { detail }) : t("tag.err.gpsNotWritten");
+    }
     case "linkLost":
       return t("tag.err.linkLost");
     case "notConnected":
