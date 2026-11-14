@@ -116,7 +116,8 @@ Ce qui est écrit : avec **Données de plongée**, le n° de plongée, le début
 
 - Une valeur absente de la plongée choisie (température, note…) efface l'ancienne valeur Dive Lens de la photo : les champs décrivent toujours une seule plongée.
 - Un site sans pays, ville ou GPS ne touche pas aux valeurs déjà présentes sur la photo (une position GPS venue d'un téléphone est conservée).
-- **Édition › Annuler** dans Lightroom défait tout en une fois, sauf le GPS.
+- Une photo qui porte déjà une **autre** plongée perd les valeurs propres à celle-ci : profondeur, température, temps écoulé et décalage d'horloge. Son altitude GPS n'est effacée que si c'est celle que Dive Lens a copiée depuis l'ancienne profondeur ; toute autre altitude est conservée. La photo reste dans sa collection : à vous de la déplacer si besoin.
+- **Édition › Annuler** dans Lightroom défait tout en une fois, sauf le GPS (et l'altitude, quand elle a été effacée) : Lightroom ne les remet pas.
 
 ---
 
