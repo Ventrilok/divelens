@@ -72,7 +72,8 @@ impl Example {
 /// The `start` column as the wall clock.
 // ADAPT: the time as the dive computer showed it, never shifted. An
 // application that stores an instant (UTC) records the dive's own offset:
-// add it. Never use the computer's time zone (`Local`).
+// add it. Never use the computer's time zone: not chrono's `Local`, nor
+// SQLite's `'localtime'` modifier (`datetime(x, 'localtime')`).
 fn wall_clock(r: &Row) -> rusqlite::Result<NaiveDateTime> {
     let i = r.as_ref().column_index("start")?;
     let text: String = r.get(i)?;
@@ -147,7 +148,8 @@ fn dive_from_row(r: &Row) -> rusqlite::Result<Dive> {
 
 impl DiveSource for Example {
     // ADAPT: what the application stores. For what it does not, declare
-    // `false` and give `None`.
+    // `false` and give `None`; without profiles, every dive has
+    // `has_profile: false` and `profile` gives no samples.
     fn capabilities(&self) -> Capabilities {
         Capabilities {
             temperature: true,
