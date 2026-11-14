@@ -152,6 +152,80 @@ fn reading_creates_no_file_next_to_the_database() {
     assert_eq!(files(dir.path()), before);
 }
 
+/// Saves a change and closes the database the way Apple's SQLite does for
+/// MacDive: an empty `-wal` file and the `-shm` index stay next to it.
+fn leave_wal_files(path: &Path) {
+    let conn = Connection::open(path).unwrap();
+    let mut persist: std::ffi::c_int = 1;
+    // SAFETY: a valid connection handle and an int, as the file control
+    // expects.
+    let rc = unsafe {
+        rusqlite::ffi::sqlite3_file_control(
+            conn.handle(),
+            c"main".as_ptr(),
+            rusqlite::ffi::SQLITE_FCNTL_PERSIST_WAL,
+            (&raw mut persist).cast(),
+        )
+    };
+    assert_eq!(rc, rusqlite::ffi::SQLITE_OK);
+    // A change saved, copied into the database on close; the -wal file is
+    // then emptied, not deleted.
+    conn.execute_batch(
+        "PRAGMA journal_size_limit = 0;
+         UPDATE ZDIVE SET ZNOTES = ZNOTES WHERE Z_PK = 1;",
+    )
+    .unwrap();
+    drop(conn);
+    // An index another SQLite left in its own state (a reader slot marked
+    // 0), which a plain read-only open would rewrite.
+    let mut shm = path.as_os_str().to_owned();
+    shm.push("-shm");
+    let mut index = std::fs::read(&shm).unwrap();
+    index[104..108].copy_from_slice(&[0; 4]);
+    std::fs::write(&shm, &index).unwrap();
+}
+
+/// Every file in `dir` with its contents.
+fn contents(dir: &Path) -> Vec<(String, Vec<u8>)> {
+    files(dir)
+        .into_iter()
+        .map(|name| {
+            let bytes = std::fs::read(dir.join(&name)).unwrap();
+            (name, bytes)
+        })
+        .collect()
+}
+
+#[test]
+fn reading_changes_no_file_left_by_macdive() {
+    let dir = TempDir::new().unwrap();
+    let path = database(dir.path(), EXTRA);
+    leave_wal_files(&path);
+    let before = contents(dir.path());
+    let names: Vec<_> = before.iter().map(|f| f.0.as_str()).collect();
+    assert_eq!(names.len(), 3, "database, -shm and -wal: {names:?}");
+    assert!(
+        before
+            .iter()
+            .any(|(n, b)| n.ends_with("-wal") && b.is_empty())
+    );
+    let md = MacDive::open(&path).unwrap();
+    assert_eq!(md.dives().unwrap().len(), 12);
+    md.profile("UUID-101").unwrap();
+    drop(md);
+    assert!(contents(dir.path()) == before, "a file was changed");
+
+    // The -shm index gone, the empty -wal left.
+    let mut shm = path.as_os_str().to_owned();
+    shm.push("-shm");
+    std::fs::remove_file(&shm).unwrap();
+    let before = contents(dir.path());
+    let md = MacDive::open(&path).unwrap();
+    md.dives().unwrap();
+    drop(md);
+    assert!(contents(dir.path()) == before, "-shm created");
+}
+
 #[test]
 fn reads_dives_macdive_has_not_copied_into_the_database_yet() {
     let dir = TempDir::new().unwrap();

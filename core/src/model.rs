@@ -72,7 +72,9 @@ pub struct Capabilities {
 
 /// A dive-log reader, once its log is opened: the interface every reader
 /// shares. Each reader also has an `open(path) -> Result<Self>` that reads the
-/// log at `path` without writing to it or creating any file next to it.
+/// log at `path` without changing it or creating any file next to it (the one
+/// write left: while MacDive is open, SQLite updates its `-shm` index, as for
+/// any reader).
 ///
 /// Every reader passes the common tests of `core/src/conformance.rs` on its
 /// copy of the reference log (`docs/contributing/reference-log.md`).

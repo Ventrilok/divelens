@@ -8,8 +8,10 @@
 //!   dives without a raw download (manual entries, some very old computers)
 //!   have no profile.
 //! - Missing values: NULL temperature, rating 0, GPS 0/0.
-//! - Read-only leaves no trace: a closed database is opened "immutable", so
-//!   SQLite does not create its `-wal` and `-shm` files next to it.
+//! - Read-only: the database and its `-wal` file are never changed. While
+//!   MacDive is closed, nothing next to the database is created or changed
+//!   either; while it is open, SQLite updates its `-shm` index, as it does
+//!   for any reader.
 
 use std::fs::File;
 use std::io::Read;
@@ -35,8 +37,9 @@ pub struct MacDive {
 }
 
 impl MacDive {
-    /// Opens the database read-only. MacDive may stay open meanwhile.
-    /// Nothing is written and no file is created next to the database.
+    /// Opens the database read-only. MacDive may stay open meanwhile. The
+    /// database and its `-wal` file are never changed; while MacDive is open,
+    /// SQLite updates its `-shm` index, as for any reader.
     pub fn open(path: &Path) -> Result<Self> {
         if !path.is_file() {
             return Err(Error::NotFound(path.to_path_buf()));
@@ -70,13 +73,18 @@ impl MacDive {
     }
 }
 
-/// A database in WAL mode (as Core Data writes them) with no `-wal` file next
-/// to it: MacDive is closed and every change is in the database file itself.
-/// Opened normally, even read-only, SQLite would create `-wal` and `-shm`
-/// files next to it and leave them there; opened "immutable", it creates
-/// nothing and misses nothing. When the `-wal` file exists (MacDive open, or
-/// left by it), it may hold dives not yet copied into the database file, so
-/// the database is opened normally.
+/// A database in WAL mode (as Core Data writes them) whose `-wal` file is
+/// missing or empty: every change is in the database file itself. Opened
+/// normally, even read-only, SQLite would create `-wal` and `-shm` files next
+/// to it, or change a `-shm` file left there; opened "immutable", it creates
+/// and changes nothing, and misses nothing. When the `-wal` file holds
+/// anything (MacDive open), it may hold dives not yet copied into the
+/// database file, so the database is opened normally.
+///
+/// Opened immutable, the database is read as it stands when the connection
+/// opens: should MacDive start and copy its changes into the file meanwhile,
+/// a read could miss them or fail. Connections last one command of the app,
+/// and the next command reads the database again.
 fn is_closed_wal(path: &Path) -> bool {
     // Bytes 18 and 19 of the SQLite header are 2 in WAL mode.
     let mut header = [0u8; 20];
@@ -85,7 +93,7 @@ fn is_closed_wal(path: &Path) -> bool {
         .is_ok_and(|()| header[18] == 2 && header[19] == 2);
     let mut wal = path.as_os_str().to_owned();
     wal.push("-wal");
-    wal_mode && !Path::new(&wal).exists()
+    wal_mode && !std::fs::metadata(&wal).is_ok_and(|m| m.len() > 0)
 }
 
 /// SQLite `file:` URI opening `path` immutable; `None` for a path SQLite's

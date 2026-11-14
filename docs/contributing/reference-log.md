@@ -39,8 +39,11 @@ The common tests read each copy and check that the reader:
 - reports a **dive without a profile** as having none, with no samples at
   all, not an empty or made-up profile;
 - **never modifies the log**: every file and folder next to it is compared
-  before and after reading; nothing may be changed, created or removed. This
-  includes the temporary files a database may create on its own;
+  before and after reading, and checked while the log is open; nothing may
+  be changed, created or removed, including the temporary files a database
+  may create on its own. The one write left is outside the tests: while
+  MacDive itself is open, SQLite updates its shared index (`-shm`), as it
+  does for any reader; the database and its journal (`-wal`) never change;
 - reports an unknown dive id as an error;
 - leaves out what the reader declares it cannot provide (temperatures, rating,
   GPS, profile).
