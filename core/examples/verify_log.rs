@@ -6,10 +6,10 @@
 //! cargo run --release -p divelens-core --example verify_log -- [--app <application>] <log> [dive number]
 //! ```
 //!
-//! - `<log>`: the MacDive database, a Subsurface XML file or a Subsurface git
-//!   storage folder.
-//! - `--app`: `MacDive` or `Subsurface`. Without it, a folder or an `.xml` or
-//!   `.ssrf` file is read as Subsurface, anything else as MacDive.
+//! - `<log>`: the log of any application Dive Lens reads, for example the
+//!   MacDive database, a Subsurface XML file or a Subsurface git storage
+//!   folder (`--help` lists them all).
+//! - `--app`: the application's name. Without it, see below.
 //! - `[dive number]`: also prints that dive in full, with its profile.
 //!
 //! It prints the number of dives and sites, decodes every profile (listing
@@ -20,9 +20,12 @@
 //! database or XML file), compared by size and hash.
 //!
 //! It reads every application of `divelens_core::apps::ALL`, opened as the
-//! app opens it: `--app` takes its name, and without it the log goes to the
-//! first application whose logs are folders (for a folder) or have its
-//! extension, else to the first application.
+//! app opens it: `--app` takes its name. Without it, the log goes to the
+//! first application that opens it among those whose logs look like it:
+//! folders, for a folder; files with its extension, for a file; every
+//! application when none does. When none of them opens it, the first error
+//! from an application that recognised the log is shown (anything but
+//! "nothing there" or "not a dive log"), else the first error.
 //!
 //! **The output is personal data** (dates, places, positions, notes). It stays
 //! on this computer: never put it, even in part, in the repository, an issue
@@ -38,25 +41,64 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use divelens_core::apps::{self, DiveApp, Kept};
-use divelens_core::{Dive, DiveSource};
+use divelens_core::{Dive, DiveSource, Error};
 
-const HELP: &str = "\
+/// `a`, `a or b`, `a, b or c`.
+fn or_list(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} or {last}", rest.join(", ")),
+    }
+}
+
+/// What a log of `app` is: "a .xml or .ssrf file, or a folder".
+fn log_kinds(app: &DiveApp) -> String {
+    let file = app.choose.file.map(|extensions| {
+        let extensions: Vec<_> = extensions.iter().map(|e| format!(".{e}")).collect();
+        format!("a {} file", or_list(&extensions))
+    });
+    match (file, app.choose.folder) {
+        (Some(file), true) => format!("{file}, or a folder"),
+        (Some(file), false) => file,
+        (None, _) => "a folder".into(),
+    }
+}
+
+/// The names of every application, "MacDive or Subsurface".
+fn names() -> String {
+    let names: Vec<_> = apps::ALL.iter().map(|a| a.name.to_string()).collect();
+    or_list(&names)
+}
+
+fn help() -> String {
+    let logs: String = apps::ALL
+        .iter()
+        .map(|a| format!("\n                   {}: {}", a.name, log_kinds(a)))
+        .collect();
+    format!(
+        "\
 Checks a reader against a real dive log on this computer.
 
 Usage: cargo run --release -p divelens-core --example verify_log -- [--app <application>] <log> [dive number]
 
-  <log>          the MacDive database, a Subsurface XML file or a Subsurface git storage folder
-  --app          MacDive or Subsurface; by default a folder, .xml or .ssrf is Subsurface, anything else MacDive
+  <log>          the log of any application Dive Lens reads:{logs}
+  --app          {}; by default, the first of them whose logs look like <log> and that opens it
   [dive number]  also prints that dive in full, with its profile
 
 The output is personal data: keep it on this computer. Never put it, even in
-part, in the repository, an issue or a pull request.";
+part, in the repository, an issue or a pull request.",
+        names()
+    )
+}
 
 /// At most this many dives listed per problem.
 const LISTED: usize = 20;
 
 struct Args {
-    app: &'static DiveApp,
+    /// Chosen with `--app`; `None`: the first application that opens the
+    /// log.
+    app: Option<&'static DiveApp>,
     path: PathBuf,
     number: Option<u32>,
 }
@@ -69,7 +111,7 @@ fn args() -> std::result::Result<Args, String> {
     while let Some(a) = it.next() {
         match a.as_str() {
             "-h" | "--help" => {
-                println!("{HELP}");
+                println!("{}", help());
                 std::process::exit(0);
             }
             "--app" => {
@@ -77,31 +119,25 @@ fn args() -> std::result::Result<Args, String> {
                 let known = apps::ALL
                     .iter()
                     .find(|a| a.name.eq_ignore_ascii_case(&name));
-                let names: Vec<_> = apps::ALL.iter().map(|a| a.name).collect();
-                app = Some(*known.ok_or(format!(
-                    "unknown application {name:?}: {}",
-                    names.join(" or ")
-                ))?);
+                app = Some(*known.ok_or(format!("unknown application {name:?}: {}", names()))?);
             }
             _ if path.is_none() => path = Some(PathBuf::from(a)),
             _ if number.is_none() => {
                 number = Some(a.parse().map_err(|_| format!("not a dive number: {a}"))?);
             }
-            _ => return Err(format!("unexpected argument {a:?}\n\n{HELP}")),
+            _ => return Err(format!("unexpected argument {a:?}\n\n{}", help())),
         }
     }
-    let path = path.ok_or(HELP)?;
-    Ok(Args {
-        app: app.unwrap_or_else(|| guess(&path)),
-        path,
-        number,
-    })
+    let path = path.ok_or_else(help)?;
+    Ok(Args { app, path, number })
 }
 
-/// The application whose logs look like `path`.
-fn guess(path: &Path) -> &'static DiveApp {
+/// The applications whose logs look like `path`, in `ALL`'s order: those
+/// whose logs are folders, for a folder; those whose files have its
+/// extension, for a file. When none does, every application.
+fn candidates(path: &Path) -> Vec<&'static DiveApp> {
     let ext = path.extension().and_then(|e| e.to_str());
-    let reads = |app: &DiveApp| {
+    let looks_like = |app: &DiveApp| {
         if path.is_dir() {
             app.choose.folder
         } else {
@@ -109,18 +145,48 @@ fn guess(path: &Path) -> &'static DiveApp {
             ext.is_some_and(|ext| file.iter().any(|e| e.eq_ignore_ascii_case(ext)))
         }
     };
-    apps::ALL
+    let found: Vec<_> = apps::ALL
         .iter()
         .copied()
-        .find(|a| reads(a))
-        .unwrap_or(apps::ALL[0])
+        .filter(|a| looks_like(a))
+        .collect();
+    if found.is_empty() {
+        apps::ALL.to_vec()
+    } else {
+        found
+    }
+}
+
+/// Opens the log with `--app`'s application, else with the first of its
+/// [`candidates`] that opens it. When none does: the first error saying
+/// more than "nothing there" or "not one of my logs" (an application that
+/// recognised the log), else the first error.
+fn open_any(args: &Args) -> Result<(&'static DiveApp, Box<dyn DiveSource>, String), String> {
+    let apps = match args.app {
+        Some(app) => vec![app],
+        None => candidates(&args.path),
+    };
+    let mut failed = Vec::new();
+    for app in apps {
+        match open(app, &args.path) {
+            Ok((log, storage)) => return Ok((app, log, storage)),
+            Err(e) => failed.push((app, e)),
+        }
+    }
+    let telling = |e: &Error| !matches!(e, Error::NotFound(_) | Error::NotADiveLog(_));
+    let shown = failed.iter().find(|(_, e)| telling(e)).or(failed.first());
+    Err(shown.map_or_else(String::new, |(app, e)| not_opened(app, &args.path, e)))
+}
+
+/// Why `app` did not open `path`.
+fn not_opened(app: &DiveApp, path: &Path, e: &Error) -> String {
+    format!("{} log {} not read: {e}", app.name, path.display())
 }
 
 /// Opens the log as the app does, with a word on how it is stored when the
 /// application has several formats.
-fn open(app: &DiveApp, path: &Path) -> Result<(Box<dyn DiveSource>, String), String> {
-    let opened = (app.open)(path, &Kept::default())
-        .map_err(|e| format!("{} log {} not read: {e}", app.name, path.display()))?;
+fn open(app: &DiveApp, path: &Path) -> Result<(Box<dyn DiveSource>, String), Error> {
+    let opened = (app.open)(path, &Kept::default())?;
     let storage = if app.texts.en.read.len() > 1 {
         format!(" ({})", opened.format)
     } else {
@@ -240,13 +306,13 @@ fn run(args: &Args) -> Result<(), String> {
 
 fn read(args: &Args) -> Result<(), String> {
     let t = Instant::now();
-    let (log, storage) = open(args.app, &args.path)?;
-    let not_read = |e: divelens_core::Error| format!("{} log not read: {e}", args.app.name);
+    let (app, log, storage) = open_any(args)?;
+    let not_read = |e: Error| format!("{} log not read: {e}", app.name);
     let dives = log.dives().map_err(not_read)?;
     let sites = log.sites().map_err(not_read)?;
     println!(
         "{}{storage}: {} dives ({} with a profile, {} invalid, {} without number), {} sites, read in {:?}",
-        args.app.name,
+        app.name,
         dives.len(),
         dives.iter().filter(|d| d.has_profile).count(),
         dives.iter().filter(|d| d.invalid).count(),
@@ -304,7 +370,7 @@ fn read(args: &Args) -> Result<(), String> {
         s.sort();
         (d, s)
     };
-    let (again, _) = open(args.app, &args.path)?;
+    let (again, _) = open(app, &args.path).map_err(|e| not_opened(app, &args.path, &e))?;
     let again = (
         again.dives().map_err(not_read)?,
         again.sites().map_err(not_read)?,

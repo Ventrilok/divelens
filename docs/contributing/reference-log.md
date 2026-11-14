@@ -247,19 +247,27 @@ application" issue so that the approach can be discussed.
    in `core/fixtures/<application>/`, but files ending `.sqlite` or `.ssrf`
    are ignored by git there, as a guard against real logs: build a database
    from SQL in the tests, as MacDive's copy is, and name a Subsurface-style
-   XML copy `.xml`. In the reader's tests, add a function that writes the
-   copy into a folder and returns the path to open, and a `conformance()`
+   XML copy `.xml`. If the application's logs end with an extension the
+   repository uses for nothing else, add it to `.gitignore` the same way, so
+   that a real log cannot be committed by mistake. Never ignore everywhere
+   an extension the repository needs (`*.json`, `*.xml`): limit the pattern
+   to where the repository has no such files, or name the copy with another
+   extension the application accepts, as Subsurface's copy is `.xml` and not
+   `.ssrf`. In the reader's tests, add a function that writes the copy into
+   a folder and returns the path to open, and a `conformance()`
    function giving the application's runs of the common tests: one per way
    the log can be stored, each with that function, the capabilities the
    reader must declare, and whether the application marks dives invalid.
 4. Describe the application in `core/src/<application>/app.rs`: a
    `pub static APP: DiveApp` with its id (camelCase, kept by settings files
    and never changed), its name, its texts in both languages, and its runs
-   (`conformance: super::tests::conformance`). In the tests' build the
-   description must have its runs: the compiler refuses one without them.
-5. Add `APP` to `ALL` in `core/src/apps.rs`. Its place in the list is the
-   order of Settings, and the first application available on a system is
-   the default there.
+   (`conformance: super::tests::conformance`). The runs exist only in the
+   tests' build, so keep the `#[cfg(test)]` above them; there, the compiler
+   refuses a description without them.
+5. Add `APP` to `ALL` in `core/src/apps.rs`: with the `pub mod` line of step
+   2, this registers the application. Its place in the list is the order of
+   Settings, and the first application available on a system is the default
+   there.
 6. Run `cargo test -p divelens-core` until it passes. The common tests run
    every registered application, opened as the app opens it; a failure
    lists every value that differs from this page. Other tests check the
@@ -275,12 +283,17 @@ application" issue so that the approach can be discussed.
 cargo run --release -p divelens-core --example verify_log -- [--app <application>] <log> [dive number]
 ```
 
-`<log>` is the log of any registered application: the MacDive database, a
-Subsurface XML file or a Subsurface git storage folder. `--app` takes the
-application's name; without it, a folder goes to the first application whose
-log can be a folder (Subsurface), a file to the first one whose files have its
-extension (`.xml` or `.ssrf`: Subsurface; `.sqlite`: MacDive), anything else
-to the first registered application (MacDive). The tool prints the number of
+`<log>` is the log of any registered application, for example the MacDive
+database, a Subsurface XML file or a Subsurface git storage folder (`--help`
+lists them all). `--app` takes the application's name. Without it, the tool
+tries the applications whose logs look like `<log>`, in the order of the
+list: those whose log can be a folder, for a folder (Subsurface); those whose
+files have its extension, for a file (`.xml` or `.ssrf`: Subsurface;
+`.sqlite`: MacDive); every application, MacDive first, for anything else.
+The first one that opens the log is used. When none does, the tool shows the
+first error from an application that recognised the log (anything but
+"nothing there" or "not a dive log": a reader failing on its own kind of
+log), else the first error. The tool prints the number of
 dives and sites, decodes every profile (listing those that fail), reads the
 log twice to compare identifiers, reports what breaks the rules above, and
 says whether reading changed, created or removed any file of the log (sizes
