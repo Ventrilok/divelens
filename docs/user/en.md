@@ -129,7 +129,7 @@ Every change is saved at once.
 - **Application**: MacDive or Subsurface. Only the applications available on your system are offered: on Windows, Subsurface. The application is changed only here, never from Create Collections or Tag Selection.
 - **MacDive database** / **Subsurface log**: the standard location is used unless you choose another. A Subsurface log is either a file (.xml or .ssrf) or the folder of its git storage (cloud storage keeps one on your computer). Under the location, Dive Lens shows whether the log is valid and how many dives and sites it holds.
 - Each application keeps its own location: switching from one to the other and back finds yours again.
-- **One dive log at a time.** Changing the application or the log starts everything again: Create Collections goes back to step 1 with no dive ticked, and Tag Selection starts from scratch. This holds however the log changes: here, by importing settings, or from the screen shown when the dive log cannot be read.
+- **One dive log at a time.** Changing the application or the log starts everything again: Create Collections goes back to step 1 with no dive ticked, and Tag Selection starts from scratch. This holds however the log changes: here, by importing settings, from the screen shown when the dive log cannot be read, or when Dive Lens takes over the previous plug-in's settings on connecting to Lightroom (section 1).
 - While Dive Lens is writing to Lightroom, the dive log cannot change: **Application**, **Choose…** (or **Choose a file…** / **Choose a folder…**), **Standard location**, **Import…** and **Replace** are greyed, with the note "Writing to Lightroom: the dive log can be changed once the write is done."
 
 **Display**
@@ -151,7 +151,7 @@ Every change is saved at once.
 - **Export…** saves them in a file, named "Dive Lens settings.json" unless you choose another name. The file holds: the dive application and the log location of each one, language, units, the GPS altitude option, where the collections go, the log level and the order of the dive list. The clock offsets remembered for each camera are not in it: they stay on this computer.
 - **Import…** asks before changing anything: **Replace** puts the file's settings in place of every setting on this screen, **Cancel** leaves them as they are.
 - If the file's dive log is not on this computer, Dive Lens says so and keeps its location until you choose the right one (**Choose…**, or **Choose a file…** / **Choose a folder…** for Subsurface). If the collection set chosen in **Place in** is not in this catalog, Create Collections says so: choose another place in Settings.
-- A file from a Mac that uses MacDive, imported on Windows: Dive Lens uses Subsurface, the application available there, and keeps the MacDive location in the settings, for when they go back to a Mac.
+- A file from a Mac that uses MacDive, imported on Windows: Dive Lens uses Subsurface, the application available there, and keeps the MacDive location: these settings, exported again and imported on a Mac, still use MacDive there.
 - A file that does not look like a Dive Lens settings file is refused, and nothing changes. A file exported by an earlier version of Dive Lens can still be imported.
 - After an import, Dive Lens no longer takes over the previous plug-in's settings (section 1): the imported settings are the ones kept.
 
