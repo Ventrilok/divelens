@@ -2,7 +2,7 @@
 // names it, and the reads of the log, of which only the latest counts.
 
 import { t } from "./i18n";
-import type { LogRef, Settings, SourceInfo } from "./types";
+import type { LogRef, SourceInfo } from "./types";
 
 /** The dive log a screen shows, as the back end checks it: application and location. */
 export const logRef = (source: SourceInfo): LogRef => ({ kind: source.kind, path: source.path });
@@ -40,17 +40,19 @@ export function latestOnly() {
 }
 
 /**
- * Follows the dive-log settings (application and locations) the flows were
- * started with: tells, change after change, whether they now point at
- * another log, which starts every flow again. Reading the same log again
- * (Retry) is not a change.
+ * Follows the dive log shown, read after read: the application in use and
+ * its location as the back end resolved them, the same log every action is
+ * checked against. Tells whether a read shows another log than the previous
+ * one, which starts every flow again. The first read is no change, nor is a
+ * read of the same log again (Retry, the standard location chosen for the
+ * file that already was the standard one, a setting of the other
+ * application changed).
  */
-export function sourceWatch(source: Settings["source"]) {
-  let current = JSON.stringify(source);
-  return (next: Settings["source"]): boolean => {
-    const key = JSON.stringify(next);
-    const changed = key !== current;
-    current = key;
+export function logWatch() {
+  let shown: LogRef | null = null;
+  return (source: SourceInfo): boolean => {
+    const changed = shown !== null && (shown.kind !== source.kind || shown.path !== source.path);
+    shown = logRef(source);
     return changed;
   };
 }

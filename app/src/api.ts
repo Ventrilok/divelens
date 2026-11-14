@@ -85,11 +85,12 @@ export const onSelectionPreview = (handler: (p: SelectionPreview) => void): Prom
 /** Finds in Lightroom the photos of the period of dives of `log`; rejects with a CollectionsError. */
 export const findCollectionPhotos = (log: LogRef, diveIds: string[]) =>
   onLog(invoke<Period>("find_collection_photos", { log, diveIds }));
-export const collectionsPreview = (choices: CollectionChoices) =>
-  invoke<CollectionsPreview>("collections_preview", { choices });
-/** Suggested offset (minutes) per camera key; null when no offset fits. */
-export const suggestOffsets = (cameras: string[]) =>
-  invoke<Record<string, number | null>>("suggest_offsets", { cameras });
-/** Writes the dives found with the photos, which must come from `log`; rejects with a CollectionsError. */
-export const applyCollections = (log: LogRef, choices: CollectionChoices) =>
-  onLog(invoke<CollectionsResult>("apply_collections", { log, choices }));
+/** Live counts of photo search `search`; rejects with noPhotos once a newer search replaced it. */
+export const collectionsPreview = (search: number, choices: CollectionChoices) =>
+  invoke<CollectionsPreview>("collections_preview", { search, choices });
+/** Suggested offset (minutes) per camera key of photo search `search`; null when no offset fits. */
+export const suggestOffsets = (search: number, cameras: string[]) =>
+  invoke<Record<string, number | null>>("suggest_offsets", { search, cameras });
+/** Writes the dives found with photo search `search`, which must come from `log`; rejects with a CollectionsError. */
+export const applyCollections = (log: LogRef, search: number, choices: CollectionChoices) =>
+  onLog(invoke<CollectionsResult>("apply_collections", { log, search, choices }));

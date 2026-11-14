@@ -19,7 +19,7 @@ use divelens_core::{Capabilities, Dive, DiveSource, Error, Site};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use collections::{Choices, Period, Preview, Session};
+use collections::{Choices, Period, Preview, Searches, Session};
 use dive_log::{LogChanged, LogId, SourceInfo, WriteInProgress, Writes, guarded_change};
 use lightroom::{
     ApplyOutcome, CollectionSet, Command, End, Event, LinkFile, Status, Timing, WrittenCollection,
@@ -132,26 +132,9 @@ fn change_settings(
     app: &AppHandle,
     change: impl FnOnce(&mut Settings),
 ) -> Result<Settings, ChangeError> {
-    let dir = config_dir(app);
     let log_of = |s: &Settings| source_info_of(app, s).id();
-    let mut before = Settings::default();
-    let mut refused = None;
-    let after = app
-        .state::<Writes>()
-        .exclusive(|writing| {
-            Settings::update(&dir, |s| {
-                before = s.clone();
-                refused = guarded_change(writing, s, change, log_of).err();
-            })
-        })
-        .map_err(|e| {
-            log::error!("settings not saved: {e}");
-            ChangeError::NotSaved(e.to_string())
-        })?;
-    if let Some(WriteInProgress) = refused {
-        log::warn!("dive log not changed: Lightroom is being written to");
-        return Err(ChangeError::WriteInProgress);
-    }
+    let (before, after) =
+        change_unless_writing(&app.state::<Writes>(), &config_dir(app), log_of, change)?;
     if after != before {
         log::info!(
             "settings changed: {}",
@@ -164,6 +147,35 @@ fn change_settings(
         let _ = app.emit("settings-changed", after.clone());
     }
     Ok(after)
+}
+
+/// Saves `change` to the settings in `dir`, unless it switches the dive log
+/// (`log_of` tells which log some settings point at) while a write is under
+/// way: then nothing is saved. Returns the settings before and after.
+fn change_unless_writing(
+    writes: &Writes,
+    dir: &Path,
+    log_of: impl Fn(&Settings) -> LogId,
+    change: impl FnOnce(&mut Settings),
+) -> Result<(Settings, Settings), ChangeError> {
+    let mut before = Settings::default();
+    let mut refused = None;
+    let after = writes
+        .exclusive(|writing| {
+            Settings::update(dir, |s| {
+                before = s.clone();
+                refused = guarded_change(writing, s, change, log_of).err();
+            })
+        })
+        .map_err(|e| {
+            log::error!("settings not saved: {e}");
+            ChangeError::NotSaved(e.to_string())
+        })?;
+    if let Some(WriteInProgress) = refused {
+        log::warn!("dive log not changed: Lightroom is being written to");
+        return Err(ChangeError::WriteInProgress);
+    }
+    Ok((before, after))
 }
 
 #[derive(Serialize)]
@@ -219,8 +231,9 @@ fn standard_path(app: &AppHandle, kind: SourceKind) -> PathBuf {
     }
 }
 
+/// The configured dive log, as every action checks it.
 fn source_info(app: &AppHandle) -> SourceInfo {
-    source_info_of(app, &Settings::load(&config_dir(app)))
+    dive_log::configured(&config_dir(app), |kind| standard_path(app, kind))
 }
 
 /// The dive log `settings` point at: the application in use on this
@@ -574,7 +587,28 @@ async fn tag_selection(
 /// Photos found for "Create Collections", kept until the next search.
 #[derive(Default)]
 struct CollectionsState {
-    session: Mutex<Option<Session>>,
+    searches: Mutex<Searches>,
+}
+
+/// Keeps the session of photo search `number` once it is done, unless the
+/// configured log changed during it (its dives belong to the previous log)
+/// or a newer search started since (the screen shows that one).
+fn keep_search(
+    searches: &Mutex<Searches>,
+    number: u64,
+    log: &LogId,
+    configured: &SourceInfo,
+    session: Session,
+) -> Result<(), CollectionsError> {
+    log.check(configured)?;
+    if !searches
+        .lock()
+        .expect("collections")
+        .finish(number, session)
+    {
+        return Err(CollectionsError::NoPhotos);
+    }
+    Ok(())
 }
 
 /// Why "Create Collections" could not go on.
@@ -584,7 +618,8 @@ enum CollectionsError {
     NothingChosen,
     NotConnected,
     LinkLost,
-    /// No photo search to work on (link reconnected, app restarted).
+    /// No photo search to work on (link reconnected, app restarted, or a
+    /// newer search replaced it).
     NoPhotos,
     /// No photo goes to any dive.
     NothingToWrite,
@@ -651,6 +686,8 @@ async fn find_collection_photos(
     dive_ids: Vec<String>,
 ) -> Result<Period, CollectionsError> {
     tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<CollectionsState>();
+        let number = state.searches.lock().expect("collections").start();
         let info = source_info(&app);
         log.check(&info)?;
         let source = open(&app, &info).map_err(|detail| CollectionsError::Source { detail })?;
@@ -675,44 +712,43 @@ async fn find_collection_photos(
             to: t,
             reply,
         })??;
-        // The log may have changed during the search: photos found for a
-        // previous log must never replace those of the current one.
-        log.check(&source_info(&app))?;
         let offsets = Offsets::load(&config_dir(&app), info.kind);
-        let session =
-            Session::new(found.search, dives, found.photos, &offsets).read_from(log, profiles);
-        let period = session.period(from, to);
-        *app.state::<CollectionsState>()
-            .session
-            .lock()
-            .expect("collections") = Some(session);
+        let session = Session::new(found.search, dives, found.photos, &offsets)
+            .read_from(log.clone(), profiles);
+        let period = session.period(number, from, to);
+        // Checked again once done: the log may have changed, or the user may
+        // have gone back and started a newer search, during this one.
+        keep_search(&state.searches, number, &log, &source_info(&app), session)?;
         Ok(period)
     })
     .await
     .expect("photo search task failed")
 }
 
-/// Live counts for the current choices.
+/// Live counts of photo search `search` for the current choices.
 #[tauri::command]
 fn collections_preview(
     state: State<CollectionsState>,
+    search: u64,
     choices: Choices,
 ) -> Result<Preview, CollectionsError> {
-    let session = state.session.lock().expect("collections");
-    let session = session.as_ref().ok_or(CollectionsError::NoPhotos)?;
+    let searches = state.searches.lock().expect("collections");
+    let session = searches.get(search).ok_or(CollectionsError::NoPhotos)?;
     Ok(session.preview(&choices))
 }
 
-/// Suggested clock offset of the given cameras (`None`: no offset fits).
+/// Suggested clock offset of the given cameras of photo search `search`
+/// (`None`: no offset fits).
 #[tauri::command]
 async fn suggest_offsets(
     app: AppHandle,
+    search: u64,
     cameras: Vec<String>,
 ) -> Result<std::collections::HashMap<String, Option<i32>>, CollectionsError> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<CollectionsState>();
-        let session = state.session.lock().expect("collections");
-        let session = session.as_ref().ok_or(CollectionsError::NoPhotos)?;
+        let searches = state.searches.lock().expect("collections");
+        let session = searches.get(search).ok_or(CollectionsError::NoPhotos)?;
         Ok(session.suggest(&cameras))
     })
     .await
@@ -732,12 +768,14 @@ struct CollectionsResult {
 
 /// Writes the collections, dive data and per-photo values in one Lightroom
 /// step, then remembers each camera's offset. Writes the dives and profiles
-/// read with the photo search; refused when `log`, the dive log the screen
-/// shows, is not theirs or no longer the configured one.
+/// read with photo search `search`, the one the screen shows; refused when
+/// it is no longer kept, or when `log`, the dive log the screen shows, is
+/// not theirs or no longer the configured one.
 #[tauri::command]
 async fn apply_collections(
     app: AppHandle,
     log: LogId,
+    search: u64,
     choices: Choices,
 ) -> Result<CollectionsResult, CollectionsError> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -746,8 +784,8 @@ async fn apply_collections(
         let units = units_in_use(&app, &info);
         let (request, empty_dives) = {
             let state = app.state::<CollectionsState>();
-            let session = state.session.lock().expect("collections");
-            let session = session.as_ref().ok_or(CollectionsError::NoPhotos)?;
+            let searches = state.searches.lock().expect("collections");
+            let session = searches.get(search).ok_or(CollectionsError::NoPhotos)?;
             let mut request = session
                 .write_request(&log, &choices, units)?
                 .map_err(|detail| CollectionsError::Source { detail })?;
@@ -790,10 +828,10 @@ async fn apply_collections(
         let mut offsets = Offsets::load(&dir, log.kind);
         if let Some(session) = app
             .state::<CollectionsState>()
-            .session
+            .searches
             .lock()
             .expect("collections")
-            .as_ref()
+            .get(search)
         {
             session.remember(&choices, &mut offsets);
         }
@@ -858,6 +896,10 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
     let version = app.package_info().version.to_string();
     let mut last_end = None;
     loop {
+        // Requests made while there is no link are dropped, so whoever sent
+        // one stops waiting (and a write in progress ends) even when
+        // Lightroom quit and its link file is gone.
+        lightroom::drop_requests(&commands);
         if let Some(link) = LinkFile::read(&dir) {
             let end = lightroom::run_session(
                 &link,
@@ -901,6 +943,10 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                     }
                     Event::Show(screen) => show_screen(&app, screen),
                     Event::Legacy(legacy) => {
+                        // Refused during a write when it would change the
+                        // dive log: nothing is saved, not even that it was
+                        // looked at, so it is tried again at the next
+                        // connection.
                         if let Ok(home) = app.path().home_dir() {
                             let standard = MacDive::default_path(&home);
                             let taken =
@@ -1030,6 +1076,96 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::screen_arg;
+    use super::{
+        ChangeError, CollectionsError, Offsets, Searches, Session, Settings, SourceKind, Writes,
+        change_unless_writing, dive_log, keep_search,
+    };
+    use crate::settings::DepthChoice;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    #[test]
+    fn a_search_is_kept_only_for_the_log_still_configured_and_if_newest() {
+        let searches = Mutex::new(Searches::default());
+        let at = |path: &str| dive_log::SourceInfo {
+            kind: SourceKind::Subsurface,
+            path: path.into(),
+            is_default_path: false,
+        };
+        let (a, b) = (at("/Logs/a.xml"), at("/Logs/b.xml"));
+        let session = || Session::new(1, Vec::new(), Vec::new(), &Offsets::default());
+        let start = || searches.lock().unwrap().start();
+
+        // The log changed in Settings while Lightroom searched.
+        let n = start();
+        let kept = keep_search(&searches, n, &a.id(), &b, session());
+        assert!(matches!(kept, Err(CollectionsError::LogChanged)));
+        assert!(searches.lock().unwrap().get(n).is_none());
+
+        // A newer search started meanwhile: the older one is dropped.
+        let older = start();
+        let newer = start();
+        let kept = keep_search(&searches, older, &a.id(), &a, session());
+        assert!(matches!(kept, Err(CollectionsError::NoPhotos)));
+        assert!(keep_search(&searches, newer, &a.id(), &a, session()).is_ok());
+        assert!(searches.lock().unwrap().get(newer).is_some());
+        assert!(searches.lock().unwrap().get(older).is_none());
+    }
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("divelens-lib-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn standard(kind: SourceKind) -> PathBuf {
+        match kind {
+            SourceKind::MacDive => "/Users/diver/MacDive.sqlite".into(),
+            SourceKind::Subsurface => "/Users/diver/diver.xml".into(),
+        }
+    }
+
+    fn log_of(s: &Settings) -> dive_log::LogId {
+        dive_log::SourceInfo::of(s, standard).id()
+    }
+
+    fn on_file(s: &mut Settings, path: &Path) {
+        s.source.kind = SourceKind::Subsurface;
+        s.source.subsurface_path = Some(path.to_path_buf());
+    }
+
+    #[test]
+    fn settings_cannot_switch_the_dive_log_during_a_write() {
+        let dir = temp_dir("gate");
+        let (a, b) = (dir.join("a.xml"), dir.join("b.xml"));
+        let writes = Writes::new(|_| {});
+        change_unless_writing(&writes, &dir, log_of, |s| on_file(s, &a)).unwrap();
+        let shown = dive_log::configured(&dir, standard).id();
+        let (writing, _) = writes
+            .begin(&shown, || dive_log::configured(&dir, standard))
+            .unwrap();
+
+        let refused = change_unless_writing(&writes, &dir, log_of, |s| on_file(s, &b));
+        assert!(matches!(refused, Err(ChangeError::WriteInProgress)));
+        assert_eq!(Settings::load(&dir).source.subsurface_path, Some(a.clone()));
+        // An import naming another log is refused whole: units untouched.
+        let mut imported = Settings::default();
+        on_file(&mut imported, &b);
+        imported.units.depth = DepthChoice::Feet;
+        let refused = change_unless_writing(&writes, &dir, log_of, |s| s.replace_with(imported));
+        assert!(matches!(refused, Err(ChangeError::WriteInProgress)));
+        assert_eq!(Settings::load(&dir).units.depth, DepthChoice::Source);
+        // Other settings may change meanwhile.
+        change_unless_writing(&writes, &dir, log_of, |s| s.units.depth = DepthChoice::Feet)
+            .unwrap();
+        assert_eq!(Settings::load(&dir).units.depth, DepthChoice::Feet);
+
+        drop(writing);
+        change_unless_writing(&writes, &dir, log_of, |s| on_file(s, &b)).unwrap();
+        assert_eq!(Settings::load(&dir).source.subsurface_path, Some(b));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     fn args(list: &[&str]) -> Vec<String> {
         list.iter().map(|s| s.to_string()).collect()

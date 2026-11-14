@@ -14,7 +14,7 @@ import {
   updateSettings,
 } from "./api";
 import { unitsInUse } from "./collectionPlace";
-import { latestOnly, sourceWatch } from "./diveLog";
+import { latestOnly, logWatch } from "./diveLog";
 import { profiles } from "./profiles";
 import { isReadyScreen, Sidebar, type Screen } from "./components/Sidebar";
 import { lang, setLanguage, t } from "./i18n";
@@ -23,7 +23,7 @@ import { DivesScreen } from "./screens/DivesScreen";
 import { TagScreen } from "./screens/TagScreen";
 import { SettingsScreen, type LogState } from "./screens/SettingsScreen";
 import { SourceError } from "./screens/SourceError";
-import type { AppInfo, LightroomStatus, LoadError, Settings, Sort } from "./types";
+import type { AppInfo, LightroomStatus, LoadError, Settings, Sort, SourceInfo } from "./types";
 import "./App.css";
 
 const offline: LightroomStatus = {
@@ -71,47 +71,59 @@ function App({ initialSettings }: { initialSettings: Settings }) {
 
   // Each read of the dive log forgets the profiles shown so far, and only the
   // latest read counts: a slow read of the previous log never replaces it.
+  // A read showing another log than the previous one (application in use and
+  // location, as the back end checks them) starts every flow again: no dive
+  // checked, Create Collections at step 1, Tag Selection from scratch.
   const reads = useMemo(latestOnly, []);
+  const [otherLog] = useState(logWatch);
   const load = useCallback(() => {
     profiles.clear();
     setState({ status: "loading" });
+    const show = (next: LogState, source: SourceInfo | undefined) => {
+      if (source && otherLog(source)) {
+        setChosen(new Set());
+        setStep("dives");
+        setTagRun((n) => n + 1);
+      }
+      setState(next);
+    };
     reads(
       loadDives(),
-      (log) => setState({ status: "ok", log }),
-      (failure) => setState({ status: "error", failure: failure as LoadError }),
+      (log) => show({ status: "ok", log }, log.source),
+      (error) => {
+        const failure = error as LoadError;
+        show({ status: "error", failure }, failure?.source);
+      },
     );
-  }, [reads]);
+  }, [reads, otherLog]);
 
   // The dive log is read again whenever the application or its location
   // changes, whichever way (Settings, the dive-log error screen, an import,
-  // the previous plugin's settings taken over). Another log starts every flow
-  // again: no dive checked, Create Collections at step 1, Tag Selection from
-  // scratch.
-  const source = settings.source;
-  const sourceKey = JSON.stringify(source);
-  const [sourceChanged] = useState(() => sourceWatch(initialSettings.source));
-  useEffect(() => {
-    if (sourceChanged(source)) {
-      setChosen(new Set());
-      setStep("dives");
-      setTagRun((n) => n + 1);
-    }
-    load();
-  }, [load, sourceKey, sourceChanged]);
+  // the previous plugin's settings taken over).
+  const sourceKey = JSON.stringify(settings.source);
+  useEffect(load, [load, sourceKey]);
 
   // The back end refused an action on a dive log that is no longer the
-  // configured one: catch up with the settings, which reads the log again.
+  // configured one: read the log and the settings again.
   useEffect(() => {
     onLogChanged(() => {
+      load();
       getSettings().then(setSettings);
     });
-  }, []);
+  }, [load]);
 
-  // While Lightroom is being written to, the dive log cannot change.
+  // While Lightroom is being written to, the dive log cannot change. Events
+  // win over the first answer, which may arrive after one of them.
   const [writing, setWriting] = useState(false);
   useEffect(() => {
-    lightroomWriting().then(setWriting);
-    const stop = onLightroomWriting(setWriting);
+    let heard = false;
+    const stop = onLightroomWriting((on) => {
+      heard = true;
+      setWriting(on);
+    });
+    lightroomWriting().then((on) => {
+      if (!heard) setWriting(on);
+    });
     return () => {
       stop.then((f) => f());
     };

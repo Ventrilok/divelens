@@ -7,7 +7,7 @@
 //! content or modification time: MacDive saves its database often, and a
 //! finer check would refuse actions on the very log the screen shows.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -48,6 +48,12 @@ impl SourceInfo {
             path: self.path.clone(),
         }
     }
+}
+
+/// The dive log configured in the settings folder `dir`, as every action
+/// checks it. Only the settings are read, never the log itself.
+pub fn configured(dir: &Path, standard: impl FnOnce(SourceKind) -> PathBuf) -> SourceInfo {
+    SourceInfo::of(&Settings::load(dir), standard)
 }
 
 /// A dive log by application and location, as a screen names the log it
@@ -203,17 +209,33 @@ mod tests {
         assert!(info.id().check(&SourceInfo::of(&s, standard)).is_ok());
     }
 
+    /// What the actions do: a read (profile, photo search) checks the log
+    /// named against the configured one, a write starts through `begin`.
+    fn accepted(writes: &Writes, shown: &LogId, settings_dir: &Path) -> bool {
+        let read = shown.check(&configured(settings_dir, standard)).is_ok();
+        let write = writes
+            .begin(shown, || configured(settings_dir, standard))
+            .is_ok();
+        assert_eq!(read, write);
+        read
+    }
+
     #[test]
-    fn same_log_is_accepted_even_once_saved_again() {
+    fn the_log_shown_stays_accepted_when_its_file_is_saved_again() {
         let dir = temp_dir("same");
+        let settings_dir = dir.join("settings");
         let file = dir.join("diver.xml");
         std::fs::write(&file, "<divelog/>").unwrap();
-        let settings = on(SourceKind::Subsurface, &file);
-        let shown = SourceInfo::of(&settings, standard).id();
-        assert!(shown.check(&SourceInfo::of(&settings, standard)).is_ok());
+        Settings::update(&settings_dir, |s| {
+            *s = on(SourceKind::Subsurface, &file);
+        })
+        .unwrap();
+        let writes = Writes::new(|_| {});
+        let shown = configured(&settings_dir, standard).id();
+        assert!(accepted(&writes, &shown, &settings_dir));
 
         // The dive application saves the log again: new content, new
-        // modification time. Still the log the screen shows.
+        // modification time. Only application and location count.
         std::fs::write(&file, "<divelog><dives/></divelog>").unwrap();
         std::fs::File::options()
             .write(true)
@@ -221,7 +243,14 @@ mod tests {
             .unwrap()
             .set_modified(SystemTime::now() + Duration::from_secs(3600))
             .unwrap();
-        assert!(shown.check(&SourceInfo::of(&settings, standard)).is_ok());
+        assert!(accepted(&writes, &shown, &settings_dir));
+
+        // Another file chosen in Settings: refused.
+        Settings::update(&settings_dir, |s| {
+            s.source.subsurface_path = Some(dir.join("other.xml"));
+        })
+        .unwrap();
+        assert!(!accepted(&writes, &shown, &settings_dir));
         std::fs::remove_dir_all(dir).unwrap();
     }
 

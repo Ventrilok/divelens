@@ -145,6 +145,8 @@ export interface Camera {
 }
 
 export interface Period {
+  /** Number of the search: the counts, Suggest and Apply name it (a newer search replaces it). */
+  search: number;
   /** First and last day searched, "YYYY-MM-DD". */
   from: string;
   to: string;

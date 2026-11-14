@@ -17,7 +17,7 @@ import {
   SLIDER_STEP_MIN,
 } from "../cameras";
 import { placeLabel, setExists } from "../collectionPlace";
-import { logRef } from "../diveLog";
+import { isLogChanged, logRef } from "../diveLog";
 import { Icon } from "../components/Icon";
 import { Steps } from "../components/Steps";
 import { formatDay, formatRange, formatRowSpan } from "../format";
@@ -393,7 +393,11 @@ export function CollectionsScreen({
         if (!keep) setNotes({});
         setSearch({ state: "ready", period });
       })
-      .catch((e: CollectionsError) => live && setSearch({ state: "failed", message: failure(e) }));
+      .catch(
+        (e: CollectionsError) =>
+          // A search writes nothing: the refusal says so without "nothing was written".
+          live && setSearch({ state: "failed", message: isLogChanged(e) ? t("log.changed") : failure(e) }),
+      );
     return () => {
       live = false;
     };
@@ -409,7 +413,7 @@ export function CollectionsScreen({
   useEffect(() => {
     if (search.state !== "ready") return;
     const n = ++asked.current;
-    collectionsPreview(choices)
+    collectionsPreview(search.period.search, choices)
       .then((p) => n === asked.current && setPreview(p))
       .catch(() => n === asked.current && setPreview(null));
   }, [choices, search]);
@@ -448,19 +452,22 @@ export function CollectionsScreen({
   };
 
   const suggest = (keys: string[]) => {
-    if (keys.length === 0) return;
-    suggestOffsets(keys).then((found) => {
-      setOffsets((o) => {
-        const next = { ...o };
-        for (const k of keys) if (found[k] !== null && found[k] !== undefined) next[k] = found[k] as number;
-        return next;
-      });
-      setNotes((n) => {
-        const next = { ...n };
-        for (const k of keys) next[k] = found[k] === null ? t("coll.noSuggestion") : "";
-        return next;
-      });
-    });
+    if (keys.length === 0 || !period) return;
+    suggestOffsets(period.search, keys)
+      .then((found) => {
+        setOffsets((o) => {
+          const next = { ...o };
+          for (const k of keys) if (found[k] !== null && found[k] !== undefined) next[k] = found[k] as number;
+          return next;
+        });
+        setNotes((n) => {
+          const next = { ...n };
+          for (const k of keys) next[k] = found[k] === null ? t("coll.noSuggestion") : "";
+          return next;
+        });
+      })
+      // Refused once a newer search replaced this one: nothing to suggest.
+      .catch(() => {});
   };
   // "Suggest for all" leaves ignored cameras and hand-set offsets alone.
   const suggestAll = () => suggest(cameras.filter((c) => !ignored.has(c.key) && !touched.has(c.key)).map((c) => c.key));
@@ -469,7 +476,7 @@ export function CollectionsScreen({
     if (!preview || !period) return;
     const cams = period.cameras;
     setRun({ state: "writing", done: 0, total: preview.total });
-    applyCollections(logRef(log.source), choices)
+    applyCollections(logRef(log.source), period.search, choices)
       .then((result) => setRun({ state: "done", result, choices, cameras: cams }))
       .catch((e: CollectionsError) => {
         setRun({ state: "failed", message: failure(e) });

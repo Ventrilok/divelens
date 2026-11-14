@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { importErrorText } from "./backup";
-import { changeErrorText, isLogChanged, latestOnly, logRef, sourceWatch } from "./diveLog";
+import { changeErrorText, isLogChanged, latestOnly, logRef, logWatch } from "./diveLog";
 import { setLanguage } from "./i18n";
-import type { Settings } from "./types";
+import type { SourceInfo, SourceKind } from "./types";
 
 beforeEach(() => setLanguage("en"));
 
@@ -59,24 +59,31 @@ describe("reads of the dive log", () => {
 });
 
 describe("one dive log at a time", () => {
-  const source = (kind: "macDive" | "subsurface", macDivePath: string | null, subsurfacePath: string | null) =>
-    ({ kind, macDivePath, subsurfacePath }) as Settings["source"];
+  /** A log as the back end reports it after a read: application in use, resolved location. */
+  const read = (kind: SourceKind, path: string, isDefaultPath = false): SourceInfo => ({ kind, path, isDefaultPath });
+  const standardMacDive = "/Users/diver/Library/Application Support/MacDive/MacDive.sqlite";
 
   it("names the log shown by application and location only", () => {
-    expect(logRef({ kind: "subsurface", path: "/Logs/diver.xml", isDefaultPath: false })).toEqual({
+    expect(logRef(read("subsurface", "/Logs/diver.xml"))).toEqual({
       kind: "subsurface",
       path: "/Logs/diver.xml",
     });
   });
 
-  it("starts the flows again when the application or a location changes", () => {
-    const changed = sourceWatch(source("macDive", null, null));
-    expect(changed(source("macDive", null, null)), "same log read again").toBe(false);
-    expect(changed(source("subsurface", null, null)), "other application").toBe(true);
-    expect(changed(source("subsurface", null, "/Logs/diver.xml")), "file chosen").toBe(true);
-    expect(changed(source("subsurface", null, "/Logs/diver.xml")), "Retry").toBe(false);
-    expect(changed(source("subsurface", null, null)), "standard location").toBe(true);
-    expect(changed(source("subsurface", "/Dives/MacDive.sqlite", null)), "import").toBe(true);
+  it("starts the flows again when a read shows another log", () => {
+    const otherLog = logWatch();
+    expect(otherLog(read("macDive", standardMacDive, true)), "first read").toBe(false);
+    expect(otherLog(read("macDive", standardMacDive, true)), "Retry").toBe(false);
+    expect(otherLog(read("subsurface", "/Users/diver/diver.xml", true)), "other application").toBe(true);
+    expect(otherLog(read("subsurface", "/Logs/diver.xml")), "file chosen").toBe(true);
+    expect(otherLog(read("subsurface", "/Logs/diver.xml")), "MacDive location changed").toBe(false);
+    expect(otherLog(read("macDive", "/Logs/diver.xml")), "same location, other application").toBe(true);
+  });
+
+  it("does not start again for the standard location chosen on the standard file", () => {
+    const otherLog = logWatch();
+    otherLog(read("macDive", standardMacDive, false));
+    expect(otherLog(read("macDive", standardMacDive, true))).toBe(false);
   });
 
   it("recognizes the back end's refusal of a log that changed", () => {

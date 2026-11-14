@@ -61,6 +61,9 @@ pub struct Session {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Period {
+    /// Number of the search (see [`Searches`]): the live counts, "Suggest"
+    /// and "Apply" name it.
+    pub search: u64,
     /// First and last day searched, `YYYY-MM-DD`.
     pub from: String,
     pub to: String,
@@ -116,6 +119,43 @@ pub struct Preview {
     pub outside: usize,
     /// Photos of ignored cameras.
     pub ignored: usize,
+}
+
+/// The photo searches of "Create Collections". Each gets a number when it
+/// starts; only the latest one started keeps its session, and every later
+/// step (live counts, "Suggest", "Apply") names the search it works on. A
+/// slower, older search (more dives, more profiles to read) can then never
+/// replace the newer one the screen shows.
+#[derive(Default)]
+pub struct Searches {
+    started: u64,
+    kept: Option<(u64, Session)>,
+}
+
+impl Searches {
+    /// Number of a search starting now.
+    pub fn start(&mut self) -> u64 {
+        self.started += 1;
+        self.started
+    }
+
+    /// Keeps the session of search `number`, unless a newer search started
+    /// since. Returns whether it was kept.
+    pub fn finish(&mut self, number: u64, session: Session) -> bool {
+        if number != self.started {
+            return false;
+        }
+        self.kept = Some((number, session));
+        true
+    }
+
+    /// The session of search `number`; `None` when another one is kept.
+    pub fn get(&self, number: u64) -> Option<&Session> {
+        match &self.kept {
+            Some((kept, session)) if *kept == number => Some(session),
+            _ => None,
+        }
+    }
 }
 
 /// First and last day to search for, `YYYY-MM-DD`.
@@ -225,8 +265,10 @@ impl Session {
         }))
     }
 
-    pub fn period(&self, from: String, to: String) -> Period {
+    /// What the screen shows of search `search`.
+    pub fn period(&self, search: u64, from: String, to: String) -> Period {
         Period {
+            search,
             from,
             to,
             photos: self.photos.len() + self.undated,
@@ -720,6 +762,58 @@ mod tests {
         assert_eq!(offsets.get("GoPro|"), None, "nothing written");
         assert_eq!(offsets.get("iPhone|Z9"), None, "ignored");
         assert_eq!(offsets.get("Nikon|"), Some(60), "other cameras kept");
+    }
+
+    #[test]
+    fn a_slower_older_search_never_replaces_the_newer_one() {
+        use crate::settings::SourceKind;
+        let read = log(SourceKind::Subsurface, "/Logs/diver.xml");
+        let mut searches = Searches::default();
+        // Many dives checked, Next: this search reads every profile, slowly.
+        let older = searches.start();
+        // Back to step 1, only dive B kept, Next: a quicker search.
+        let newer = searches.start();
+        let only_b = |s: Session| {
+            let dives = s.dives.iter().filter(|d| d.id == "B").cloned().collect();
+            let found = vec![photo("3", "2025-12-31T04:40:00", Some("TG-7"), Some("A1"))];
+            Session::new(10, dives, found, &Offsets::default())
+                .read_from(read.clone(), HashMap::new())
+        };
+        assert!(searches.finish(newer, only_b(session(&Offsets::default()))));
+        // The older one finishes last: dropped, the newer one stays.
+        let all = session(&Offsets::default()).read_from(read.clone(), HashMap::new());
+        assert!(!searches.finish(older, all));
+        assert!(
+            searches.get(older).is_none(),
+            "its counts and Apply are refused"
+        );
+        let kept = searches.get(newer).expect("the screen's search");
+        let request = kept
+            .write_request(&read, &choices(0), Units::default())
+            .unwrap()
+            .unwrap();
+        let written: Vec<_> = request
+            .groups
+            .iter()
+            .map(|g| g.collection.as_str())
+            .collect();
+        assert_eq!(
+            written,
+            ["702 - Site 702"],
+            "never the dives unchecked since"
+        );
+    }
+
+    #[test]
+    fn a_newer_search_replaces_the_kept_one() {
+        let mut searches = Searches::default();
+        let first = searches.start();
+        assert!(searches.finish(first, session(&Offsets::default())));
+        let second = searches.start();
+        assert!(searches.get(first).is_some(), "until the next one finishes");
+        assert!(searches.finish(second, session(&Offsets::default())));
+        assert!(searches.get(first).is_none());
+        assert!(searches.get(second).is_some());
     }
 
     #[test]
