@@ -56,9 +56,9 @@ local function current()
     return _G.DiveLensLink
 end
 
+-- The full version, pre-release label included (Info.lua's `display`).
 local function pluginVersion()
-    local v = require "Info".VERSION
-    return string.format("%d.%d.%d", v.major, v.minor, v.revision)
+    return require "Info".VERSION.display
 end
 
 -- Link file -------------------------------------------------------------------

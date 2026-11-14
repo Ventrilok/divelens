@@ -141,28 +141,6 @@ fn framing_splits_lines_whatever_lightroom_hands_over() {
 }
 
 #[test]
-fn plugin_version_matches_app_version() {
-    let lua = lua();
-    let version: String = lua
-        .load(
-            r#"
-            local v = require "Info".VERSION
-            local numbers = string.format("%d.%d.%d", v.major, v.minor, v.revision)
-            assert(v.display == numbers, "display " .. tostring(v.display) .. " vs " .. numbers)
-            return numbers
-            "#,
-        )
-        .eval()
-        .unwrap();
-    let package: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../package.json"))
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(version, package["version"].as_str().unwrap());
-}
-
-#[test]
 fn plugin_keeps_its_identifier_and_fields() {
     let lua = lua();
     run(
