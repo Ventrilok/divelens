@@ -706,6 +706,16 @@ async fn find_collection_photos(
             .filter(|d| d.has_profile)
             .map(|d| (d.id.clone(), source.profile(&d.id)))
             .collect();
+        // Lightroom keeps the photos of its last search only: a search that a
+        // newer one replaced while it read the profiles stops here.
+        if !state
+            .searches
+            .lock()
+            .expect("collections")
+            .is_latest(number)
+        {
+            return Err(CollectionsError::NoPhotos);
+        }
         let (f, t) = (from.clone(), to.clone());
         let found = ask(&app, |reply| Command::FindPhotos {
             from: f,

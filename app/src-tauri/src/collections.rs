@@ -139,6 +139,11 @@ impl Searches {
         self.started
     }
 
+    /// No newer search started since search `number`.
+    pub fn is_latest(&self, number: u64) -> bool {
+        number == self.started
+    }
+
     /// Keeps the session of search `number`, unless a newer search started
     /// since. Returns whether it was kept.
     pub fn finish(&mut self, number: u64, session: Session) -> bool {
@@ -773,6 +778,10 @@ mod tests {
         let older = searches.start();
         // Back to step 1, only dive B kept, Next: a quicker search.
         let newer = searches.start();
+        // Done reading its profiles, the older one does not even ask
+        // Lightroom: the plug-in keeps the photos of the newer one only.
+        assert!(!searches.is_latest(older));
+        assert!(searches.is_latest(newer));
         let only_b = |s: Session| {
             let dives = s.dives.iter().filter(|d| d.id == "B").cloned().collect();
             let found = vec![photo("3", "2025-12-31T04:40:00", Some("TG-7"), Some("A1"))];
