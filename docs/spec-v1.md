@@ -346,6 +346,8 @@ Diffusion **[Décidé]** : un seul texte source, publié à deux endroits :
 
 **Sauvegarde des réglages [2026-11-14]** : F11 étant livré, le guide la décrit dans la section Réglages (contenu, export, import, carnet introuvable, fin de la reprise de l'ancien module après un import).
 
+**Guide des contributeurs [2026-11-14]** : `CONTRIBUTING.md` (en anglais) a une section « Adding a dive application » : ticket « Support a new dive application » d'abord, puis la fiche de l'application, le lecteur copié du lecteur d'exemple, le carnet de référence, les tests communs, la vérification locale `verify_log` (sa sortie est une donnée personnelle, jamais dans le dépôt, un ticket ou une pull request) et la liste de vérification de la pull request ; les étapes restent dans `docs/contributing/reference-log.md`. `CLAUDE.md` importe `CONTRIBUTING.md` au lieu d'en recopier les règles. **[Décidé, 2026-11-14]**
+
 ### F13 — Mises à jour automatiques
 
 **[Décidé : oui]** L'application vérifie s'il existe une nouvelle version de Dive Lens et propose de l'installer.
