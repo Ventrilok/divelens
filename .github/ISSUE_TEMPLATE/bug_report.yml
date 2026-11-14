@@ -1,0 +1,90 @@
+name: Bug report
+description: Something in Dive Lens does not work as expected.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **This repository is public: everyone can read this issue, forever.**
+        >
+        > - Do **not** attach your dive log, your dive-log database (MacDive, Subsurface or other), or the log files `DiveLens.log` and `DiveLens App.log`. They hold personal data: dive sites, places, GPS positions, names, notes and file paths.
+        > - For a log, describe the problem in words, or paste **only the few relevant lines**, with site names, places, people's names and file paths removed or replaced.
+        > - Crop or blur screenshots: dive sites, GPS positions, names, file paths and any photo you do not want public.
+  - type: input
+    id: version
+    attributes:
+      label: Dive Lens version
+      description: Shown at the bottom of the app's Settings screen.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: System
+      options:
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: System version
+      placeholder: "macOS 15.5, Windows 11 24H2…"
+  - type: input
+    id: lightroom
+    attributes:
+      label: Lightroom Classic version
+      placeholder: "14.4"
+  - type: dropdown
+    id: dive-app
+    attributes:
+      label: Dive application
+      description: The one chosen in Settings › Dive log.
+      options:
+        - MacDive
+        - Subsurface (XML file)
+        - Subsurface (git storage or cloud storage)
+        - Not related to the dive log
+    validations:
+      required: true
+  - type: input
+    id: dive-app-version
+    attributes:
+      label: Dive application version
+      placeholder: "MacDive 2.17, Subsurface 6.0…"
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what Dive Lens did instead. Quote any message the app showed.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Create Collections…
+        2. Tick two dives, then Next
+        3. …
+  - type: textarea
+    id: log-lines
+    attributes:
+      label: Relevant log lines (optional)
+      description: |
+        Only the few lines around the problem, from Settings › Diagnostics › Show log. Remove or replace site names, places, people's names and file paths first. Never attach the whole file.
+      render: text
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else (optional)
+      description: Screenshots help, once cropped or blurred.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I have not attached a real dive log, a dive-log database or a Dive Lens log file, and I removed personal details from what I pasted and from screenshots.
+          required: true

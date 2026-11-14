@@ -1,0 +1,68 @@
+name: Support a new dive application
+description: Ask for Dive Lens to read the log of another dive-log application.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Dive Lens reads MacDive and Subsurface today. BlueDive and Submersion are already planned: no need to ask for them again.
+
+        > **This repository is public: everyone can read this issue, forever.**
+        >
+        > - Do **not** attach your dive log, your dive-log database, an export of it, or the log files `DiveLens.log` and `DiveLens App.log`. They hold personal data: dive sites, places, GPS positions, names, notes and file paths.
+        > - When you describe where the application keeps its log, replace your user name and anything personal in the path.
+        > - Crop or blur screenshots: dive sites, GPS positions, names, file paths.
+  - type: input
+    id: app
+    attributes:
+      label: Dive application
+      description: Its name, and a link to its website.
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: Version you use
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      description: Where you use it with Lightroom Classic.
+      multiple: true
+      options:
+        - macOS
+        - Windows
+    validations:
+      required: true
+  - type: textarea
+    id: storage
+    attributes:
+      label: Where it stores its log
+      description: |
+        As far as you know: the folder, the kind of file (a database, an XML file, a folder of files…), and whether it syncs through a cloud service. Replace your user name, for example `~/Library/Application Support/<App>/` or `%APPDATA%\<App>\`.
+    validations:
+      required: true
+  - type: dropdown
+    id: testing
+    attributes:
+      label: Can you help test?
+      description: |
+        A fictional log holds dives you invent in the application for the purpose. An anonymised log has every name, site, place, GPS position, note and buddy replaced. Never share your real log.
+      options:
+        - Yes, I can make a fictional or anonymised log to share
+        - Yes, by trying test versions on my own log, without sharing it
+        - Not at the moment
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else (optional)
+      description: What you would like Dive Lens to get from this application, known limits, links to documentation about its format.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I have not attached a real dive log, a dive-log database or a Dive Lens log file, and I removed personal details from paths and screenshots.
+          required: true
