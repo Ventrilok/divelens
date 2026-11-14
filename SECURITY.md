@@ -9,6 +9,8 @@ Only the latest release of Dive Lens, on the [Releases page](https://github.com/
 | Latest release | Yes |
 | Earlier releases | No |
 
+Until the first release, fixes go to the main branch.
+
 ## Reporting a vulnerability
 
 Report it privately, in one of two ways:

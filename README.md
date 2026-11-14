@@ -35,6 +35,6 @@ Clone with `git clone --recursive`, or run `git submodule update --init` after c
 
 Contributions are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) explains how the project is built, the commands, and the rules for branches, commits and pull requests.
 
-To report a bug or ask for another dive application, use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choose). The repository is public: never attach a real dive log, a dive-log database or the Dive Lens log files. If the log files are needed, you will be asked for them: send them only by e-mail to [divelens@querton.com](mailto:divelens@querton.com).
+To report a bug or ask for another dive application, use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choose). The repository is public: never attach a real dive log, a dive-log database or the Dive Lens log files. If the log files are needed, you will be asked for them: send them only by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number.
 
 To report a security vulnerability or an exposed secret, see [`SECURITY.md`](SECURITY.md): privately, never in a public issue.

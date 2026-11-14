@@ -4,7 +4,7 @@ Thank you for your interest in Dive Lens. It links underwater photos in Adobe Li
 
 Bug reports, requests to support another dive application, fixes and documentation are all welcome.
 
-**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share here a real dive log, a dive-log database, what a tool prints from one, the Dive Lens log files, or an exported Dive Lens settings file. See [Test data: fictional or anonymised](#test-data-fictional-or-anonymised). When the log files, or a log to test a new dive application, are needed, they go privately by e-mail to [divelens@querton.com](mailto:divelens@querton.com): see [Reporting a bug or asking for a dive application](#reporting-a-bug-or-asking-for-a-dive-application).
+**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share a real dive log, a dive-log database, what a tool prints from one, the Dive Lens log files, or an exported Dive Lens settings file here. See [Test data: fictional or anonymised](#test-data-fictional-or-anonymised). When you are asked for the log files, or send a log to test a new dive application, they go privately by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number: see [Reporting a bug or asking for a dive application](#reporting-a-bug-or-asking-for-a-dive-application).
 
 ## Contents
 
@@ -135,7 +135,7 @@ Continuous integration runs the same checks on **macOS and Windows** for every p
 **Pull requests.**
 
 - The title follows the same format as a commit message: pull requests are **squash-merged**, so the title becomes the single commit on `main`.
-- Fill in the pull request template: summary, checks run, and confirmation that the data is fictional.
+- Fill in the pull request template: summary, checks run, and confirmation that the data is fictional or anonymised.
 - **CI must be green on macOS and Windows** before a pull request is merged.
 - Anything a diver would notice (a screen, a text, a behaviour, what gets written on photos or in Lightroom) is a product decision. Say in the pull request whether it is already decided in the specification or proposed by your change.
 - Once a branch is pushed, don't rewrite its history (no force-push): to catch up with `main`, merge it into your branch. The squash merge keeps `main` tidy anyway.
@@ -186,5 +186,5 @@ Use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choos
 
 Both remind you of the privacy rule above:
 
-- For a bug, describe the problem in the issue. If the Dive Lens log files are needed, you will be asked for them: send them by e-mail to [divelens@querton.com](mailto:divelens@querton.com), never in an issue. In the issue itself, paste at most the relevant lines, with site names, places, people's names and file paths removed.
-- For a new dive application, a fictional log, or your real log once anonymised, helps testing. Send it by e-mail to the same address, never attached to the issue. It is used to test the new reader. The repository itself only ever holds fictional or properly anonymised test data, never a real log as it is (see [Test data](#test-data-fictional-or-anonymised)).
+- For a bug, describe the problem in the issue. If the Dive Lens log files are needed, you will be asked for them: send them only by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number, never in an issue. In the issue itself, paste at most the relevant lines, with site names, places, people's names and file paths removed.
+- For a new dive application, a fictional log, or your real log once anonymised, helps testing. Send it by e-mail to the same address, with the issue number, never attached to the issue. It is used to test the new reader. The repository itself only ever holds fictional or properly anonymised test data, never a real log as it is (see [Test data](#test-data-fictional-or-anonymised)).

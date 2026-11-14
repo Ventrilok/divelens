@@ -4,8 +4,9 @@ Every dive-log reader in Dive Lens reads the same ten fictional dives, and
 must give the same values for them. This page describes those dives and the
 traps they hold, and explains how to give a new reader its own copy.
 
-All of it is fictional: invented sites, invented dives. Never add a real dive
-log, or anything copied from one, to the repository.
+All of it is fictional: invented sites, invented dives. Never add to the
+repository a real dive log as it is, or anything copied from one without
+anonymising it.
 
 ## Where things are
 
