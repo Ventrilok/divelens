@@ -7,14 +7,14 @@ body:
       value: |
         > **This repository is public: everyone can read this issue, forever.**
         >
-        > - Do **not** attach your dive log, your dive-log database (MacDive, Subsurface or other), or the log files `DiveLens.log` and `DiveLens App.log`. They hold personal data: dive sites, places, GPS positions, names, notes and file paths.
-        > - For a log, describe the problem in words, or paste **only the few relevant lines**, with site names, places, people's names and file paths removed or replaced.
+        > - Do **not** attach your dive log, your dive-log database (MacDive, Subsurface or other), the log files `DiveLens.log` and `DiveLens App.log`, or an exported settings file ("Dive Lens settings.json"). They hold personal data: dive sites, places, GPS positions, names, notes, file paths with your user name, collection-set names.
+        > - For a log, describe the problem in words, or paste **only the few relevant lines**, with site names, places, people's names and file paths removed or replaced. A settings file can be pasted, if it helps, with its paths and collection-set names replaced.
         > - Crop or blur screenshots: dive sites, GPS positions, names, file paths and any photo you do not want public.
   - type: input
     id: version
     attributes:
       label: Dive Lens version
-      description: Shown at the bottom of the app's Settings screen.
+      description: Shown at the bottom of the app's Settings screen, or in Lightroom's Plug-in Manager.
       placeholder: "0.1.0"
     validations:
       required: true
@@ -58,7 +58,7 @@ body:
     id: what-happened
     attributes:
       label: What happened
-      description: What you did, what you expected, and what Dive Lens did instead. Quote any message the app showed.
+      description: What you did, what you expected, and what Dive Lens did instead. Quote any message the app showed (replace any file path, user name or collection-set name).
     validations:
       required: true
   - type: textarea
@@ -86,5 +86,5 @@ body:
     attributes:
       label: Privacy
       options:
-        - label: I have not attached a real dive log, a dive-log database or a Dive Lens log file, and I removed personal details from what I pasted and from screenshots.
+        - label: I have not attached a real dive log, a dive-log database, a Dive Lens log file or an exported settings file, and I removed personal details from what I pasted and from screenshots.
           required: true

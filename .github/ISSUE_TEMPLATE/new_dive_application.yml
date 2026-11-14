@@ -9,7 +9,7 @@ body:
 
         > **This repository is public: everyone can read this issue, forever.**
         >
-        > - Do **not** attach your dive log, your dive-log database, an export of it, or the log files `DiveLens.log` and `DiveLens App.log`. They hold personal data: dive sites, places, GPS positions, names, notes and file paths.
+        > - Do **not** attach your dive log, your dive-log database, an export of it, the log files `DiveLens.log` and `DiveLens App.log`, or an exported Dive Lens settings file ("Dive Lens settings.json"). They hold personal data: dive sites, places, GPS positions, names, notes, file paths with your user name, collection-set names.
         > - When you describe where the application keeps its log, replace your user name and anything personal in the path.
         > - Crop or blur screenshots: dive sites, GPS positions, names, file paths.
   - type: input
@@ -47,7 +47,7 @@ body:
     attributes:
       label: Can you help test?
       description: |
-        A fictional log holds dives you invent in the application for the purpose. An anonymised log has every name, site, place, GPS position, note and buddy replaced. Never share your real log.
+        A fictional log holds dives you invent in the application for the purpose. An anonymised log has every name, site, place, GPS position, note, buddy and dive-computer serial number replaced; raw dive-computer downloads kept in the log can contain serial numbers too. Never share your real log.
       options:
         - Yes, I can make a fictional or anonymised log to share
         - Yes, by trying test versions on my own log, without sharing it
@@ -64,5 +64,5 @@ body:
     attributes:
       label: Privacy
       options:
-        - label: I have not attached a real dive log, a dive-log database or a Dive Lens log file, and I removed personal details from paths and screenshots.
+        - label: I have not attached a real dive log, a dive-log database, a Dive Lens log file or an exported settings file, and I removed personal details from paths and screenshots.
           required: true

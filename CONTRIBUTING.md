@@ -1,10 +1,10 @@
 # Contributing to Dive Lens
 
-Thank you for your interest in Dive Lens. It links underwater photos in Adobe Lightroom Classic with dive-log data. It is free and open source, under the [GNU General Public License v3.0](LICENSE): by contributing, you agree that your contribution is published under the same licence.
+Thank you for your interest in Dive Lens. It links underwater photos in Adobe Lightroom Classic with dive-log data. It is free and open source, under the [GNU General Public License, version 3 or later](LICENSE) (GPL-3.0-or-later): by contributing, you agree that your contribution is published under GPL-3.0-or-later.
 
 Bug reports, requests to support another dive application, fixes and documentation are all welcome.
 
-**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share a real dive log, a dive-log database, what a tool prints from one, or the Dive Lens log files. See [Test data: fictional only](#test-data-fictional-only).
+**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share a real dive log, a dive-log database, what a tool prints from one, the Dive Lens log files, or an exported Dive Lens settings file. See [Test data: fictional only](#test-data-fictional-only).
 
 ## Contents
 
@@ -18,7 +18,6 @@ Bug reports, requests to support another dive application, fixes and documentati
 - [Secrets](#secrets)
 - [What must never be renamed](#what-must-never-be-renamed)
 - [The libdivecomputer submodule](#the-libdivecomputer-submodule)
-- [Adding a dive application](#adding-a-dive-application)
 - [Reporting a bug or asking for a dive application](#reporting-a-bug-or-asking-for-a-dive-application)
 
 ## How Dive Lens is built
@@ -78,6 +77,7 @@ From the repository root:
 | Formatting check | `cargo fmt --all --check` (`cargo fmt --all` fixes it) |
 | Lint, everything | `cargo clippy --workspace --all-targets -- -D warnings` (needs `app/dist`) |
 | Lint, core only | `cargo clippy -p divelens-core -p libdivecomputer-sys --all-targets -- -D warnings` |
+| Lint, app | `cargo clippy -p divelens --all-targets -- -D warnings` (needs `app/dist`) |
 
 From `app/`:
 
@@ -148,11 +148,12 @@ The repository is public, and git history keeps everything forever: a dive log c
 
 So:
 
-- Test fixtures are **fictional** (invented dives, sites and people) or properly **anonymised**. The existing ones are in `core/fixtures/`.
+- Test fixtures are **fictional** (invented dives, sites and people) or properly **anonymised**. The Subsurface fixtures are in `core/fixtures/`; the MacDive test databases are built by the tests themselves, in `core/src/macdive/tests.rs`.
 - Never commit, attach or paste:
   - a real dive log or dive-log database (MacDive database, Subsurface file or git storage, or any other application's);
   - output produced from a real dive log;
   - the log files `DiveLens.log` and `DiveLens App.log`;
+  - an exported settings file ("Dive Lens settings.json" or "Réglages Dive Lens.json"): it holds the full paths of your dive logs, with your user name, and your collection-set names. If it really helps, paste its content with those replaced;
   - screenshots showing real dive sites, GPS positions, names or file paths (crop or blur them).
 - When something only shows up with your own log, check it locally and describe the result in words (for example "dives with two computers lose their profile"), without the data itself.
 
@@ -168,22 +169,19 @@ People already have Lightroom catalogs written by earlier versions of Dive Lens.
 
 - the plug-in identifier `com.querton.divelens`;
 - the existing metadata field ids: `DiveId`, `StartDate`, `EndDate`, `Duration`, `MaxDepth`, `TempHigh`, `TempLow`, `Rating`. New fields are added, never renamed; only their displayed labels may change;
-- the collection set **"Dive Lens"** and collection names of the form **"&lt;dive number&gt; - &lt;site&gt;"**;
-- the app bundle identifier `com.querton.divelens.desktop`, which decides where the app's settings are stored.
+- the collection set **"Dive Lens"** and collection names of the form **"&lt;dive number&gt; - &lt;site&gt;"**.
+
+The app bundle identifier `com.querton.divelens.desktop` never changes either, for a different reason: it decides where the app keeps its settings, so changing it would leave every user's settings behind.
 
 ## The libdivecomputer submodule
 
 `third_party/libdivecomputer` is pinned to a validated commit. Do not move it in a pull request: if you think it needs an update, open an issue explaining why. libdivecomputer is LGPL 2.1; Dive Lens uses only its parsing code.
-
-## Adding a dive application
-
-A guide for adding a reader for another dive-log application is coming in a later change. Until then, open a "Support a new dive application" issue to discuss it first.
 
 ## Reporting a bug or asking for a dive application
 
 Use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choose):
 
 - **Bug report**: something does not work as expected.
-- **Support a new dive application**: you would like Dive Lens to read another dive log.
+- **Support a new dive application**: you would like Dive Lens to read another dive log. If you want to write that reader yourself, open this issue first so the approach can be discussed.
 
-Both remind you of the privacy rule above: describe the problem, and if a log helps, paste only the relevant lines with site names, places, names and file paths removed.
+Both remind you of the privacy rule above: describe the problem, and if a log helps, paste only the relevant lines with site names, places, people's names and file paths removed.
