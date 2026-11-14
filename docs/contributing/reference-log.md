@@ -14,6 +14,7 @@ anonymising it.
 |---|---|
 | Expected values, written once for every reader | `core/src/conformance/reference.rs` |
 | Common tests, run against each reader | `core/src/conformance.rs` |
+| Each application's description, and the list of applications | `core/src/<application>/app.rs`, `core/src/apps.rs` |
 | MacDive copy (built from SQL when the tests run) | `core/src/macdive/tests.rs` |
 | Subsurface copy, XML file | `core/fixtures/subsurface/fictional.xml` |
 | Subsurface copy, git storage (turned into a repository by the tests) | `core/fixtures/subsurface/git-tree/` |
@@ -209,38 +210,64 @@ position at all.
 
 ## Adding a reader
 
-1. Write the reader in `core/src/<application>.rs`: it implements
+An application is a reader plus its description. The description
+(`DiveApp`, in `core/src/apps.rs`) is everything the app needs besides the
+reader: the name written on photos, the systems it runs on, its standard
+location, whether the diver chooses a file or a folder, its unit
+preferences, its clock-offsets file, and every text the screens show for
+it, in English and French. The app builds Settings, the file chooser and
+the dive-log error screen from it; nothing else in the app or in the
+screens names an application. Before starting, open a "Support a new dive
+application" issue so that the approach can be discussed.
+
+1. Start from a copy of the example reader: `core/src/skeleton.rs`,
+   `core/src/skeleton/app.rs` and `core/src/skeleton/tests.rs` become
+   `core/src/<application>.rs`, `core/src/<application>/app.rs` and
+   `core/src/<application>/tests.rs`. Each place to change is marked
+   `ADAPT:`. The example reads a SQLite log, opened by the shared
+   `crate::sqlite::open_read_only`; for files and folders, see the
+   Subsurface reader.
+2. Write the reader in `core/src/<application>.rs`: it implements
    `DiveSource` (`core/src/model.rs`) and has an `open(path)` that reads the
-   log without writing anything. Start from a copy of the example reader,
-   `core/src/skeleton.rs` and `core/src/skeleton/tests.rs`: it reads a
-   SQLite log, opened by the shared `crate::sqlite::open_read_only`, and
-   marks with `ADAPT:` each place to change. Declare the module in
-   `core/src/lib.rs` as `pub mod <application>;` (the example reader is
-   declared `#[cfg(test)]`: only the tests build it).
-2. Write the reference log in the application's own format, from the tables
+   log without writing anything. Its module holds, besides the reader:
+
+   ```rust
+   mod app;
+
+   pub use app::APP;
+
+   #[cfg(test)]
+   pub(crate) mod tests;
+   ```
+
+   and `core/src/lib.rs` declares it as `pub mod <application>;` (the
+   example reader is declared `#[cfg(test)]`: only the tests build it).
+3. Write the reference log in the application's own format, from the tables
    above, shaped exactly like what the application itself writes. Files go
    in `core/fixtures/<application>/`, but files ending `.sqlite` or `.ssrf`
    are ignored by git there, as a guard against real logs: build a database
    from SQL in the tests, as MacDive's copy is, and name a Subsurface-style
    XML copy `.xml`. In the reader's tests, add a function that writes the
-   copy into a folder and returns the path to open, and declare the tests
-   module `#[cfg(test)] pub(crate) mod tests;` so that the common tests can
-   reach it.
-3. Add a test at the bottom of `core/src/conformance.rs` calling `check`
-   with that function, the reader's `open`, the capabilities the reader must
-   declare, and whether the application marks dives invalid.
-4. Run `cargo test -p divelens-core` until it passes. A failure lists every
-   value that differs from this page.
-5. Register the application in the tool below
-   (`core/examples/verify_log.rs`): its name in `APPS`, how to open it in
-   `open`, and how to recognise its logs in `guess`.
-6. Check the reader against a real log on your own computer, with that
-   tool.
-
-Offering the application in the app's Settings goes through the
-application registry, which is being added; before starting a reader, open
-a "Support a new dive application" issue so that the approach can be
-discussed.
+   copy into a folder and returns the path to open, and a `conformance()`
+   function giving the application's runs of the common tests: one per way
+   the log can be stored, each with that function, the capabilities the
+   reader must declare, and whether the application marks dives invalid.
+4. Describe the application in `core/src/<application>/app.rs`: a
+   `pub static APP: DiveApp` with its id (camelCase, kept by settings files
+   and never changed), its name, its texts in both languages, and its runs
+   (`conformance: super::tests::conformance`). In the tests' build the
+   description must have its runs: the compiler refuses one without them.
+5. Add `APP` to `ALL` in `core/src/apps.rs`. Its place in the list is the
+   order of Settings, and the first application available on a system is
+   the default there.
+6. Run `cargo test -p divelens-core` until it passes. The common tests run
+   every registered application, opened as the app opens it; a failure
+   lists every value that differs from this page. Other tests check the
+   description is complete: every text present in English and in French,
+   none empty, the same placeholders in both languages, an id, name and
+   offsets file no other application has.
+7. Check the reader against a real log on your own computer, with the tool
+   below: it reads every registered application, nothing to add there.
 
 ## Checking a reader against a real log
 
@@ -248,9 +275,12 @@ discussed.
 cargo run --release -p divelens-core --example verify_log -- [--app <application>] <log> [dive number]
 ```
 
-`<log>` is the MacDive database, a Subsurface XML file or a Subsurface git
-storage folder; without `--app`, a folder or an `.xml` or `.ssrf` file is
-read as Subsurface, anything else as MacDive. The tool prints the number of
+`<log>` is the log of any registered application: the MacDive database, a
+Subsurface XML file or a Subsurface git storage folder. `--app` takes the
+application's name; without it, a folder goes to the first application whose
+log can be a folder (Subsurface), a file to the first one whose files have its
+extension (`.xml` or `.ssrf`: Subsurface; `.sqlite`: MacDive), anything else
+to the first registered application (MacDive). The tool prints the number of
 dives and sites, decodes every profile (listing those that fail), reads the
 log twice to compare identifiers, reports what breaks the rules above, and
 says whether reading changed, created or removed any file of the log (sizes
