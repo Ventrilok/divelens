@@ -58,7 +58,16 @@ Application Dive Lens (Rust + Tauri)
   - **Paquet [Proposé, 2026-11-13]** : un zip par système, `DiveLens-<version>-macOS.zip` (application universelle, Intel et Apple Silicon) et `DiveLens-<version>-Windows.zip`. Chacun contient le dossier `DiveLens.lrplugin`, le nom de l'ancien plugin, avec l'application dedans et la licence. Il est fabriqué automatiquement quand une étiquette de version (ex. `v2.0.0`) est poussée et déposé en **brouillon** sur GitHub Releases : le propriétaire le relit et le publie à la main.
   - Windows : l'application a besoin de WebView2, présent sur Windows 11 et sur la plupart des Windows 10.
 - **Aucune fenêtre Lua.** Le gestionnaire de modules externes de Lightroom affichera au minimum la version et un bouton pour ouvrir Dive Lens (Lightroom impose cette entrée). **[Proposé]**
-- **Liaison** : l'application suit en direct la sélection de photos dans Lightroom. Rien n'est écrit dans le catalogue avant que l'utilisateur clique sur **Appliquer** ; tout est alors écrit en **une seule fois**, donc annulable en une seule étape dans Lightroom. **[Décidé]**
+- **Liaison** : l'application suit en direct la sélection de photos dans Lightroom. Rien n'est écrit dans le catalogue avant que l'utilisateur clique sur **Appliquer** ; ce qu'il écrit est alors **annulable en une seule étape** dans Lightroom. **[Décidé]**
+  - **GPS et altitude dans une seconde écriture [Décidé, 2026-11-14]** : « Appliquer » (F5, F8) écrit d'abord, pour toutes les photos, les champs Dive Lens, le pays, la ville, le lieu et les collections ; puis, aussitôt après et sous le même nom d'annulation, une seconde écriture pose le GPS et l'altitude (écriture comme effacement, y compris l'altitude effacée en rattachant une photo à une autre plongée, F8) pour toutes les photos. Sans GPS ni altitude à écrire, il n'y a pas de seconde écriture. Raison : Lightroom ne défait pas le GPS et l'altitude écrits dans la même écriture qu'un champ de lieu texte (section 9). Sur Mac, les deux écritures forment une seule étape d'annulation : un « Annuler » défait tout, GPS et altitude compris.
+  - Rien entre les deux écritures, et rien pendant la seconde, ne rend la main à Lightroom : Mac ne les regroupe que s'il n'y a eu aucune action de l'utilisateur entre elles. La progression affichée s'arrête donc à la fin de la première écriture ; la seconde, courte, n'en donne pas.
+  - **Windows** : ce regroupement en une seule étape n'est documenté par Adobe que pour macOS. Les testeurs Windows vérifient qu'un seul « Annuler » défait tout, GPS et altitude compris.
+  - Si la seconde écriture n'a pas lieu (Lightroom occupé, erreur) alors que la première a réussi, les photos ont leurs données de plongée et leur lieu, mais pas leur GPS ni leur altitude. Ce n'est pas un succès : le journal du plugin le note et l'application l'affiche **[Proposé, 2026-11-14]**, en nommant l'élément du menu Annuler tel que Lightroom le montre :
+    - Lightroom occupé : « Lightroom n'a pas laissé Dive Lens écrire le GPS et l'altitude ; tout le reste a été écrit. Choisissez Édition › Annuler Tagger la sélection (Dive Lens) dans Lightroom, puis appliquez à nouveau. » (EN « Lightroom did not let Dive Lens write the GPS and altitude; everything else was written. Choose Edit › Undo Tag Selection (Dive Lens) in Lightroom, then apply again. ») ;
+    - erreur : « Tout a été écrit sauf le GPS et l'altitude : {erreur}. Choisissez Édition › Annuler Tagger la sélection (Dive Lens) dans Lightroom, puis appliquez à nouveau. » (EN « Everything was written except the GPS and altitude: {error}. Choose Edit › Undo Tag Selection (Dive Lens) in Lightroom, then apply again. ») ;
+    - pour « Créer les collections », les mêmes textes avec « Créer les collections (Dive Lens) » (EN « Create Collections (Dive Lens) »). Les décalages d'horloge sont mémorisés comme après une écriture complète : ils sont déjà sur les photos.
+    - Annuler d'abord : appliquer à nouveau sans annuler ne referait pas l'effacement de l'altitude d'une autre plongée (F8), la photo portant déjà la nouvelle plongée.
+    - Le nom de l'élément suit la langue de Lightroom, le texte celle de l'application : quand elles diffèrent, le nom cité ne correspond pas exactement au menu. Laissé tel quel **[Proposé, 2026-11-14]**.
 - Si la liaison est perdue (Lightroom fermé, plugin rechargé), l'application l'indique clairement et désactive « Appliquer ». **[Proposé]**
 - Choisir un menu alors que l'application est déjà ouverte ramène sa fenêtre au premier plan, sur l'écran demandé. **[Proposé]**
 
@@ -191,7 +200,7 @@ Parcours :
    - **« Suggérer pour tous » [Décidé]** : calcule le décalage de chaque appareil d'un coup, sans toucher aux appareils ignorés ni aux décalages réglés à la main.
 4. **« Inclure les photos prises en surface »** (la marge) : « jusqu'à N min avant et après la plongée », optionnel, **par défaut 0**. Elle sert seulement à remplir les collections. **[Décidé]**
 5. **Retour en direct** pendant le réglage : nombre de photos trouvées **pour chaque plongée** et au total. Une plongée à 0 photo est mise en évidence, car c'est souvent le signe d'un changement d'horloge en cours de route. **[Décidé]**
-6. **Appliquer** : en une seule écriture,
+6. **Appliquer** : en une seule étape d'annulation (le GPS et l'altitude dans une seconde écriture, juste après la première, section 3),
    - chaque plongée qui a des photos obtient sa collection « numéro – site », à l'emplacement choisi dans les réglages, « Dive Lens » par défaut (F2), créée si besoin. L'écran rappelle cet emplacement avant « Appliquer » ;
    - les photos reçoivent les infos de plongée et le lieu (section 4) ;
    - les photos reçoivent les données par photo (F6) et le décalage appliqué.
@@ -209,7 +218,7 @@ Règles :
 
 Critères d'acceptation :
 - Le compteur se met à jour pendant que le décalage ou la marge change, sans clic supplémentaire.
-- Un « Annuler » dans Lightroom défait l'intégralité d'une application, sauf le GPS, comme pour F8, et sauf l'altitude quand la profondeur y est copiée (F7) (constaté le 2026-11-12).
+- Un « Annuler » dans Lightroom défait l'intégralité d'une application, GPS et altitude compris, comme pour F8 (section 3). Sur Windows, à vérifier par les testeurs.
 - Avec des photos prises à l'heure de France et des plongées aux Maldives (+4 h), « Suggérer » propose +4 h.
 
 ### F6 — Données par photo
@@ -234,11 +243,11 @@ Critères d'acceptation :
   - seul « Créer les collections » écrit l'altitude : « Tagger la sélection » n'écrit pas de profondeur par photo. Il peut seulement **effacer** l'altitude tirée de la profondeur d'une autre plongée, quand il rattache la photo à une nouvelle plongée (F8) **[Décidé, 2026-11-14]** ;
   - une photo sans profondeur (prise dans la marge, plongée sans courbe) garde l'altitude qu'elle a déjà ;
   - désactiver l'option plus tard n'efface pas les altitudes déjà copiées ;
-  - « Annuler » dans Lightroom **ne défait pas l'altitude**, comme pour le GPS (constaté le 2026-11-12). Accepté ; l'explication de l'option et le rappel après écriture le disent.
+  - « Annuler » dans Lightroom **défait l'altitude** avec le reste, GPS compris : elle est écrite dans une seconde écriture, juste après le reste (section 3) **[Décidé, 2026-11-14]**. Le rappel après écriture le dit : « Pour tout défaire : Édition › Annuler dans Lightroom, en une seule fois, GPS et altitude compris. » (EN « To undo: Edit › Undo in Lightroom, in one step, GPS and altitude included. ») **[Proposé, 2026-11-14]**
 - L'option est accompagnée d'une explication, qui dit trois choses :
   - le champ Dive Lens n'existe que dans Lightroom ;
   - l'altitude suit la photo exportée et se voit dans les autres logiciels ;
-  - la copie remplace une altitude GPS déjà présente.
+  - la copie remplace une altitude GPS déjà présente ; « Annuler » dans Lightroom la remet : « La copie remplace une altitude GPS déjà présente sur la photo ; Édition › Annuler dans Lightroom la remet. Les photos sans profondeur gardent la leur. » (EN « The copy replaces a GPS altitude already on the photo; Edit › Undo in Lightroom brings it back. Photos without a depth keep theirs. ») **[Proposé, 2026-11-14]**
 
 ### F8 — Tagger la sélection
 
@@ -260,7 +269,7 @@ Ce qui est écrit **[Décidé : comportement actuel en V1]** :
 - Données de plongée : n° de plongée, début, fin, durée, profondeur max, températures, note, et l'application source (section 7). Pas de données par photo, pas de collection. Celles d'une autre plongée déjà sur la photo sont effacées (voir « Photo déjà rattachée à une autre plongée » plus bas).
 - Lieu : pays, ville, lieu, GPS (section 4).
 - Évolution envisagée : calculer les données par photo et alimenter la collection de la plongée.
-- Annulation : « Annuler » dans Lightroom défait l'écriture, **sauf le GPS**, que Lightroom ne remet pas (constaté le 2026-11-12). Accepté tel quel. **[Décidé]**
+- Annulation : un « Annuler » dans Lightroom défait toute l'écriture, **GPS et altitude compris** : ils sont écrits dans une seconde écriture, juste après le reste (section 3). **[Décidé, 2026-11-14]** (Avant : « sauf le GPS », constaté le 2026-11-12 quand tout était écrit en une seule écriture, voir section 9.)
 
 Comportements **[Décidé, 2026-11-12]** :
 - Une valeur absente de la plongée choisie (température, note, profondeur) **efface** l'ancienne valeur Dive Lens de la photo : les champs décrivent une seule plongée.
@@ -270,18 +279,18 @@ Comportements **[Décidé, 2026-11-12]** :
 - Liste : un clic sur une ligne choisit la plongée ; les flèches ne font que parcourir (la fiche suit la ligne parcourue).
 - « Annuler » remet l'écran à zéro, sans rien garder (il n'y a plus d'écran Plongées où revenir). **[Proposé, 2026-11-13]**
 - « Appliquer » écrit les données du carnet affiché ; si le carnet réglé a changé entre-temps, rien n'est écrit et il faut recommencer. Changer de carnet dans Réglages remet l'écran à zéro (F2). **[Décidé, 2026-11-14]**
-- Après l'écriture : bandeau avec le nombre de photos taguées et le rappel qu'« Annuler » dans Lightroom défait tout en une fois, sauf le GPS (et l'altitude quand une altitude a été effacée, voir plus bas).
+- Après l'écriture : bandeau avec le nombre de photos taguées et le rappel qu'« Annuler » dans Lightroom défait tout en une fois : « Pour annuler : Édition › Annuler dans Lightroom, en une seule fois, GPS et altitude compris. » (EN « To undo: Edit › Undo in Lightroom, in one step, GPS and altitude included. ») **[Proposé, 2026-11-14]**
 
 Photo déjà rattachée à une autre plongée **[Décidé, 2026-11-14]** :
 - Quand « Données de plongée » est cochée et qu'une photo porte déjà une **autre** plongée, ses valeurs par photo sont effacées : profondeur, température, temps écoulé et décalage d'horloge (F6, section 7). Elles décrivaient l'ancienne plongée.
-- L'altitude GPS n'est effacée que si elle vaut **exactement** celle que Dive Lens a tirée de l'ancienne profondeur (F7), au décimètre près. Sinon elle reste : ce champ Lightroom est partagé avec l'appareil photo et l'utilisateur, et « Annuler » ne le remet pas. Dans le doute, on la garde.
+- L'altitude GPS n'est effacée que si elle vaut **exactement** celle que Dive Lens a tirée de l'ancienne profondeur (F7), au décimètre près. Sinon elle reste : ce champ Lightroom est partagé avec l'appareil photo et l'utilisateur. Dans le doute, on la garde.
   - En pieds, la profondeur écrite est arrondie au pied : l'altitude tirée de la profondeur exacte ne se retrouve souvent pas, et elle est alors gardée.
   - Profondeur absente ou illisible : l'altitude est gardée.
 - **Même plongée** : application source, début et n° de plongée identiques tous les trois. Un n° vide des deux côtés compte comme identique. Rien d'autre n'est alors touché.
-  - Le début est enregistré sur la photo en texte, au format de date du système. Si ce format change entre deux écritures (changement de région, catalogue ouvert sur Mac puis sur Windows), la même plongée passe pour une autre : ses valeurs par photo sont effacées, ainsi que l'altitude GPS tirée de la profondeur, dans les conditions ci-dessus, et « Annuler » dans Lightroom ne remet pas cette altitude. Accepté pour la V1. **[Décidé, 2026-11-14]**
+  - Le début est enregistré sur la photo en texte, au format de date du système. Si ce format change entre deux écritures (changement de région, catalogue ouvert sur Mac puis sur Windows), la même plongée passe pour une autre : ses valeurs par photo sont effacées, ainsi que l'altitude GPS tirée de la profondeur, dans les conditions ci-dessus (« Annuler » dans Lightroom les remet). Accepté pour la V1. **[Décidé, 2026-11-14]**
 - Une photo sans données de plongée n'a rien à effacer. Le lieu seul (« Données de plongée » décochée) ne touche à rien d'autre.
-- La vérification se fait au moment de l'écriture, d'après la plongée que porte la photo, dans la même écriture (une seule étape d'annulation).
-- « Annuler » dans Lightroom remet les valeurs par photo effacées, pas l'altitude. En application de F7 (le rappel après écriture le dit), quand l'écriture a effacé au moins une altitude, le bandeau reprend le rappel de « Créer les collections » avec altitude : « sauf le GPS et l'altitude ».
+- La vérification se fait au moment de l'écriture, d'après la plongée que porte la photo, dans la première écriture ; l'altitude est effacée dans la seconde, avec le GPS (section 3). Le tout reste une seule étape d'annulation.
+- « Annuler » dans Lightroom remet les valeurs par photo effacées et l'altitude. Le bandeau après écriture a un seul rappel, qu'une altitude ait été effacée ou non (voir plus haut) ; le journal du plugin note sur combien de photos les valeurs d'une autre plongée et l'altitude ont été effacées. **[Décidé, 2026-11-14]**
 - Si Lightroom refuse d'effacer une altitude, elle reste et le reste de l'écriture se fait.
 - La photo reste dans la collection de l'ancienne plongée : c'est à l'utilisateur de la déplacer. Pas de changement de collection automatique.
 - Détails **[Proposé]** : « sans données de plongée » = ni source, ni début, ni n° ; un champ vidé à la main dans Lightroom compte comme vide ; une profondeur sans unité (format d'avant les unités) se lit en mètres.
@@ -462,7 +471,14 @@ BlueDive et Submersion, après examen de leur stockage.
 
 - **Ordinateurs anciens sans téléchargement brut** dans MacDive : message à afficher (« pas de courbe disponible pour cet ordinateur »), à distinguer d'une plongée saisie à la main.
 - **Ajout de champs** — vérifié dans le kit Lightroom 16 (2026-11-12) : ajouter des champs ne demande aucune migration ; les valeurs existantes sont conservées tant que la définition des 8 champs existants ne change pas. Le numéro de version par champ ne sert qu'à un changement incompatible. La version globale du schéma passe de 1 à 2, comme le kit le recommande à chaque évolution, sans routine de mise à jour. Preuve finale : test dans Lightroom (anciennes valeurs toujours visibles après rechargement).
-- **Écriture de l'altitude** — vérifié (2026-11-12) : un plugin peut écrire l'altitude GPS (nombre, en mètres). « Annuler » ne la remet pas, comme le GPS (constaté le 2026-11-12). Sans effet tant que l'option est désactivée.
+- **Écriture de l'altitude** — vérifié (2026-11-12) : un plugin peut écrire l'altitude GPS (nombre, en mètres). « Annuler » la remet, avec le GPS, depuis qu'ils sont écrits à part (voir ci-dessous). Sans effet tant que l'option est désactivée.
+- **Annulation du GPS et de l'altitude** — **[Constaté, 2026-11-14]**, dans Lightroom Classic sur Mac, avec un plugin de test minimal :
+  - le GPS et l'altitude écrits par un plugin **dans la même écriture qu'un champ de lieu texte** (pays, ville, lieu), dans n'importe quel ordre, ne sont **pas** défaits par « Annuler » ; les champs texte et les champs du plugin, eux, le sont ;
+  - écrits seuls (le GPS, l'altitude, ou les deux sans champ texte), ils sont défaits ;
+  - écrits dans une **seconde écriture**, juste après celle des champs texte, sans action de l'utilisateur entre les deux, ils sont défaits : sur Mac, les deux écritures forment **une seule étape d'annulation**, au nom de la dernière (le kit Lightroom documente ce regroupement pour macOS) ;
+  - un GPS saisi à la main dans Lightroom est défait normalement.
+  - Le constat du 2026-11-12 (« Annuler ne remet pas le GPS ni l'altitude ») venait de là : Dive Lens écrivait tout en une seule écriture. D'où le GPS et l'altitude dans une seconde écriture (section 3, **[Décidé, 2026-11-14]**).
+  - **Windows** : le regroupement des deux écritures en une seule étape n'est pas documenté. À vérifier par les testeurs Windows : un seul « Annuler » doit tout défaire, GPS et altitude compris.
 - **Recherche des photos par date** — constaté (2026-11-12) : la recherche du catalogue par date de prise de vue ne fonctionne qu'au jour près, et sur l'heure de prise de vue modifiée dans Lightroom, pas l'heure d'origine. Le plugin cherche donc par jours élargis, puis l'application filtre sur l'heure d'origine.
 - **Filtrer par profondeur** : les champs de plugin sont du texte. Un filtre « photos sous 30 m » n'est probablement pas possible dans Lightroom ; seuls la recherche et la navigation par valeur le sont. À vérifier avant de promettre quoi que ce soit.
 - **Températures nulles ou négatives** : le plugin actuel ne les écrit pas (plongée sous glace). **[Proposé : corrigé en V1]**
@@ -481,6 +497,7 @@ Aucune question ouverte à ce stade.
 
 ### Tranché
 
+- Annulation du GPS et de l'altitude (2026-11-14) : écrits dans une seconde écriture, juste après le reste, pour qu'un seul « Annuler » défasse tout (section 3, section 9).
 - Coordonnées GPS (2026-11-13) : affichées comme dans Lightroom (degrés, minutes, secondes), saisie toujours en décimal (F4).
 - Carte du site (2026-11-13) : carte en ligne sous le GPS de la fiche, plutôt qu'une carte hors ligne grossière (F4).
 - Nom (2026-11-13) : « Dive Lens » en deux mots partout où il s'affiche (application, textes dans Lightroom, nom de l'application installée, documentation). Les identifiants techniques et les noms des fichiers journaux restent « DiveLens ».

@@ -37,7 +37,7 @@ local Json = require "Json"
 local Log = require "Log"
 local Tagging = require "Tagging"
 
-local PROTOCOL = 4
+local PROTOCOL = 5
 local APP_ID = "com.querton.divelens.desktop" -- the app's bundle identifier
 local LINK_FILE = "lightroom-link.json"
 local TICK = 0.1           -- seconds between two passes of the link task
@@ -264,27 +264,78 @@ local function write(photo, changes)
     for _, change in ipairs(changes) do writeChange(photo, change) end
 end
 
--- Clears what a photo kept from another dive (Tagging.retagChanges, which
--- lists only values the photo has). Returns whether something was cleared,
--- and whether the GPS altitude was.
-local function clearOtherDive(photo, extra)
-    local cleared, altitude = false, false
-    for _, change in ipairs(extra) do
-        if change.kind == "raw" and change.field == "gpsAltitude" then
-            -- When in doubt, leave it: an altitude Lightroom refuses to clear
-            -- stays, and the rest of the write goes on.
+-- Writes a photo's GPS position and altitude (the second list of
+-- Tagging.splitGps), inside the second catalog write. Returns whether its
+-- GPS altitude was cleared (a photo that carried another dive,
+-- Tagging.retagChanges), and whether Lightroom refused to clear it. When in
+-- doubt, the altitude is left: one Lightroom refuses to clear stays, and
+-- the rest of the write goes on.
+local function writeGps(photo, changes)
+    local cleared, refused = false, false
+    for _, change in ipairs(changes) do
+        if change.field == "gpsAltitude" and change.value == nil then
             local ok, err = LrTasks.pcall(writeChange, photo, change)
             if ok then
-                cleared, altitude = true, true
+                cleared = true
             else
+                refused = true
                 Log.warn("GPS altitude kept on photo %s: %s", tostring(photo.localIdentifier), tostring(err))
             end
         else
             writeChange(photo, change)
-            cleared = true
         end
     end
-    return cleared, altitude
+    return cleared, refused
+end
+
+-- Tells the app how far the first write is, when `progress`
+-- (Tagging.progress) has something new to tell after one more photo.
+local function advance(s, id, total, progress)
+    local done = progress.advance()
+    if done then
+        send(s, { type = "progress", id = id, done = done, total = total })
+        LrTasks.yield()
+    end
+end
+
+-- The second catalog write of an "Apply": the GPS positions and altitudes,
+-- `later` = { { photo = photo, changes = GPS changes }, ... }, under the
+-- same Undo name as the first. Lightroom's Undo does not revert them when
+-- they are written with a location text field (spec section 3). On macOS,
+-- writes made in a row "without any intervening user interaction" form one
+-- Undo step, so one Undo reverts both: the caller starts it right after the
+-- first, sending and yielding nothing in between, and it never yields or
+-- sends either (no progress), so Lightroom gets no chance to handle a click
+-- between or during the two writes.
+-- Returns { written = true, cleared = n, refused = n } (altitudes cleared,
+-- and altitudes Lightroom refused to clear), or { written = false, error =
+-- message, or nil when Lightroom kept the catalog busy }.
+local function writeGpsLater(catalog, undoName, later)
+    local cleared, refused = 0, 0
+    if #later == 0 then return { written = true, cleared = 0, refused = 0 } end
+    local ok, status = LrTasks.pcall(function()
+        return catalog:withWriteAccessDo(undoName, function()
+            for _, item in ipairs(later) do
+                local c, r = writeGps(item.photo, item.changes)
+                if c then cleared = cleared + 1 end
+                if r then refused = refused + 1 end
+            end
+        end, { timeout = WRITE_TIMEOUT })
+    end)
+    if not ok then return { written = false, error = tostring(status) } end
+    if status ~= "executed" then return { written = false } end
+    return { written = true, cleared = cleared, refused = refused }
+end
+
+local function logSecondWrite(later, second)
+    if #later == 0 then
+        Log.info("no GPS or altitude to write: no second write")
+    elseif second.refused == 0 then
+        Log.info("GPS and altitude written on %d photos, in a second write", #later)
+    else
+        Log.info("second write on %d photos: GPS and altitude written on %d, altitude left on %d (Lightroom refused to clear it)",
+            #later, #later - second.refused, second.refused)
+    end
 end
 
 -- What the photos carry before a dive is written on them, for
@@ -303,9 +354,11 @@ local function photosBefore(catalog, photos)
 end
 
 -- Tags the photos selected in Lightroom now (not when the app last looked),
--- in one catalog write, so one Undo reverts it. A photo that carried another
--- dive also loses that dive's own values (Tagging.retagChanges), read from
--- the photo inside the same write. Always answers the app.
+-- in two catalog writes under one Undo name, the GPS and altitude in the
+-- second (Tagging.splitGps, writeGpsLater), so one Undo reverts it all. A
+-- photo that carried another dive also loses that dive's own values
+-- (Tagging.retagChanges), read from the photo inside the first write; its
+-- altitude, when cleared, in the second. Always answers the app.
 local function applyTags(s, message)
     local id = message.id
     local function fail(reason, detail)
@@ -319,29 +372,37 @@ local function applyTags(s, message)
     if not catalog:getTargetPhoto() then return fail("noSelection") end
     local photos = catalog:getTargetPhotos()
     local total = #photos
-    local cleared, altitudes = 0, 0
+    local undoName = LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)"
+    local progress = Tagging.progress(total, PROGRESS_EVERY)
+    local cleared, later = 0, {}
     local ok, status = LrTasks.pcall(function()
-        return catalog:withWriteAccessDo(LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)", function()
+        return catalog:withWriteAccessDo(undoName, function()
             local before = Tagging.writesDive(changes) and photosBefore(catalog, photos) or {}
-            for i, photo in ipairs(photos) do
+            for _, photo in ipairs(photos) do
                 local extra = before[photo] and Tagging.retagChanges(before[photo], changes) or {}
-                write(photo, changes)
-                local any, altitude = clearOtherDive(photo, extra)
-                if any then cleared = cleared + 1 end
-                if altitude then altitudes = altitudes + 1 end
-                if i % PROGRESS_EVERY == 0 and i < total then
-                    send(s, { type = "progress", id = id, done = i, total = total })
-                    LrTasks.yield()
-                end
+                -- An altitude to clear always comes with a depth to clear.
+                if #extra > 0 then cleared = cleared + 1 end
+                local now, afterwards = Tagging.splitGps(changes, extra)
+                write(photo, now)
+                if #afterwards > 0 then later[#later + 1] = { photo = photo, changes = afterwards } end
+                advance(s, id, total, progress)
             end
         end, { timeout = WRITE_TIMEOUT })
     end)
-    s.lastHeard = LrDate.currentTime() -- the app's pings waited during the write
+    -- Straight on to the second write: nothing sent or yielded in between.
+    local second = ok and status == "executed" and writeGpsLater(catalog, undoName, later)
+    s.lastHeard = LrDate.currentTime() -- the app's pings waited during the writes
     if not ok then return fail("error", tostring(status)) end
     if status ~= "executed" then return fail("busy") end
-    Log.info("tagged %d photos; another dive's values cleared on %d (GPS altitude on %d)", total, cleared, altitudes)
-    -- altitudesCleared: the app's Undo reminder then mentions the altitude.
-    send(s, { type = "applied", id = id, count = total, altitudesCleared = altitudes })
+    if not second.written then
+        -- The first write stays: dive data and location text, without GPS.
+        Log.warn("tagged %d photos but not the GPS and altitude of %d: %s", total, #later, second.error or "Lightroom busy")
+        send(s, { type = "applyFailed", id = id, reason = "gpsNotWritten", detail = second.error })
+        return
+    end
+    logSecondWrite(later, second)
+    Log.info("tagged %d photos; another dive's values cleared on %d (GPS altitude on %d)", total, cleared, second.cleared)
+    send(s, { type = "applied", id = id, count = total })
 end
 
 -- Create Collections ----------------------------------------------------------
@@ -393,10 +454,12 @@ local function findChild(list, name)
     end
 end
 
--- Writes a "Create Collections" request in one catalog step: each dive's
--- collection where the app's settings say (by default in a "Dive Lens" set
--- at the root, created if needed), its data and location on its photos, and
--- each photo's own values. Always answers the app.
+-- Writes a "Create Collections" request: each dive's collection where the
+-- app's settings say (by default in a "Dive Lens" set at the root, created
+-- if needed), its data and location on its photos, and each photo's own
+-- values. Two catalog writes under one Undo name, the GPS and altitude in
+-- the second (Tagging.splitGps, writeGpsLater), so one Undo reverts it all.
+-- Always answers the app.
 local function applyCollections(s, message)
     local id = message.id
     local function fail(reason, detail)
@@ -434,38 +497,33 @@ local function applyCollections(s, message)
     local existing = {}
     for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
 
-    local total = 0
-    for _, g in ipairs(groups) do total = total + #g.photos end
+    -- Each photo found: its changes for the first write, and its GPS
+    -- position and altitude for the second (Tagging.splitGps).
+    local total, later = 0, {}
+    for _, g in ipairs(groups) do
+        total = total + #g.photos
+        for _, p in ipairs(g.photos) do
+            p.photo = s.search.photos[p.id]
+            if p.photo then
+                local gps
+                p.now, gps = Tagging.splitGps(g.common, p.changes)
+                if #gps > 0 then later[#later + 1] = { photo = p.photo, changes = gps } end
+            end
+        end
+    end
+    local undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)"
+    local progress = Tagging.progress(total, PROGRESS_EVERY)
     local results = {}
     local ok, status = LrTasks.pcall(function()
-        return catalog:withWriteAccessDo(LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)", function()
-            local done = 0
+        return catalog:withWriteAccessDo(undoName, function()
             for gi, g in ipairs(groups) do
                 local photos = {}
                 for _, p in ipairs(g.photos) do
-                    local photo = s.search.photos[p.id]
-                    if photo then
-                        for _, change in ipairs(g.common) do
-                            if change.kind == "plugin" then
-                                photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
-                            else
-                                photo:setRawMetadata(change.field, change.value)
-                            end
-                        end
-                        for _, change in ipairs(p.changes) do
-                            if change.kind == "plugin" then
-                                photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
-                            else
-                                photo:setRawMetadata(change.field, change.value)
-                            end
-                        end
-                        photos[#photos + 1] = photo
+                    if p.photo then
+                        write(p.photo, p.now)
+                        photos[#photos + 1] = p.photo
                     end
-                    done = done + 1
-                    if done % PROGRESS_EVERY == 0 and done < total then
-                        send(s, { type = "progress", id = id, done = done, total = total })
-                        LrTasks.yield()
-                    end
+                    advance(s, id, total, progress)
                 end
                 if #photos > 0 then
                     local collection = catalog:createCollection(g.collection, container, true)
@@ -475,9 +533,18 @@ local function applyCollections(s, message)
             end
         end, { timeout = WRITE_TIMEOUT })
     end)
+    -- Straight on to the second write: nothing sent or yielded in between.
+    local second = ok and status == "executed" and writeGpsLater(catalog, undoName, later)
     s.lastHeard = LrDate.currentTime()
     if not ok then return fail("error", tostring(status)) end
     if status ~= "executed" then return fail("busy") end
+    if not second.written then
+        -- The first write stays: collections, dive data and location text.
+        Log.warn("collections written but not the GPS and altitude of %d photos: %s", #later, second.error or "Lightroom busy")
+        send(s, { type = "applyFailed", id = id, reason = "gpsNotWritten", detail = second.error })
+        return
+    end
+    logSecondWrite(later, second)
     Log.info("collections written: %d groups, %d photos", #results, total)
     send(s, { type = "collectionsApplied", id = id, groups = results })
 end

@@ -1,7 +1,8 @@
 --[[
 Turns a "tag the selection" request from the app into the list of changes to
 make on each photo. Pure Lua (no Lightroom import) so it is tested outside
-Lightroom; Link.lua applies the changes inside one catalog write.
+Lightroom; Link.lua applies the changes in two catalog writes, the GPS and
+altitude in the second (splitGps).
 
 "Create Collections" requests are planned per dive with planCollections;
 a photo's GPS altitude (the depth, negative) is written only when the
@@ -138,8 +139,7 @@ end
 --- own values belonged to that dive and are cleared (only those it has, so
 --- an empty list means nothing to clear). Its GPS altitude is cleared only
 --- when it is exactly the one Dive Lens derived from the old depth: the
---- field is shared with the camera and the user, and Lightroom's Undo does
---- not restore it.
+--- field is shared with the camera and the user, so when in doubt it stays.
 ---
 --- `photo` is what the photo carries before the write: the RETAG_FIELDS
 --- values and `gpsAltitude` (metres or nil). Nothing for the same dive
@@ -169,6 +169,47 @@ function Tagging.retagChanges(photo, changes)
         extra[#extra + 1] = { kind = "raw", field = "gpsAltitude", value = nil }
     end
     return extra
+end
+
+-- Lightroom fields that go in the second catalog write.
+local GPS_FIELDS = { gps = true, gpsAltitude = true }
+
+--- Splits planned changes (from plan, planCollections or retagChanges; any
+--- number of lists, taken in turn) between an "Apply"'s two catalog writes:
+--- the first gets the Dive Lens fields and the location text (country,
+--- city, location), the second the GPS position and altitude, set or
+--- cleared. Lightroom's Undo does not revert a GPS or an altitude written in
+--- the same write as a location text field; written in a write of their
+--- own, right after, they are reverted with the rest (spec section 3).
+--- Returns the two lists, each in the order given.
+function Tagging.splitGps(...)
+    local first, second = {}, {}
+    for i = 1, select("#", ...) do
+        for _, c in ipairs((select(i, ...))) do
+            if c.kind == "raw" and GPS_FIELDS[c.field] then
+                second[#second + 1] = c
+            else
+                first[#first + 1] = c
+            end
+        end
+    end
+    return first, second
+end
+
+--- Progress of an "Apply"'s first write, told in photos, `total` in all.
+--- Call `advance()` after each photo: every `every` photos it returns the
+--- number done, nil otherwise, and never `total` (the app's answer tells the
+--- end). The second write tells nothing: it must not pause (see Link.lua,
+--- writeGpsLater), so the count stays where the first write left it.
+function Tagging.progress(total, every)
+    local done = 0
+    local p = {}
+    function p.advance()
+        done = done + 1
+        if done % every ~= 0 or done >= total then return nil end
+        return done
+    end
+    return p
 end
 
 --- Changes for one dive of a "Create Collections" request:

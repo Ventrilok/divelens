@@ -98,7 +98,7 @@ Bon à savoir :
 - Une photo qui tomberait dans deux plongées va à la plus proche.
 - Relancer un groupe de plongées ne fait qu'ajouter : les photos déjà rangées restent où elles sont (corrigez-les à la main si besoin), et les photos retrouvées voient leurs valeurs réécrites.
 
-**Annuler.** **Édition › Annuler** dans Lightroom défait tout en une seule fois, sauf le GPS (et l'altitude, si vous y copiez la profondeur) : Lightroom ne les remet pas.
+**Annuler.** **Édition › Annuler** dans Lightroom défait tout en une seule fois, GPS et altitude compris.
 
 ---
 
@@ -117,7 +117,7 @@ Ce qui est écrit : avec **Données de plongée**, le n° de plongée, le début
 - Une valeur absente de la plongée choisie (température, note…) efface l'ancienne valeur Dive Lens de la photo : les champs décrivent toujours une seule plongée.
 - Un site sans pays, ville ou GPS ne touche pas aux valeurs déjà présentes sur la photo (une position GPS venue d'un téléphone est conservée).
 - Avec **Données de plongée**, une photo qui porte déjà une **autre** plongée perd les valeurs propres à celle-ci : profondeur, température, temps écoulé et décalage d'horloge. Son altitude GPS n'est effacée que si c'est celle que Dive Lens a copiée depuis l'ancienne profondeur ; toute autre altitude est conservée. La photo reste dans sa collection : à vous de la déplacer si besoin.
-- **Édition › Annuler** dans Lightroom défait tout en une fois, sauf le GPS (et l'altitude, quand elle a été effacée) : Lightroom ne les remet pas.
+- **Édition › Annuler** dans Lightroom défait tout en une fois, GPS et altitude compris.
 
 ---
 
@@ -140,7 +140,7 @@ Chaque modification est enregistrée immédiatement.
 - **Copier la profondeur dans l'altitude GPS** (désactivé par défaut) : écrit aussi la profondeur de chaque photo comme une altitude négative, en mètres.
   - Le champ Profondeur de Dive Lens n'existe que dans Lightroom : il disparaît à l'export.
   - L'altitude GPS suit la photo exportée et se voit dans les autres logiciels.
-  - La copie remplace une altitude GPS déjà présente sur la photo, et « Annuler » dans Lightroom ne la remet pas. Les photos sans profondeur gardent la leur.
+  - La copie remplace une altitude GPS déjà présente sur la photo ; **Édition › Annuler** dans Lightroom la remet. Les photos sans profondeur gardent la leur.
 
 **Collections**
 - **Placer dans** : la racine du catalogue ou un ensemble de collections existant (Lightroom doit être connecté pour les parcourir).

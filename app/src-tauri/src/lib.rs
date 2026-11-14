@@ -748,10 +748,11 @@ struct CollectionsResult {
 }
 
 /// Writes the collections, dive data and per-photo values in one Lightroom
-/// step, then remembers each camera's offset. Writes the dives and profiles
-/// read with photo search `search`, the one the screen shows; refused when
-/// it is no longer kept, or when `log`, the dive log the screen shows, is
-/// not theirs or no longer the configured one.
+/// Undo step, then remembers each camera's offset (also when only the GPS
+/// and altitude could not be written: the offsets are on the photos).
+/// Writes the dives and profiles read with photo search `search`, the one
+/// the screen shows; refused when it is no longer kept, or when `log`, the
+/// dive log the screen shows, is not theirs or no longer the configured one.
 #[tauri::command]
 async fn apply_collections(
     app: AppHandle,
@@ -794,31 +795,35 @@ async fn apply_collections(
             .flat_map(|g| &g.photos)
             .filter(|p| p.photo_depth.is_some())
             .count();
-        let written = ask(&app, |reply| Command::ApplyCollections { request, reply })
-            .inspect_err(|e| log::warn!("collections not written: {e:?}"))?
-            .map_err(|outcome| {
-                log::warn!("collections refused by Lightroom: {outcome:?}");
-                CollectionsError::from(outcome)
-            })?;
+        let answer = ask(&app, |reply| Command::ApplyCollections { request, reply })
+            .inspect_err(|e| log::warn!("collections not written: {e:?}"))?;
+        // The offsets are on the photos once the first catalog write is
+        // done, even when the GPS and altitude write did not follow.
+        if answer.as_ref().err().is_none_or(ApplyOutcome::half_written) {
+            let dir = config_dir(&app);
+            let mut offsets = Offsets::load(&dir, log.app);
+            if let Some(session) = app
+                .state::<CollectionsState>()
+                .searches
+                .lock()
+                .expect("collections")
+                .get(search)
+            {
+                session.remember(&choices, &mut offsets);
+            }
+            if let Err(e) = offsets.save(&dir, log.app) {
+                log::error!("clock offsets not saved: {e}");
+            }
+        }
+        let written = answer.map_err(|outcome| {
+            log::warn!("collections refused by Lightroom: {outcome:?}");
+            CollectionsError::from(outcome)
+        })?;
         log::info!(
             "collections written: {} collections, {} photos ({with_depth} with depth)",
             written.len(),
             written.iter().map(|c| c.count).sum::<usize>()
         );
-        let dir = config_dir(&app);
-        let mut offsets = Offsets::load(&dir, log.app);
-        if let Some(session) = app
-            .state::<CollectionsState>()
-            .searches
-            .lock()
-            .expect("collections")
-            .get(search)
-        {
-            session.remember(&choices, &mut offsets);
-        }
-        if let Err(e) = offsets.save(&dir, log.app) {
-            log::error!("clock offsets not saved: {e}");
-        }
         Ok(CollectionsResult {
             photos: written.iter().map(|c| c.count).sum(),
             collections: written,

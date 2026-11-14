@@ -1,7 +1,8 @@
 // Create Collections, steps 2 and 3 (spec F5, F6): the dives checked in
 // step 1, the cameras found in Lightroom over their period with one clock
-// offset each, the surface margin, live counts per dive, then one write in
-// Lightroom and the summary. Only shown with at least one dive checked.
+// offset each, the surface margin, live counts per dive, then the write in
+// Lightroom (one Undo step) and the summary. Only shown with at least one
+// dive checked.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyCollections, collectionSets, collectionsPreview, findCollectionPhotos, onApplyProgress, suggestOffsets } from "../api";
@@ -67,6 +68,9 @@ function failure(e: CollectionsError): string {
       return t("log.changedNothingWritten");
     case "lightroom":
       if (e.reason === "busy") return t("coll.err.busy");
+      // Written but for the GPS and altitude: Undo, then apply again.
+      if (e.reason === "gpsNotWritten")
+        return e.detail ? t("coll.err.gpsNotWrittenDetail", { detail: e.detail }) : t("coll.err.gpsNotWritten");
       if (e.reason === "staleSearch") return t("coll.err.noPhotos");
       if (e.reason === "parentNotFound") return t("coll.parentMissing", { path: e.detail ?? "" });
       return t("coll.err.other", { detail: e.detail ?? e.reason });
@@ -221,7 +225,6 @@ function ResultView({
   dives,
   choices,
   cameras,
-  altitude,
   onBack,
   onRetry,
 }: {
@@ -229,8 +232,6 @@ function ResultView({
   dives: Dive[];
   choices: CollectionChoices;
   cameras: Camera[];
-  /** Depth was copied to GPS altitude, which Lightroom's Undo does not revert. */
-  altitude: boolean;
   /** Back to step 1, with no dive checked. */
   onBack: () => void;
   onRetry: (ids: string[]) => void;
@@ -295,7 +296,7 @@ function ResultView({
       </div>
       <div className="card selection-bar apply-bar">
         <div className="selection-text">
-          <span className="muted small">{t(altitude ? "coll.undoHintAltitude" : "coll.undoHint")}</span>
+          <span className="muted small">{t("coll.undoHint")}</span>
         </div>
         <div className="selection-actions">
           {empty.length > 0 && (
@@ -488,7 +489,6 @@ export function CollectionsScreen({
         dives={dives}
         choices={run.choices}
         cameras={run.cameras}
-        altitude={settings.depthToAltitude}
         onBack={onDone}
         onRetry={(ids) => {
           setRun({ state: "idle" });
@@ -705,7 +705,7 @@ export function CollectionsScreen({
             <span className="small">{blocker ?? t("coll.writes", { place })}</span>
             <span className="muted small">
               {t("coll.writesNote", { units, altitude: t(settings.depthToAltitude ? "coll.on" : "coll.off") })} ·{" "}
-              {t(settings.depthToAltitude ? "coll.undoShortAltitude" : "coll.undoShort")}
+              {t("coll.undoShort")}
             </span>
           </div>
         )}

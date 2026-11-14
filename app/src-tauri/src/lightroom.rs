@@ -30,7 +30,7 @@ use crate::settings::{Legacy, LogLevel};
 /// Name of the link file, written by the plugin in the app's settings folder.
 pub const LINK_FILE: &str = "lightroom-link.json";
 /// Version of the message set; both sides must agree.
-pub const PROTOCOL: u32 = 4;
+pub const PROTOCOL: u32 = 5;
 
 /// Content of the link file.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -171,7 +171,7 @@ pub enum Command {
         to: String,
         reply: Sender<Result<PhotoSearch, ApplyOutcome>>,
     },
-    /// Write collections, dive data and per-photo values in one step.
+    /// Write collections, dive data and per-photo values in one Undo step.
     ApplyCollections {
         request: CollectionsRequest,
         reply: Sender<Result<Vec<WrittenCollection>, ApplyOutcome>>,
@@ -208,22 +208,28 @@ impl Pending {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "outcome", rename_all = "camelCase")]
 pub enum ApplyOutcome {
-    /// Written in one catalog step on `count` photos. `altitudes_cleared`:
-    /// photos whose GPS altitude, derived from another dive's depth, was
-    /// cleared (spec F8); Lightroom's Undo does not restore it.
-    Applied {
-        count: usize,
-        #[serde(rename = "altitudesCleared")]
-        altitudes_cleared: usize,
-    },
+    /// Written on `count` photos, in one Undo step: the GPS and altitude in
+    /// a second catalog write right after the first (spec section 3).
+    Applied { count: usize },
     /// Nothing written. `reason`: `noSelection`, `busy` (Lightroom kept the
     /// catalog busy), `badRequest`, `staleSearch` (the photos were found in
     /// an earlier link session), `parentNotFound` (the collection set chosen
-    /// in the settings is not in the catalog) or `error`.
+    /// in the settings is not in the catalog) or `error`. Except
+    /// `gpsNotWritten`: everything but the GPS and altitude was written (the
+    /// second catalog write did not happen).
     Failed {
         reason: String,
         detail: Option<String>,
     },
+}
+
+impl ApplyOutcome {
+    /// Failed after the first catalog write: the photos carry everything
+    /// but the GPS and altitude (dive data, location, per-photo values,
+    /// clock offsets, collections).
+    pub fn half_written(&self) -> bool {
+        matches!(self, Self::Failed { reason, .. } if reason == "gpsNotWritten")
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -268,9 +274,6 @@ enum FromPlugin {
     Applied {
         id: u64,
         count: usize,
-        /// Absent from plugins that never clear an altitude.
-        #[serde(default, rename = "altitudesCleared")]
-        altitudes_cleared: usize,
     },
     ApplyFailed {
         id: u64,
@@ -514,16 +517,9 @@ fn session(
                     FromPlugin::Progress { done, total } => {
                         on_event(Event::Progress { done, total });
                     }
-                    FromPlugin::Applied {
-                        id,
-                        count,
-                        altitudes_cleared,
-                    } => match pending.remove(&id) {
+                    FromPlugin::Applied { id, count } => match pending.remove(&id) {
                         Some(Pending::Apply(reply)) => {
-                            let _ = reply.send(ApplyOutcome::Applied {
-                                count,
-                                altitudes_cleared,
-                            });
+                            let _ = reply.send(ApplyOutcome::Applied { count });
                         }
                         Some(other) => other.fail(ApplyOutcome::Failed {
                             reason: "error".into(),
@@ -667,7 +663,7 @@ mod tests {
         stream.write_all(text.as_bytes()).unwrap();
     }
 
-    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":4,"type":"hello"}"#;
+    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":5,"type":"hello"}"#;
 
     #[test]
     fn dropped_requests_stop_their_callers_waiting() {
@@ -869,13 +865,12 @@ mod tests {
         let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |e| events.push(e));
         plugin.join().unwrap();
         assert_eq!(end, End::Bye);
-        // No altitudesCleared in the answer (older plugin): none cleared.
+        let outcome = outcome_rx.recv().unwrap();
+        assert_eq!(outcome, ApplyOutcome::Applied { count: 120 });
+        // As the front end reads it.
         assert_eq!(
-            outcome_rx.recv().unwrap(),
-            ApplyOutcome::Applied {
-                count: 120,
-                altitudes_cleared: 0
-            }
+            serde_json::to_value(&outcome).unwrap(),
+            serde_json::json!({ "outcome": "applied", "count": 120 })
         );
         assert!(events.contains(&Event::Progress {
             done: 50,
@@ -884,16 +879,17 @@ mod tests {
     }
 
     #[test]
-    fn apply_tells_how_many_altitudes_were_cleared() {
+    fn apply_half_written_is_a_failure() {
         let (commands, inbox) = std::sync::mpsc::channel();
         let (outcome_tx, outcome_rx) = std::sync::mpsc::channel();
         let (link, plugin) = fake_plugin(move |lines, to_app| {
             let outcome = connect_and_apply(lines, to_app, &commands);
             let id = next_request(lines)["id"].as_u64().unwrap();
+            // The first write done, Lightroom refused the GPS write.
             write(
                 to_app,
                 &format!(
-                    "{{\"type\":\"applied\",\"id\":{id},\"count\":12,\"altitudesCleared\":3}}\n"
+                    "{{\"type\":\"applyFailed\",\"id\":{id},\"reason\":\"gpsNotWritten\",\"detail\":\"aborted\"}}\n"
                 ),
             );
             outcome_tx.send(outcome.recv().unwrap()).unwrap();
@@ -901,18 +897,25 @@ mod tests {
         run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {});
         plugin.join().unwrap();
         let outcome = outcome_rx.recv().unwrap();
-        assert_eq!(
-            outcome,
-            ApplyOutcome::Applied {
-                count: 12,
-                altitudes_cleared: 3
-            }
-        );
-        // As the front end reads it.
+        assert!(outcome.half_written());
+        // As the front end reads it, to show its own text.
         assert_eq!(
             serde_json::to_value(&outcome).unwrap(),
-            serde_json::json!({ "outcome": "applied", "count": 12, "altitudesCleared": 3 })
+            serde_json::json!({ "outcome": "failed", "reason": "gpsNotWritten", "detail": "aborted" })
         );
+    }
+
+    #[test]
+    fn only_a_missing_gps_write_is_half_written() {
+        let failed = |reason: &str| ApplyOutcome::Failed {
+            reason: reason.into(),
+            detail: None,
+        };
+        assert!(failed("gpsNotWritten").half_written());
+        for reason in ["busy", "error", "noSelection", "staleSearch", "badRequest"] {
+            assert!(!failed(reason).half_written(), "{reason}");
+        }
+        assert!(!ApplyOutcome::Applied { count: 3 }.half_written());
     }
 
     #[test]
@@ -1082,7 +1085,7 @@ mod tests {
             lines.next().unwrap();
             write(
                 to_app,
-                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":4,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
+                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":5,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
             );
             write(to_app, "\n");
             lines.next().unwrap(); // first ping: the app is connected

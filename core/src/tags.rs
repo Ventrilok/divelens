@@ -109,7 +109,7 @@ pub struct CollectionGroup {
     pub photos: Vec<PhotoTags>,
 }
 
-/// Everything one "Create Collections › Apply" writes, in one catalog step.
+/// Everything one "Create Collections › Apply" writes, in one Undo step.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionsRequest {
