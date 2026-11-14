@@ -145,10 +145,10 @@ Every change is saved at once.
 
 **Settings backup**
 - **Export or import**: to get your settings back on another computer, or after reinstalling.
-- **Export…** saves them in a file, named "Dive Lens settings.json" unless you choose another name: the dive application and the log location of each one, language, units, the GPS altitude option, where the collections go, the log level and the order of the dive list. The clock offsets remembered for each camera are not in it: they stay on this computer.
+- **Export…** saves them in a file, named "Dive Lens settings.json" unless you choose another name. The file holds: the dive application and the log location of each one, language, units, the GPS altitude option, where the collections go, the log level and the order of the dive list. The clock offsets remembered for each camera are not in it: they stay on this computer.
 - **Import…** asks before changing anything: **Replace** puts the file's settings in place of every setting on this screen, **Cancel** leaves them as they are.
 - If the file's dive log is not on this computer, Dive Lens says so and keeps its location until you choose the right one (**Choose…**, or **Choose a file…** / **Choose a folder…** for Subsurface). If the collection set chosen in **Place in** is not in this catalog, Create Collections says so: choose another place in Settings.
-- A file that is not a Dive Lens settings file is refused, and nothing changes. A file exported by an earlier version of Dive Lens can still be imported.
+- A file that does not look like a Dive Lens settings file is refused, and nothing changes. A file exported by an earlier version of Dive Lens can still be imported.
 - After an import, Dive Lens no longer takes over the previous plug-in's settings (section 1): the imported settings are the ones kept.
 
 **Diagnostics**
@@ -182,7 +182,7 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 
 **Switching from MacDive to Subsurface.** Nothing to migrate. Running a dive again finds its collection when the name "<number> - <site>" is the same; otherwise a new collection is created next to it. Clock offsets are remembered separately for each application.
 
-**Reporting a problem.** Set **Settings › Diagnostics › Log level** to **Detailed**, reproduce the problem, then **Show log** and send the two files.
+**Reporting a problem.** Set **Settings › Diagnostics › Log level** to **Detailed**, reproduce the problem, then **Show log**: the folder holds the two log files. Never attach them to a GitHub issue: the repository is public, and the logs contain your dive sites and file paths. Describe the problem, and paste only the relevant lines, with site names, places, people's names and file paths removed.
 
 ---
 
