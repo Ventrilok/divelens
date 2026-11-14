@@ -4,7 +4,7 @@ Thank you for your interest in Dive Lens. It links underwater photos in Adobe Li
 
 Bug reports, requests to support another dive application, fixes and documentation are all welcome.
 
-**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share a real dive log, a dive-log database, what a tool prints from one, the Dive Lens log files, or an exported Dive Lens settings file. See [Test data: fictional only](#test-data-fictional-only).
+**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share a real dive log, a dive-log database, what a tool prints from one, the Dive Lens log files, or an exported Dive Lens settings file here. See [Test data: fictional or anonymised](#test-data-fictional-or-anonymised). When you are asked for the log files, or send a log to test a new dive application, they go privately by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number: see [Reporting a bug or asking for a dive application](#reporting-a-bug-or-asking-for-a-dive-application).
 
 ## Contents
 
@@ -15,7 +15,7 @@ Bug reports, requests to support another dive application, fixes and documentati
 - [Checks before you commit](#checks-before-you-commit)
 - [Branches, commits and pull requests](#branches-commits-and-pull-requests)
 - [Version numbers](#version-numbers)
-- [Test data: fictional only](#test-data-fictional-only)
+- [Test data: fictional or anonymised](#test-data-fictional-or-anonymised)
 - [Secrets](#secrets)
 - [What must never be renamed](#what-must-never-be-renamed)
 - [The libdivecomputer submodule](#the-libdivecomputer-submodule)
@@ -103,7 +103,7 @@ The plug-in's pure-Lua parts (JSON, message framing, manifest, metadata fields) 
 
 A dev window started with `npm run tauri dev` connects to Lightroom by itself while it runs.
 
-The plug-in writes its log to `DiveLens.log` in Lightroom's log folder, next to the app's `DiveLens App.log`: `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/` on macOS, `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\` on Windows. These logs contain your own data (dive sites, file paths): read them, but never commit or post them.
+The plug-in writes its log to `DiveLens.log` in Lightroom's log folder, next to the app's `DiveLens App.log`: `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/` on macOS, `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\` on Windows. These logs contain your own data (dive sites, file paths): read them, but never commit them or post them in an issue or a pull request.
 
 Never copy files from the Adobe Lightroom SDK into the repository. The legacy 0.x plug-in's licence code, compiled Lua bytecode and the `luac5.1` binary must not be brought over either.
 
@@ -137,7 +137,7 @@ Continuous integration runs the same checks on **macOS and Windows** for every p
 **Pull requests.**
 
 - The title follows the same format as a commit message: pull requests are **squash-merged**, so the title becomes the single commit on `main`.
-- Fill in the pull request template: summary, checks run, and confirmation that the data is fictional.
+- Fill in the pull request template: summary, checks run, and confirmation that the data is fictional or anonymised.
 - **CI must be green on macOS and Windows** before a pull request is merged.
 - Anything a diver would notice (a screen, a text, a behaviour, what gets written on photos or in Lightroom) is a product decision. Say in the pull request whether it is already decided in the specification or proposed by your change.
 - Once a branch is pushed, don't rewrite its history (no force-push): to catch up with `main`, merge it into your branch. The squash merge keeps `main` tidy anyway.
@@ -176,7 +176,7 @@ Three other numbers are **compatibility versions**, not the version of Dive Lens
 - **Metadata schema**: `schemaVersion` in `plugin/DiveLens.lrdevplugin/Metadata.lua`. Raise it when Dive Lens fields are added or their definitions change, as the Lightroom SDK asks. Each field's own `version` changes only when its definition changes incompatibly, which the compatibility contract rules out for the existing fields.
 - **Settings file**: `CURRENT_VERSION` in `app/src-tauri/src/settings.rs`, written into the settings file and into exported settings. Raise it when the layout of the file changes, keeping older files readable (the same goes for the clock-offset files, `CURRENT_VERSION` in `app/src-tauri/src/offsets.rs`).
 
-## Test data: fictional only
+## Test data: fictional or anonymised
 
 The repository is public, and git history keeps everything forever: a dive log committed by mistake and deleted later is still there. A dive log is personal data. It holds dates, places and GPS positions, often buddy names, notes and the diver's own name, and its file path usually contains a user name.
 
@@ -195,7 +195,7 @@ The `.gitignore` already blocks some dive-log file types and the build output, b
 
 ## Secrets
 
-Never commit keys, certificates, passwords or tokens. Signing keys and credentials live in GitHub secrets or with the maintainer, never in the repository. If one was committed by mistake, deleting it in a new commit does not remove it from history: say so in your pull request or in an issue, without repeating the secret, so that it can be revoked.
+Never commit keys, certificates, passwords or tokens. Signing keys and credentials live in GitHub secrets or with the maintainer, never in the repository. If one was committed by mistake, deleting it in a new commit does not remove it from history: report it privately, as described in [SECURITY.md](SECURITY.md), so that it can be revoked. Never mention it in a public issue or pull request. Security vulnerabilities are reported the same way.
 
 ## What must never be renamed
 
@@ -218,4 +218,7 @@ Use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choos
 - **Bug report**: something does not work as expected.
 - **Support a new dive application**: you would like Dive Lens to read another dive log. If you want to write that reader yourself, open this issue first so the approach can be discussed.
 
-Both remind you of the privacy rule above: describe the problem, and if a log helps, paste only the relevant lines with site names, places, people's names and file paths removed.
+Both remind you of the privacy rule above:
+
+- For a bug, describe the problem in the issue. If the Dive Lens log files are needed, you will be asked for them: send them only by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number, never in an issue. In the issue itself, paste at most the relevant lines, with site names, places, people's names and file paths removed.
+- For a new dive application, a fictional log, or your real log once anonymised, helps testing. Send it by e-mail to the same address, with the issue number, never attached to the issue. It is used to test the new reader. The repository itself only ever holds fictional or properly anonymised test data, never a real log as it is (see [Test data](#test-data-fictional-or-anonymised)).

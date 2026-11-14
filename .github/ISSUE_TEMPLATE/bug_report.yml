@@ -8,7 +8,8 @@ body:
         > **This repository is public: everyone can read this issue, forever.**
         >
         > - Do **not** attach your dive log, your dive-log database (MacDive, Subsurface or other), the log files `DiveLens.log` and `DiveLens App.log`, or an exported settings file ("Dive Lens settings.json"). They hold personal data: dive sites, places, GPS positions, names, notes, file paths with your user name, collection-set names.
-        > - For a log, describe the problem in words, or paste **only the few relevant lines**, with site names, places, people's names and file paths removed or replaced. A settings file can be pasted, if it helps, with its paths and collection-set names replaced.
+        > - Describe the problem in this issue. If the log files are needed, you will be asked for them: send them only by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number, never here.
+        > - Here, paste at most **the few relevant log lines**, with site names, places, people's names and file paths removed or replaced. A settings file can be pasted, if it helps, with its paths and collection-set names replaced.
         > - Crop or blur screenshots: dive sites, GPS positions, names, file paths and any photo you do not want public.
   - type: input
     id: version
@@ -74,7 +75,7 @@ body:
     attributes:
       label: Relevant log lines (optional)
       description: |
-        Only the few lines around the problem, from Settings › Diagnostics › Show log. Remove or replace site names, places, people's names and file paths first. Never attach the whole file.
+        Only the few lines around the problem, from Settings › Diagnostics › Show log. Remove or replace site names, places, people's names and file paths first. Never attach the whole file here: if it is needed, you will be asked to send it by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number.
       render: text
   - type: textarea
     id: more
