@@ -227,6 +227,32 @@ mod tests {
         assert!(info.id().check(&SourceInfo::of(&s, OS, standard)).is_ok());
     }
 
+    /// As the screens receive the log shown, and name it back in every
+    /// action: the application by its id.
+    #[test]
+    fn screens_name_the_application_by_its_id() {
+        let info = SourceInfo::of(&on(&subsurface::APP, Path::new("/x.xml")), OS, standard);
+        assert_eq!(
+            serde_json::to_value(&info).unwrap(),
+            serde_json::json!({"kind": "subsurface", "path": "/x.xml", "isDefaultPath": false})
+        );
+        let named: LogId =
+            serde_json::from_value(serde_json::json!({"kind": "macDive", "path": "/x"})).unwrap();
+        assert_eq!(
+            named,
+            LogId {
+                app: &macdive::APP,
+                path: "/x".into()
+            }
+        );
+        assert_eq!(
+            serde_json::to_value(&named).unwrap(),
+            serde_json::json!({"kind": "macDive", "path": "/x"})
+        );
+        let unknown = serde_json::json!({"kind": "blueDive", "path": "/x"});
+        assert!(serde_json::from_value::<LogId>(unknown).is_err());
+    }
+
     /// What the actions do: a read (profile, photo search) checks the log
     /// named against the configured one, a write starts through `begin`.
     fn accepted(writes: &Writes, shown: &LogId, settings_dir: &Path) -> bool {
