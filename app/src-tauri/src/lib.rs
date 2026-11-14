@@ -33,16 +33,17 @@ struct LogFile(Option<PathBuf>);
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AppInfo {
-    version: &'static str,
+    version: String,
     os: &'static str,
     log_path: Option<PathBuf>,
 }
 
-/// Version, system and log file, for Settings.
+/// Version (app/package.json, through tauri.conf.json), system and log file,
+/// for Settings.
 #[tauri::command]
-fn app_info(log: State<LogFile>) -> AppInfo {
+fn app_info(app: AppHandle, log: State<LogFile>) -> AppInfo {
     AppInfo {
-        version: env!("CARGO_PKG_VERSION"),
+        version: app.package_info().version.to_string(),
         os: std::env::consts::OS,
         log_path: log.0.clone(),
     }
@@ -1062,11 +1063,12 @@ pub fn run() {
         ])
         .setup(|app| {
             let settings = Settings::load(&config_dir(app.handle()));
+            let version = app.package_info().version.to_string();
             let log_path = app.path().home_dir().ok().map(|home| {
                 let path = applog::start(applog::folder(&home), settings.log_level);
                 log::info!(
                     "Dive Lens {} on {}, log {}",
-                    env!("CARGO_PKG_VERSION"),
+                    version,
                     std::env::consts::OS,
                     path.display()
                 );
