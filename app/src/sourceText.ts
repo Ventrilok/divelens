@@ -15,11 +15,29 @@ export function setApps(list: DiveApp[]): void {
 export const availableApps = (): readonly DiveApp[] => apps;
 
 /**
+ * Stands in for the applications when the back end could not list them
+ * (never expected): the screens still show, with the id as name and no texts.
+ */
+function unlisted(id: SourceKind): DiveApp {
+  const problem = { title: id, text: "" };
+  const texts: AppTexts = {
+    log: id,
+    logHint: "",
+    reading: "",
+    read: {},
+    fileType: id,
+    locate: null,
+    problems: { notFound: problem, notADiveLog: problem, database: problem },
+  };
+  return { id, name: id, choose: { file: [], folder: true }, texts: { en: texts, fr: texts } };
+}
+
+/**
  * The application used for `kind`, as the back end resolves it: that one when
  * this system has it, else the first one available.
  */
 export function appOf(kind: SourceKind): DiveApp {
-  return apps.find((a) => a.id === kind) ?? apps[0];
+  return apps.find((a) => a.id === kind) ?? apps[0] ?? unlisted(kind);
 }
 
 /** What the screens say of `app`, in the interface language. */
@@ -29,7 +47,8 @@ export const sourceName = (kind: SourceKind) => appOf(kind).name;
 
 /** What went wrong, as the screens tell it: the reader's error when the application explains it, else "database". */
 export function errorKind(app: DiveApp, error: ReaderError): string {
-  return error.kind in appTexts(app).problems ? error.kind : "database";
+  // An own key only (Object.hasOwn needs a newer WebView than macOS 11's).
+  return Object.prototype.hasOwnProperty.call(appTexts(app).problems, error.kind) ? error.kind : "database";
 }
 
 /** Title or explanation of a reader error, worded for the application. */
@@ -40,7 +59,7 @@ export function errorText(app: DiveApp, error: ReaderError, field: "title" | "te
 /** What Settings says once the log is read, with its counts. */
 export function readText(app: DiveApp, format: string, counts: { dives: string; sites: string }): string {
   const read = appTexts(app).read;
-  return fill(read[format] ?? Object.values(read)[0], counts);
+  return fill(read[format] ?? Object.values(read)[0] ?? "", counts);
 }
 
 /** The buttons choosing a log of `app`: a file and a folder, or the one kind it is. */

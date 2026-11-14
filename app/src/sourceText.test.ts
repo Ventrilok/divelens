@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage } from "./i18n";
 import { appOf, chooseButtons, errorKind, errorText, readText, setApps, withLocation } from "./sourceText";
-import type { AppTexts, DiveApp } from "./types";
+import type { AppTexts, DiveApp, ReaderError } from "./types";
 
 // Fictional applications, described as the back end describes them
 // (core/src/apps.rs): one whose log is a file, one whose log is a file or a
@@ -51,6 +51,8 @@ describe("errorKind", () => {
     expect(errorKind(fileApp, { kind: "notFound", detail: "" })).toBe("notFound");
     expect(errorKind(eitherApp, { kind: "notADiveLog", detail: "" })).toBe("notADiveLog");
     expect(errorKind(eitherApp, { kind: "badProfile", detail: "" })).toBe("database");
+    // Only the application's own texts, never an object's built-in keys.
+    expect(errorKind(fileApp, { kind: "constructor", detail: "" } as unknown as ReaderError)).toBe("database");
   });
 
   it("words the error for the application, in the interface language", () => {
@@ -69,6 +71,15 @@ describe("the dive applications", () => {
     expect(appOf("blueDive")).toBe(fileApp);
     setApps([eitherApp]);
     expect(appOf("fileLog")).toBe(eitherApp);
+  });
+
+  it("still shows the screens when the back end listed no application", () => {
+    setApps([]);
+    const app = appOf("macDive");
+    expect(app.name).toBe("macDive");
+    expect(errorText(app, { kind: "notFound", detail: "" }, "title")).toBe("macDive");
+    expect(readText(app, "database", { dives: "1 dive", sites: "1 site" })).toBe("");
+    expect(chooseButtons(app)).toHaveLength(2);
   });
 
   it("says what was read, with the counts", () => {

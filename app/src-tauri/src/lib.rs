@@ -12,7 +12,7 @@ use std::sync::mpsc::{self, Sender};
 use std::time::Duration;
 
 use divelens_core::apps::{self, DiveApp, Kept, Opened, Os, Places};
-use divelens_core::macdive::MacDive;
+use divelens_core::macdive;
 use divelens_core::profile::Sample;
 use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
 use divelens_core::{Capabilities, Dive, Error, Site};
@@ -929,8 +929,9 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                         // dive log: nothing is saved, not even that it was
                         // looked at, so it is tried again at the next
                         // connection.
+                        // The previous plugin only read MacDive.
                         if let Ok(home) = app.path().home_dir() {
-                            let standard = MacDive::default_path(&home);
+                            let standard = standard_path(&app, &macdive::APP);
                             let taken =
                                 change_settings(&app, |s| s.take_over(&legacy, &home, &standard));
                             if let Err(e) = taken {
