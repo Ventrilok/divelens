@@ -277,12 +277,15 @@ application" issue so that the approach can be discussed.
 cargo run --release -p divelens-core --example verify_log -- [--app <application>] <log> [dive number]
 ```
 
-`<log>` is the log of any registered application: the MacDive database, a
-Subsurface XML file or a Subsurface git storage folder. `--app` takes the
-application's name; without it, a folder goes to the first application whose
-log can be a folder (Subsurface), a file to the first one whose files have its
-extension (`.xml` or `.ssrf`: Subsurface; `.sqlite`: MacDive), anything else
-to the first registered application (MacDive). The tool prints the number of
+`<log>` is the log of any registered application, for example the MacDive
+database, a Subsurface XML file or a Subsurface git storage folder (`--help`
+lists them all). `--app` takes the application's name. Without it, the tool
+tries the applications whose logs look like `<log>`, in the order of the
+list: those whose log can be a folder, for a folder (Subsurface); those whose
+files have its extension, for a file (`.xml` or `.ssrf`: Subsurface;
+`.sqlite`: MacDive); the first registered application (MacDive) for anything
+else. The first one that reads the log is used; when none does, the first
+one's error is shown. The tool prints the number of
 dives and sites, decodes every profile (listing those that fail), reads the
 log twice to compare identifiers, reports what breaks the rules above, and
 says whether reading changed, created or removed any file of the log (sizes
