@@ -3,10 +3,9 @@
 //! in [`crate::apps::ALL`], so Dive Lens never offers it; the tests check it
 //! like every registered description.
 //!
-//! A copy becomes `core/src/<application>/app.rs`, its `APP` is
-//! `pub static` (declared `mod app; pub use app::APP;` in the reader's
-//! module) and is added to [`crate::apps::ALL`]: the application then
-//! appears in Settings, on the systems it runs on.
+//! A copy becomes `core/src/<application>/app.rs` and its `APP` is added to
+//! [`crate::apps::ALL`]: the application then appears in Settings, on the
+//! systems it runs on.
 
 use std::path::{Path, PathBuf};
 
@@ -18,7 +17,7 @@ use crate::apps::{
 };
 use crate::tags::Units;
 
-pub(crate) static APP: DiveApp = DiveApp {
+pub static APP: DiveApp = DiveApp {
     // ADAPT: the id settings files keep (camelCase, never changed) and the
     // name written on photos (never translated, never changed).
     id: "example",
@@ -108,6 +107,7 @@ pub(crate) static APP: DiveApp = DiveApp {
             ],
         },
     },
+    #[cfg(test)]
     conformance: super::tests::conformance,
 };
 

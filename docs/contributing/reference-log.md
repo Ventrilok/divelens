@@ -255,11 +255,13 @@ application" issue so that the approach can be discussed.
 4. Describe the application in `core/src/<application>/app.rs`: a
    `pub static APP: DiveApp` with its id (camelCase, kept by settings files
    and never changed), its name, its texts in both languages, and its runs
-   (`conformance: super::tests::conformance`). In the tests' build the
-   description must have its runs: the compiler refuses one without them.
-5. Add `APP` to `ALL` in `core/src/apps.rs`. Its place in the list is the
-   order of Settings, and the first application available on a system is
-   the default there.
+   (`conformance: super::tests::conformance`). The runs exist only in the
+   tests' build, so keep the `#[cfg(test)]` above them; there, the compiler
+   refuses a description without them.
+5. Add `APP` to `ALL` in `core/src/apps.rs`: with the `pub mod` line of step
+   2, this registers the application. Its place in the list is the order of
+   Settings, and the first application available on a system is the default
+   there.
 6. Run `cargo test -p divelens-core` until it passes. The common tests run
    every registered application, opened as the app opens it; a failure
    lists every value that differs from this page. Other tests check the

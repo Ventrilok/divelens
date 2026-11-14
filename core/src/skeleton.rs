@@ -30,7 +30,7 @@
 //!    ids, wall-clock times, metres, °C, its way of storing missing values.
 //!    Declare what it provides in `capabilities`.
 //! 3. Describe the application in `app.rs` (`APP`: name, systems, standard
-//!    location, texts in English and French…) and make it `pub static`.
+//!    location, texts in English and French…).
 //! 4. In the tests, write the reference log as the application stores it;
 //!    its runs of the common tests go in the description.
 //! 5. Add `APP` to `crate::apps::ALL`, then run `cargo test -p
@@ -52,10 +52,9 @@ use crate::profile::Sample;
 use crate::sqlite;
 use crate::{Error, Result};
 
-// ADAPT: `mod app; pub use app::APP;` once the description is `pub static`.
 mod app;
 
-pub(crate) use app::APP;
+pub use app::APP;
 
 /// How Example writes times: the wall clock, as the dive computer showed it.
 // ADAPT: the application's own format.
