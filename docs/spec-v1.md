@@ -193,7 +193,7 @@ Parcours :
 2. L'application repère les appareils photo présents parmi les photos de la période couverte. Les photos sont cherchées **dans tout le catalogue**, sur la période des plongées choisies, élargie de la marge et des décalages. **[Décidé, 2026-11-12]** Un appareil est identifié par son modèle **et son numéro de série** quand la photo le contient, sinon par le modèle seul. Deux boîtiers du même modèle ont donc chacun leur décalage. **[Décidé, 2026-11-12]**
 3. **Pour chaque appareil**, l'utilisateur règle **un seul décalage d'horloge**, qui remplace les deux curseurs début et fin actuels. **[Décidé]**
    - Plage : ±24 h, au pas de la minute (comme aujourd'hui).
-   - **Décalage mémorisé [Décidé, 2026-11-12]** : l'application retient le dernier décalage appliqué à chaque appareil et le pré-remplit la fois suivante. Il sert aussi au repère « Couvre la sélection » de F8. Les décalages sont mémorisés **séparément pour chaque application de plongée** : un même carnet importé de l'une dans l'autre peut avoir des heures de début différentes (constaté : jusqu'à plusieurs heures entières entre MacDive et Subsurface). Après un changement d'application, aucun décalage n'est pré-rempli ; « Suggérer » le retrouve. **[Décidé, 2026-11-12]**
+   - **Décalage mémorisé [Décidé, 2026-11-12]** : l'application retient le dernier décalage appliqué à chaque appareil et le pré-remplit la fois suivante. Il sert aussi au repère « Couvre la sélection » de F8. **Partagé avec « Tagger la sélection » [Décidé, 2026-11-14]** : les deux écrans pré-remplissent et mémorisent les mêmes décalages (F8, « Données par photo »). Les décalages sont mémorisés **séparément pour chaque application de plongée** : un même carnet importé de l'une dans l'autre peut avoir des heures de début différentes (constaté : jusqu'à plusieurs heures entières entre MacDive et Subsurface). Après un changement d'application, aucun décalage n'est pré-rempli ; « Suggérer » le retrouve. **[Décidé, 2026-11-12]**
    - Bouton **« Suggérer »** : propose le décalage qui fait tomber le plus de photos dans les plongées choisies. Il teste les écarts au pas de 15 minutes entre −14 h et +14 h, ce qui couvre tous les fuseaux horaires. L'utilisateur accepte ou non. **[Décidé, 2026-11-12]** Le fuseau horaire enregistré dans les photos n'est **pas utilisé en V1** : il ne donne le décalage que si l'on connaît aussi le fuseau de la plongée, que Subsurface n'enregistre pas et que MacDive garde de façon peu fiable (souvent le fuseau du Mac ou « GMT »). **[Décidé, 2026-11-12]**
    - **Affichage des appareils [Proposé, maquette]** : une carte compacte par appareil, sur deux colonnes, **classées par nom d'appareil** [Décidé] ; les appareils à vérifier (0 photo dans les plongées) sont signalés en orange. Chaque carte : modèle et numéro de série complet **[Décidé, 2026-11-12]**, nombre de photos, décalage avec boutons −1 h / −1 min / +1 min / +1 h, « Suggérer », jauge des photos dans les plongées.
    - **Ignorer un appareil [Décidé]** : case par appareil (ex. téléphone resté sur le bateau) ; ses photos ne sont ni comptées ni taguées.
@@ -225,6 +225,8 @@ Critères d'acceptation :
 
 **[Décidé]** Uniquement la **profondeur**, la **température** et le **temps écoulé depuis le début de la plongée**. Pas de pression de bouteille ni de PPO2.
 
+Écrites par « Créer les collections » (F5) et, depuis le 2026-11-14, par « Tagger la sélection » quand la plongée choisie a une courbe (F8, « Données par photo »), avec le même calcul et les mêmes formats. **[Décidé, 2026-11-14]**
+
 - Calcul à partir de la courbe de plongée : heure de la photo + décalage de l'appareil, puis valeur estimée entre les deux points de mesure qui l'entourent. MacDive enregistre un point toutes les 10 secondes. **[Décidé, 2026-11-12 : interpolation linéaire]**
 - Plongée sans courbe : les trois champs restent **vides**. **[Décidé]**
 - Photo dans la marge, hors de la plongée : champs vides. **[Décidé]**
@@ -240,7 +242,8 @@ Critères d'acceptation :
 - La profondeur est **toujours** écrite dans le champ Dive Lens dédié.
 - Une option permet de la **copier aussi dans le champ altitude GPS**, en valeur négative, en mètres. Désactivée par défaut. **[Décidé]**
 - Comportements **[Décidé, 2026-11-12]** :
-  - seul « Créer les collections » écrit l'altitude : « Tagger la sélection » n'écrit pas de profondeur par photo. Il peut seulement **effacer** l'altitude tirée de la profondeur d'une autre plongée, quand il rattache la photo à une nouvelle plongée (F8) **[Décidé, 2026-11-14]** ;
+  - « Créer les collections » et « Tagger la sélection » écrivent l'altitude, sur les photos qui reçoivent une profondeur : « Tagger la sélection » copie la profondeur des photos prises pendant la plongée, comme « Créer les collections » (F8, « Données par photo »), toujours dans la seconde écriture (section 3) **[Décidé, 2026-11-14]**. Avant le 2026-11-14, seul « Créer les collections » l'écrivait ;
+  - « Tagger la sélection » **efface** aussi l'altitude tirée de la profondeur d'une autre plongée, quand il rattache la photo à une nouvelle plongée sans lui écrire de nouvelle altitude (F8) **[Décidé, 2026-11-14]** ;
   - une photo sans profondeur (prise dans la marge, plongée sans courbe) garde l'altitude qu'elle a déjà ;
   - désactiver l'option plus tard n'efface pas les altitudes déjà copiées ;
   - « Annuler » dans Lightroom **défait l'altitude** avec le reste, GPS compris : elle est écrite dans une seconde écriture, juste après le reste (section 3) **[Décidé, 2026-11-14]**. Le rappel après écriture le dit : « Pour tout défaire : Édition › Annuler dans Lightroom, en une seule fois, GPS et altitude compris. » (EN « To undo: Edit › Undo in Lightroom, in one step, GPS and altitude included. ») **[Proposé, 2026-11-14]**
@@ -266,9 +269,9 @@ Sélection **[Décidé]** :
 - Sans sélection, le bouton est désactivé avec le message « Sélectionnez des photos dans Lightroom ».
 
 Ce qui est écrit **[Décidé : comportement actuel en V1]** :
-- Données de plongée : n° de plongée, début, fin, durée, profondeur max, températures, note, et l'application source (section 7). Pas de données par photo, pas de collection. Celles d'une autre plongée déjà sur la photo sont effacées (voir « Photo déjà rattachée à une autre plongée » plus bas).
+- Données de plongée : n° de plongée, début, fin, durée, profondeur max, températures, note, et l'application source (section 7). Pas de collection. Celles d'une autre plongée déjà sur la photo sont effacées (voir « Photo déjà rattachée à une autre plongée » plus bas).
+- Données par photo : quand la plongée choisie a une courbe, sur les photos prises pendant la plongée (voir « Données par photo » plus bas) **[Décidé, 2026-11-14]**. Avant le 2026-11-14 : pas de données par photo.
 - Lieu : pays, ville, lieu, GPS (section 4).
-- Évolution envisagée : calculer les données par photo et alimenter la collection de la plongée.
 - Annulation : un « Annuler » dans Lightroom défait toute l'écriture, **GPS et altitude compris** : ils sont écrits dans une seconde écriture, juste après le reste (section 3). **[Décidé, 2026-11-14]** (Avant : « sauf le GPS », constaté le 2026-11-12 quand tout était écrit en une seule écriture, voir section 9.)
 
 Comportements **[Décidé, 2026-11-12]** :
@@ -281,12 +284,37 @@ Comportements **[Décidé, 2026-11-12]** :
 - « Appliquer » écrit les données du carnet affiché ; si le carnet réglé a changé entre-temps, rien n'est écrit et il faut recommencer. Changer de carnet dans Réglages remet l'écran à zéro (F2). **[Décidé, 2026-11-14]**
 - Après l'écriture : bandeau avec le nombre de photos taguées et le rappel qu'« Annuler » dans Lightroom défait tout en une fois : « Pour annuler : Édition › Annuler dans Lightroom, en une seule fois, GPS et altitude compris. » (EN « To undo: Edit › Undo in Lightroom, in one step, GPS and altitude included. ») **[Proposé, 2026-11-14]**
 
+Données par photo **[Décidé, 2026-11-14]** (remplace l'« évolution envisagée » : calculer les données par photo ; alimenter la collection de la plongée n'en fait pas partie, toujours pas de collection) :
+- Quand « Données de plongée » est cochée et que la plongée choisie a une courbe, « Tagger la sélection » écrit aussi, sur les photos sélectionnées dont l'heure corrigée tombe dans la plongée (début ≤ heure corrigée ≤ fin), la profondeur, la température et le temps écoulé, calculés exactement comme dans « Créer les collections » (F6 : interpolation linéaire, mêmes formats et unités).
+- **Décalage d'horloge par appareil**, comme à l'étape 2 de « Créer les collections » : sous « Données de plongée », un bloc avec une carte compacte par appareil présent dans la sélection, classées par nom d'appareil (appareil = modèle et numéro de série quand la photo le contient, F5). Chaque carte : nombre de photos, décalage, « Suggérer » et une jauge « N dans la plongée ». Au-dessus des cartes, une ligne en direct : « Données par photo : N photos sur M dans la plongée ». Le bloc est **toujours visible** (pas repliable) quand « Données de plongée » est cochée et que la plongée a une courbe. Plongée sans courbe : une seule ligne à la place, « Pas de courbe : pas de données par photo ». Les cartes sont celles de « Créer les collections », sans copie à part.
+- « Suggérer » propose le décalage qui fait tomber le plus de photos sélectionnées de l'appareil dans la plongée choisie, avec la même recherche que F5 (pas de 15 minutes entre −14 h et +14 h). Avec des photos prises à l'heure de France et une plongée aux Maldives (+4 h), « Suggérer » propose +4:00.
+- **Décalage pré-rempli** avec le dernier décalage appliqué à l'appareil, mémorisé séparément pour chaque application de plongée, au même endroit que pour « Créer les collections » (mêmes fichiers de décalages). Aucun décalage mémorisé : 0:00, et « Suggérer » est proposé. **Après « Appliquer », les décalages utilisés sont mémorisés**, partagés avec « Créer les collections » (F5).
+- Les photos hors de la plongée (après décalage) reçoivent les données de plongée sans données par photo, comme les photos de la marge dans F5. **Pas de marge** dans « Tagger la sélection ».
+- Le **décalage d'horloge** (ClockOffset, section 7) n'est écrit que sur les photos qui reçoivent des données par photo.
+- **Altitude** : quand l'option « Copier la profondeur dans l'altitude GPS » est activée, la profondeur est copiée dans l'altitude, comme dans « Créer les collections » (F7), toujours dans la seconde écriture (section 3).
+- Le repère « Couvre la sélection » suit les décalages affichés à l'écran, pas seulement les décalages mémorisés (voir « Suggestion » plus bas).
+- Tout le reste de « Tagger la sélection » est inchangé : lieu, GPS, Source, pas de collection. Le lieu seul (« Données de plongée » décochée) est inchangé.
+- Photo déjà rattachée (voir plus bas) : **autre plongée** : les photos dans la plongée reçoivent les nouvelles valeurs ; les photos hors de la plongée voient les valeurs par photo de l'ancienne plongée effacées, comme avant (règle de l'altitude tirée de la profondeur inchangée). **Même plongée** : les photos dans la plongée voient leurs valeurs par photo réécrites avec le décalage affiché ; les photos hors de la plongée gardent leurs valeurs par photo **[Proposé]**.
+- Détails **[Proposé, 2026-11-14]** :
+  - Le bloc s'intitule « Horloge des appareils », avec l'explication de « Créer les collections » : « Écart entre l'heure de chaque appareil et celle du carnet de plongée. Appareils classés par nom ; ceux à vérifier sont en orange. » Il se place sous la liste des plongées et sa fiche, au-dessus de la ligne « Écrit : … ». Sans plongée choisie, ni bloc ni ligne.
+  - Les cartes sont exactement celles de « Créer les collections » : curseur de −14 h à +14 h au quart d'heure, champ heures:minutes (flèches haut/bas : ±1 min), « Suggérer », étiquette « décalage mémorisé », carte en orange quand aucune photo de l'appareil n'est dans la plongée. Ni « Ignorer » ni « Suggérer pour tous ».
+  - Textes anglais : « Per-photo data: N photos of M in the dive », « No profile: no per-photo data », jauge « N in the dive ». M compte toutes les photos sélectionnées, y compris celles sans heure de prise de vue, qui ne sont jamais dans la plongée.
+  - « Suggérer » sans résultat : « Aucun décalage ne place de photo de cet appareil dans la plongée. » (EN « No offset puts a photo of this camera in the dive. »)
+  - Ligne sous la liste quand la plongée a une courbe : « Écrit : n° de plongée, début, fin, durée, profondeur max, températures, note ; sur les photos prises pendant la plongée, aussi profondeur · température · temps et le décalage d'horloge. » (EN « Written: dive number, start, end, duration, max depth, temperatures, rating; on the photos taken during the dive, also depth · temperature · time and the clock offset. ») Sinon, la ligne actuelle.
+  - Tant que « Données de plongée » est cochée, l'application relit la sélection photo par photo (heure, appareil) à chaque changement de sélection. Pendant la lecture, dans le bloc et dans la barre du bas, « Appliquer » grisé : « Lecture de la sélection dans Lightroom… » (EN « Reading the selection in Lightroom… »). En cas d'échec : « La sélection n'a pas pu être lue dans Lightroom : {erreur} » (EN « The selection could not be read in Lightroom: {error} ») et « Réessayer ».
+  - Changement de sélection : un appareil encore présent garde le décalage affiché ; un nouvel appareil part du décalage mémorisé. Le repère « Couvre la sélection » prend les décalages des cartes dès que la sélection est lue, et les décalages mémorisés avant.
+  - « Appliquer » écrit les données par photo calculées pour la sélection affichée. Si, au moment du clic, la sélection dans Lightroom n'est plus exactement celle-là, rien n'est écrit : « La sélection a changé dans Lightroom. Rien n'a été écrit : vérifiez les données par photo, puis appliquez à nouveau. » (EN « The selection changed in Lightroom. Nothing was written: check the per-photo data, then apply again. »), et la sélection est relue. Sans données par photo (plongée sans courbe, lieu seul), « Appliquer » écrit comme avant sur la sélection du moment.
+  - Décalages mémorisés après « Appliquer » : ceux des appareils dont au moins une photo est dans la plongée (le décalage leur a été appliqué), comme dans « Créer les collections » ; aussi quand seuls le GPS et l'altitude n'ont pas pu être écrits.
+  - Bandeau après écriture inchangé (nombre de photos taguées, sans le nombre de photos avec profondeur).
+  - Réglages › Écriture sur les photos : la précision sous « Copier la profondeur dans l'altitude GPS » devient « En valeur négative, en mètres, en plus du champ Dive Lens. Pour « Créer les collections » et « Tagger la sélection ». » (EN « As a negative value, in metres, in addition to the Dive Lens field. Create Collections and Tag Selection. »), au lieu de « … Pour « Créer les collections » seulement. ».
+
 Photo déjà rattachée à une autre plongée **[Décidé, 2026-11-14]** :
 - Quand « Données de plongée » est cochée et qu'une photo porte déjà une **autre** plongée, ses valeurs par photo sont effacées : profondeur, température, temps écoulé et décalage d'horloge (F6, section 7). Elles décrivaient l'ancienne plongée.
 - L'altitude GPS n'est effacée que si elle vaut **exactement** celle que Dive Lens a tirée de l'ancienne profondeur (F7), au décimètre près. Sinon elle reste : ce champ Lightroom est partagé avec l'appareil photo et l'utilisateur. Dans le doute, on la garde.
   - En pieds, la profondeur écrite est arrondie au pied : l'altitude tirée de la profondeur exacte ne se retrouve souvent pas, et elle est alors gardée.
   - Profondeur absente ou illisible : l'altitude est gardée.
-- **Même plongée** : application source, début et n° de plongée identiques tous les trois. Un n° vide des deux côtés compte comme identique. Rien d'autre n'est alors touché.
+- Quand la plongée a une courbe, les photos prises pendant la plongée reçoivent leurs nouvelles valeurs par photo au lieu de les voir effacées ; l'altitude tirée de l'ancienne profondeur est alors remplacée par la nouvelle si l'option altitude est activée, et effacée sinon (voir « Données par photo » plus haut) **[Décidé, 2026-11-14]**.
+- **Même plongée** : application source, début et n° de plongée identiques tous les trois. Un n° vide des deux côtés compte comme identique. Rien d'autre n'est alors touché, sauf les valeurs par photo des photos prises pendant la plongée, réécrites avec le décalage affiché (« Données par photo » plus haut).
   - Le début est enregistré sur la photo en texte, au format de date du système. Si ce format change entre deux écritures (changement de région, catalogue ouvert sur Mac puis sur Windows), la même plongée passe pour une autre : ses valeurs par photo sont effacées, ainsi que l'altitude GPS tirée de la profondeur, dans les conditions ci-dessus (« Annuler » dans Lightroom les remet). Accepté pour la V1. **[Décidé, 2026-11-14]**
 - Une photo sans données de plongée n'a rien à effacer. Le lieu seul (« Données de plongée » décochée) ne touche à rien d'autre.
 - La vérification se fait au moment de l'écriture, d'après la plongée que porte la photo, dans la première écriture ; l'altitude est effacée dans la seconde, avec le GPS (section 3). Le tout reste une seule étape d'annulation.
@@ -297,7 +325,7 @@ Photo déjà rattachée à une autre plongée **[Décidé, 2026-11-14]** :
 
 Liste des plongées **[Décidé]** : **la même que dans F4** (mêmes colonnes, regroupement par mois, recherche et filtres), en choix unique.
 
-Suggestion **[Décidé]** : la ligne de la plongée dont les heures couvrent la sélection porte un repère « Couvre la sélection ». Le calcul applique le dernier décalage appliqué au boîtier dans « Créer les collections », quand il existe. **[Décidé, 2026-11-12]** Ce n'est qu'une aide : l'utilisateur choisit.
+Suggestion **[Décidé]** : la ligne de la plongée dont les heures couvrent la sélection porte un repère « Couvre la sélection ». Le calcul applique à chaque boîtier le décalage affiché à l'écran (« Données par photo » plus haut), pré-rempli avec le dernier décalage appliqué au boîtier, dans « Créer les collections » ou « Tagger la sélection », quand il existe. **[Décidé, 2026-11-14]** (Avant : seulement le dernier décalage appliqué dans « Créer les collections », 2026-11-12.) Ce n'est qu'une aide : l'utilisateur choisit.
 
 
 ### F9 — (fusionné dans F8)
@@ -385,7 +413,7 @@ Description fonctionnelle seulement. La mise en page est une décision du propri
 | **Accueil / état** | Liaison Lightroom, nombre de photos sélectionnées, source de plongée et nombre de plongées | Aller vers chaque usage, ouvrir les réglages |
 | **Liste des plongées** | Plongées (F4), indicateur de courbe ; étape 1 de « Créer les collections », pas d'écran à part | Rechercher, sélectionner une ou plusieurs plongées |
 | **Créer les collections** (F5) | Plongées choisies avec compteur de photos chacune, appareils détectés, décalage et marge, total | Régler le décalage par appareil, « Suggérer », régler la marge, Appliquer |
-| **Tagger la sélection** (F8) | Sélection Lightroom en direct (nombre, vignettes), plongée choisie, lieu (site de la plongée ou autre site : pays › lieu › site, GPS) | Cocher données de plongée et/ou lieu, choisir, Appliquer |
+| **Tagger la sélection** (F8) | Sélection Lightroom en direct (nombre, vignettes), plongée choisie, appareils de la sélection avec leur décalage et le nombre de photos dans la plongée quand elle a une courbe, lieu (site de la plongée ou autre site : pays › lieu › site, GPS) | Cocher données de plongée et/ou lieu, choisir, régler le décalage par appareil, « Suggérer », Appliquer |
 | **Réglages** (F2, F3, F7, F10) | Source de plongée et état de la base, langue, unités, option altitude et son explication, emplacement des collections, journal, à propos | Modifier, afficher le journal, exporter et importer les réglages (F11) ; F13 plus tard |
 | **Résultat d'application** | Collections créées, photos écrites, plongées sans photo | Fermer |
 
@@ -406,6 +434,8 @@ Description fonctionnelle seulement. La mise en page est une décision du propri
 | PhotoElapsed | temps écoulé depuis le début de la plongée | oui |
 | ClockOffset | décalage d'horloge appliqué à la photo, `±HH:MM` | oui **[Décidé]** |
 | Source | application dont viennent les données de plongée : `MacDive` ou `Subsurface` | oui **[Décidé, 2026-11-12]** |
+
+PhotoDepth, PhotoTemp, PhotoElapsed et ClockOffset sont écrits par « Créer les collections » (ClockOffset sur toutes les photos rangées, marge comprise) et par « Tagger la sélection » seulement sur les photos prises pendant la plongée, quand elle a une courbe (F8). **[Décidé, 2026-11-14]**
 
 Source est écrit chaque fois que des données de plongée le sont : par « Créer les collections » sur toutes les photos rangées, et par « Tagger la sélection » quand « Données de plongée » est cochée. Un lieu posé seul ne le touche pas. Les photos déjà taguées le gardent vide jusqu'à une nouvelle application. **[Décidé, 2026-11-12]**
 
@@ -497,6 +527,7 @@ Aucune question ouverte à ce stade.
 
 ### Tranché
 
+- Tagger la sélection, données par photo (2026-11-14) : profondeur, température et temps écoulé sur les photos prises pendant la plongée, avec un décalage par appareil comme dans « Créer les collections », partagé avec lui ; altitude avec l'option ; repère « Couvre la sélection » d'après les décalages affichés ; toujours pas de collection (F5, F6, F7, F8).
 - Annulation du GPS et de l'altitude (2026-11-14) : écrits dans une seconde écriture, juste après le reste, pour qu'un seul « Annuler » défasse tout (section 3, section 9).
 - Coordonnées GPS (2026-11-13) : affichées comme dans Lightroom (degrés, minutes, secondes), saisie toujours en décimal (F4).
 - Carte du site (2026-11-13) : carte en ligne sous le GPS de la fiche, plutôt qu'une carte hors ligne grossière (F4).
@@ -510,7 +541,7 @@ Aucune question ouverte à ce stade.
 - Unités : réglage métrique / impérial (F2) ; profondeurs écrites avec leur unité (F6).
 - Liste des plongées : affichage et filtres redéfinis pendant le design (F4).
 - Identification d'un appareil : modèle + numéro de série quand disponible (F5, proposé).
-- Tagger la sélection : fusion des deux usages sur la sélection ; comportement actuel en V1, évolution notée (F8).
+- Tagger la sélection : fusion des deux usages sur la sélection ; comportement actuel en V1, évolution notée (F8) ; données par photo ajoutées le 2026-11-14.
 - Noms : « Créer les collections » et « Tagger la sélection » ; deux menus raccourcis dans Lightroom (section 3).
 - Langues : multilingue (F2).
 - Emplacement de la base : emplacement standard de MacDive pré-rempli (F2).

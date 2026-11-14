@@ -73,7 +73,7 @@ Dive Lens cherche dans tout le catalogue les photos prises sur la période des p
 - Vous pouvez aussi saisir le décalage (heures:minutes) ou l'ajuster vous-même.
 - **Ignorer** écarte un appareil, par exemple un téléphone resté sur le bateau : ses photos ne sont ni comptées ni taguées.
 
-Dive Lens retient le dernier décalage utilisé pour chaque appareil et le propose la fois suivante.
+Dive Lens retient le dernier décalage utilisé pour chaque appareil et le propose la fois suivante, ici et dans Tagger la sélection (section 4).
 
 **Inclure les photos prises en surface.** Facultatif, 0 minute par défaut : jusqu'à N minutes avant et après chaque plongée, pour les photos prises sur le bateau juste avant la mise à l'eau ou juste après la sortie. Elles rejoignent la collection de la plongée et reçoivent les infos de plongée, sans profondeur.
 
@@ -108,15 +108,22 @@ Pour des photos sans heure fiable, pour rattacher des photos à une plongée à 
 
 1. Dans Lightroom, sélectionnez les photos. L'application suit la sélection en direct et en montre les vignettes.
 2. Cochez ce qu'il faut écrire :
-   - **Données de plongée** : cliquez ensuite sur une plongée dans la liste. La plongée dont les heures couvrent la sélection porte le repère **Couvre la sélection** (il tient compte du dernier décalage de l'appareil). Ce n'est qu'une aide : c'est vous qui choisissez.
+   - **Données de plongée** : cliquez ensuite sur une plongée dans la liste. La plongée dont les heures couvrent la sélection porte le repère **Couvre la sélection** (il tient compte du décalage de chaque appareil affiché sous la liste, au départ le dernier utilisé). Ce n'est qu'une aide : c'est vous qui choisissez.
    - **Lieu** : le **Site de la plongée** choisie, ou un **Autre site** choisi par pays › lieu › site parmi les sites de votre carnet. Son GPS est modifiable (en degrés décimaux, par exemple `-20.2531` et `57.5125`).
 3. Cliquez sur **Appliquer à N photos**. Ce sont les photos sélectionnées dans Lightroom **à ce moment-là** qui sont écrites.
 
-Ce qui est écrit : avec **Données de plongée**, le n° de plongée, le début, la fin, la durée, la profondeur max, les températures et la note (pas de profondeur par photo ni de collection) ; avec **Lieu**, le pays, la ville, le lieu et le GPS.
+**Horloge des appareils et données par photo.** Quand la plongée choisie a une courbe, les photos prises pendant la plongée reçoivent aussi **la profondeur, la température et le temps écoulé**, exactement comme dans Créer les collections. Sous la liste des plongées, **Horloge des appareils** montre une carte par appareil de la sélection, comme à l'étape 2 de Créer les collections : réglez son décalage d'horloge, ou cliquez sur **Suggérer** pour le décalage qui place le plus de photos sélectionnées dans la plongée. Chaque décalage part du dernier utilisé pour cet appareil (dans l'un ou l'autre écran) ; sans décalage connu, il part de 0:00. La ligne **Données par photo : N photos sur M dans la plongée** suit vos réglages. Une plongée sans courbe affiche « Pas de courbe : pas de données par photo » à la place.
+
+- Les photos hors de la plongée (après décalage) reçoivent les données de plongée, sans données par photo. Il n'y a pas de marge ici.
+- Les décalages utilisés sont retenus pour la fois suivante, en commun avec Créer les collections.
+- Si la sélection change dans Lightroom au moment où vous cliquez sur **Appliquer**, rien n'est écrit : vérifiez les données par photo, puis appliquez à nouveau.
+
+Ce qui est écrit : avec **Données de plongée**, le n° de plongée, le début, la fin, la durée, la profondeur max, les températures et la note, et, sur les photos prises pendant une plongée qui a une courbe, la profondeur, la température, le temps écoulé et le décalage d'horloge (et l'altitude GPS si **Copier la profondeur dans l'altitude GPS** est activé, section 5) ; pas de collection. Avec **Lieu**, le pays, la ville, le lieu et le GPS.
 
 - Une valeur absente de la plongée choisie (température, note…) efface l'ancienne valeur Dive Lens de la photo : les champs décrivent toujours une seule plongée.
 - Un site sans pays, ville ou GPS ne touche pas aux valeurs déjà présentes sur la photo (une position GPS venue d'un téléphone est conservée).
-- Avec **Données de plongée**, une photo qui porte déjà une **autre** plongée perd les valeurs propres à celle-ci : profondeur, température, temps écoulé et décalage d'horloge. Son altitude GPS n'est effacée que si c'est celle que Dive Lens a copiée depuis l'ancienne profondeur ; toute autre altitude est conservée. La photo reste dans sa collection : à vous de la déplacer si besoin.
+- Avec **Données de plongée**, une photo qui porte déjà une **autre** plongée perd les valeurs propres à celle-ci : profondeur, température, temps écoulé et décalage d'horloge, remplacés par les nouveaux quand la photo a été prise pendant la nouvelle plongée. Son altitude GPS n'est effacée que si c'est celle que Dive Lens a copiée depuis l'ancienne profondeur (sauf si une nouvelle profondeur y est copiée) ; toute autre altitude est conservée. La photo reste dans sa collection : à vous de la déplacer si besoin.
+- Taguer une photo avec la plongée qu'elle porte déjà réécrit ses données par photo si elle a été prise pendant la plongée, avec le décalage affiché ; les autres photos gardent les leurs.
 - **Édition › Annuler** dans Lightroom défait tout en une fois, GPS et altitude compris.
 
 ---
