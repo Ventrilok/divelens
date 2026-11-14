@@ -631,14 +631,14 @@ fn collections_write_gps_and_altitude_in_a_write_of_their_own() {
 }
 
 #[test]
-fn progress_counts_both_writes_in_photos() {
+fn progress_tells_the_first_write_only() {
     let lua = lua();
-    let reported = |total: u32, steps: u32, calls: u32| -> Vec<u32> {
+    let reported = |total: u32| -> Vec<u32> {
         lua.load(format!(
             r#"
-            local p = require("Tagging").progress({total}, {steps}, 50)
+            local p = require("Tagging").progress({total}, 50)
             local out = {{}}
-            for _ = 1, {calls} do
+            for _ = 1, {total} do
                 local done = p.advance()
                 if done then out[#out + 1] = done end
             end
@@ -648,17 +648,11 @@ fn progress_counts_both_writes_in_photos() {
         .eval()
         .unwrap()
     };
-    // One write: every 50 photos, never the last one (as before).
-    assert_eq!(reported(120, 120, 120), [50, 100]);
-    assert_eq!(reported(100, 100, 100), [50]);
-    assert_eq!(reported(30, 30, 30), Vec::<u32>::new());
-    // Both writes on every photo: half a photo per write.
-    assert_eq!(reported(120, 240, 240), [25, 50, 75, 100]);
-    // More writes than counted (altitudes found during the first write):
-    // the count stops short of the total, never goes back.
-    assert_eq!(reported(120, 120, 180), [50, 100]);
-    // Fewer: the count keeps going up and still never reaches the total.
-    assert_eq!(reported(120, 240, 120), [25, 50]);
+    // Every 50 photos, never the last one: the app's answer tells the end.
+    // The second write tells nothing (it must not pause).
+    assert_eq!(reported(120), [50, 100]);
+    assert_eq!(reported(100), [50]);
+    assert_eq!(reported(30), Vec::<u32>::new());
 }
 
 /// What a photo carries before "Tag Selection", as the plugin's own write

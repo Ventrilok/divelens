@@ -196,21 +196,17 @@ function Tagging.splitGps(...)
     return first, second
 end
 
---- Progress of an "Apply" over its two writes, told in photos: `total`
---- photos, `steps` photo writes in all (each photo counts once per write it
---- is in; a short guess only holds the count back). Call `advance()` after
---- each photo write: every `every` writes it returns the number of photos to
---- report, or nil when there is nothing new. Never less than before, never
---- `total`: the app's answer tells the end.
-function Tagging.progress(total, steps, every)
-    local step, last = 0, 0
+--- Progress of an "Apply"'s first write, told in photos, `total` in all.
+--- Call `advance()` after each photo: every `every` photos it returns the
+--- number done, nil otherwise, and never `total` (the app's answer tells the
+--- end). The second write tells nothing: it must not pause (see Link.lua,
+--- writeGpsLater), so the count stays where the first write left it.
+function Tagging.progress(total, every)
+    local done = 0
     local p = {}
     function p.advance()
-        step = step + 1
-        if step % every ~= 0 then return nil end
-        local done = math.floor(step * total / math.max(steps, 1))
-        if done >= total or done <= last then return nil end
-        last = done
+        done = done + 1
+        if done % every ~= 0 or done >= total then return nil end
         return done
     end
     return p
