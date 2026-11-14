@@ -4,7 +4,7 @@ Thank you for your interest in Dive Lens. It links underwater photos in Adobe Li
 
 Bug reports, requests to support another dive application, fixes and documentation are all welcome.
 
-**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share here a real dive log, a dive-log database, what a tool prints from one, the Dive Lens log files, or an exported Dive Lens settings file. See [Test data: fictional only](#test-data-fictional-only). When the log files, or a log to test a new dive application, are needed, they go privately by e-mail to [divelens@querton.com](mailto:divelens@querton.com): see [Reporting a bug or asking for a dive application](#reporting-a-bug-or-asking-for-a-dive-application).
+**One rule before anything else: this repository is public.** Everything you put in it, in an issue or in a pull request, stays visible to everyone, including in the history. Never share here a real dive log, a dive-log database, what a tool prints from one, the Dive Lens log files, or an exported Dive Lens settings file. See [Test data: fictional or anonymised](#test-data-fictional-or-anonymised). When the log files, or a log to test a new dive application, are needed, they go privately by e-mail to [divelens@querton.com](mailto:divelens@querton.com): see [Reporting a bug or asking for a dive application](#reporting-a-bug-or-asking-for-a-dive-application).
 
 ## Contents
 
@@ -14,7 +14,7 @@ Bug reports, requests to support another dive application, fixes and documentati
 - [Trying the plug-in in Lightroom](#trying-the-plug-in-in-lightroom)
 - [Checks before you commit](#checks-before-you-commit)
 - [Branches, commits and pull requests](#branches-commits-and-pull-requests)
-- [Test data: fictional only](#test-data-fictional-only)
+- [Test data: fictional or anonymised](#test-data-fictional-or-anonymised)
 - [Secrets](#secrets)
 - [What must never be renamed](#what-must-never-be-renamed)
 - [The libdivecomputer submodule](#the-libdivecomputer-submodule)
@@ -142,7 +142,7 @@ Continuous integration runs the same checks on **macOS and Windows** for every p
 
 **Visible text** says **"Dive Lens"**, two words, wherever a person reads it: the app, Lightroom texts, the bundle name, the documentation. Identifiers keep **"DiveLens"** / **"divelens"**: the plug-in identifier and folder, the bundle identifier, translation keys, crate names, log file names.
 
-## Test data: fictional only
+## Test data: fictional or anonymised
 
 The repository is public, and git history keeps everything forever: a dive log committed by mistake and deleted later is still there. A dive log is personal data. It holds dates, places and GPS positions, often buddy names, notes and the diver's own name, and its file path usually contains a user name.
 
@@ -187,4 +187,4 @@ Use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choos
 Both remind you of the privacy rule above:
 
 - For a bug, describe the problem in the issue. If the Dive Lens log files are needed, you will be asked for them: send them by e-mail to [divelens@querton.com](mailto:divelens@querton.com), never in an issue. In the issue itself, paste at most the relevant lines, with site names, places, people's names and file paths removed.
-- For a new dive application, a fictional log, or your real log once anonymised, helps testing. Send it by e-mail to the same address, never attached to the issue. It is used to test the new reader. The repository itself only ever holds fictional or properly anonymised test data, never a real log as it is (see [Test data](#test-data-fictional-only)).
+- For a new dive application, a fictional log, or your real log once anonymised, helps testing. Send it by e-mail to the same address, never attached to the issue. It is used to test the new reader. The repository itself only ever holds fictional or properly anonymised test data, never a real log as it is (see [Test data](#test-data-fictional-or-anonymised)).
