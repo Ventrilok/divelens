@@ -17,7 +17,7 @@ import {
   SLIDER_STEP_MIN,
 } from "../cameras";
 import { placeLabel, setExists } from "../collectionPlace";
-import { isLogChanged, logRef } from "../diveLog";
+import { logRef, nextSearchNumber } from "../diveLog";
 import { Icon } from "../components/Icon";
 import { Steps } from "../components/Steps";
 import { formatDay, formatRange, formatRowSpan } from "../format";
@@ -63,6 +63,7 @@ function failure(e: CollectionsError): string {
     case "nothingChosen":
       return t("coll.err.nothingChosen");
     case "logChanged":
+      // Not seen: the app reads the log again and says why on step 1.
       return t("log.changedNothingWritten");
     case "lightroom":
       if (e.reason === "busy") return t("coll.err.busy");
@@ -379,7 +380,7 @@ export function CollectionsScreen({
     let live = true;
     setSearch({ state: "searching" });
     setPreview(null);
-    findCollectionPhotos(logRef(log.source), diveKey.split(","))
+    findCollectionPhotos(logRef(log.source), nextSearchNumber(), diveKey.split(","))
       .then((period) => {
         if (!live) return;
         // Same dives found again (link restarted): the user's settings stay.
@@ -393,11 +394,7 @@ export function CollectionsScreen({
         if (!keep) setNotes({});
         setSearch({ state: "ready", period });
       })
-      .catch(
-        (e: CollectionsError) =>
-          // A search writes nothing: the refusal says so without "nothing was written".
-          live && setSearch({ state: "failed", message: isLogChanged(e) ? t("log.changed") : failure(e) }),
-      );
+      .catch((e: CollectionsError) => live && setSearch({ state: "failed", message: failure(e) }));
     return () => {
       live = false;
     };

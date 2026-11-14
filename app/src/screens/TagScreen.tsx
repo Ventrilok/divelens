@@ -8,6 +8,7 @@ import { onApplyProgress, onSelectionPreview, selectionPreview, tagSelection } f
 import { coveringDive } from "../covers";
 import { logRef } from "../diveLog";
 import { DiveDetail } from "../components/DiveDetail";
+import { LogNotice } from "../components/LogNotice";
 import { DiveList } from "../components/DiveList";
 import { FilterBar } from "../components/FilterBar";
 import { NO_PICK, pickAround, SitePicker, type SitePick } from "../components/SitePicker";
@@ -40,8 +41,6 @@ function failure(e: ApplyOutcome | TagError): string {
       return t("tag.err.linkLost");
     case "notConnected":
       return t("tag.err.notConnected");
-    case "logChanged":
-      return t("log.changedNothingWritten");
     default: {
       const detail = "outcome" in e ? (e.outcome === "failed" ? (e.detail ?? e.reason) : "") : JSON.stringify(e);
       return t("tag.err.other", { detail });
@@ -53,12 +52,17 @@ export function TagScreen({
   log,
   lr,
   sort,
+  notice,
+  onDismissNotice,
   onCancel,
 }: {
   log: DiveLog;
   lr: LightroomStatus;
   /** Same order as the dive list of Create Collections (one list everywhere). */
   sort: Sort;
+  /** Why the screen started again (the dive log changed), shown once. */
+  notice: string | null;
+  onDismissNotice: () => void;
   onCancel: () => void;
 }) {
   const units = log.units;
@@ -155,6 +159,7 @@ export function TagScreen({
           ? { kind: "diveSite" }
           : { kind: "site", siteId: pick.siteId as string, lat: gps?.lat ?? null, lon: gps?.lon ?? null },
     };
+    onDismissNotice();
     setRun({ state: "writing", done: 0, total: lr.selected });
     tagSelection(logRef(log.source), choice)
       .then((outcome) =>
@@ -177,6 +182,7 @@ export function TagScreen({
           <p className="muted">{t("tag.subtitle")}</p>
         </div>
       </header>
+      {notice && <LogNotice text={notice} onDismiss={onDismissNotice} />}
 
       <section className="card tag-selection" aria-label={t("tag.live")}>
         <div className="tag-selection-text">

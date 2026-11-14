@@ -19,15 +19,18 @@ import type {
   TagChoice,
 } from "./types";
 
-let logChanged = () => {};
-/** Calls `handler` when the back end refuses an action because the dive log is no longer the one shown. */
-export const onLogChanged = (handler: () => void) => {
+let logChanged = (_applied: boolean) => {};
+/**
+ * Calls `handler` when the back end refuses an action because the dive log is
+ * no longer the one shown; `applied`: the action was an Apply.
+ */
+export const onLogChanged = (handler: (applied: boolean) => void) => {
   logChanged = handler;
 };
 /** An action on the dive log `log`: refused (rejects with logChanged) when it is no longer the configured one. */
-function onLog<T>(call: Promise<T>): Promise<T> {
+function onLog<T>(call: Promise<T>, applied = false): Promise<T> {
   return call.catch((e: unknown) => {
-    if (isLogChanged(e)) logChanged();
+    if (isLogChanged(e)) logChanged(applied);
     throw e;
   });
 }
@@ -70,7 +73,7 @@ export const onShowScreen = (handler: (screen: string) => void): Promise<Unliste
 
 /** Tags the photos selected in Lightroom with data of `log`; rejects with a TagError. */
 export const tagSelection = (log: LogRef, choice: TagChoice) =>
-  onLog(invoke<ApplyOutcome>("tag_selection", { log, choice }));
+  onLog(invoke<ApplyOutcome>("tag_selection", { log, choice }), true);
 
 /** Progress of a catalog write: (photos done, total). */
 export const onApplyProgress = (handler: (done: number, total: number) => void): Promise<UnlistenFn> =>
@@ -82,9 +85,12 @@ export const selectionPreview = () => invoke<SelectionPreview>("selection_previe
 export const onSelectionPreview = (handler: (p: SelectionPreview) => void): Promise<UnlistenFn> =>
   listen<SelectionPreview>("selection-preview", (e) => handler(e.payload));
 
-/** Finds in Lightroom the photos of the period of dives of `log`; rejects with a CollectionsError. */
-export const findCollectionPhotos = (log: LogRef, diveIds: string[]) =>
-  onLog(invoke<Period>("find_collection_photos", { log, diveIds }));
+/**
+ * Finds in Lightroom the photos of the period of dives of `log`; `search`
+ * numbers it, higher than any search asked for before. Rejects with a CollectionsError.
+ */
+export const findCollectionPhotos = (log: LogRef, search: number, diveIds: string[]) =>
+  onLog(invoke<Period>("find_collection_photos", { log, search, diveIds }));
 /** Live counts of photo search `search`; rejects with noPhotos once a newer search replaced it. */
 export const collectionsPreview = (search: number, choices: CollectionChoices) =>
   invoke<CollectionsPreview>("collections_preview", { search, choices });
@@ -93,4 +99,4 @@ export const suggestOffsets = (search: number, cameras: string[]) =>
   invoke<Record<string, number | null>>("suggest_offsets", { search, cameras });
 /** Writes the dives found with photo search `search`, which must come from `log`; rejects with a CollectionsError. */
 export const applyCollections = (log: LogRef, search: number, choices: CollectionChoices) =>
-  onLog(invoke<CollectionsResult>("apply_collections", { log, search, choices }));
+  onLog(invoke<CollectionsResult>("apply_collections", { log, search, choices }), true);

@@ -1,8 +1,8 @@
 // One dive log at a time (spec F2): the log a screen shows, as every action
 // names it, and the reads of the log, of which only the latest counts.
 
-import { t } from "./i18n";
-import type { LogRef, SourceInfo } from "./types";
+import { t, type Key } from "./i18n";
+import type { LogRef, Settings, SourceInfo, SourceKind } from "./types";
 
 /** The dive log a screen shows, as the back end checks it: application and location. */
 export const logRef = (source: SourceInfo): LogRef => ({ kind: source.kind, path: source.path });
@@ -11,6 +11,32 @@ export const logRef = (source: SourceInfo): LogRef => ({ kind: source.kind, path
 export function isLogChanged(error: unknown): boolean {
   return typeof error === "object" && error !== null && (error as { error?: unknown }).error === "logChanged";
 }
+
+/**
+ * What the screen the diver lands on says after a refusal because the dive
+ * log changed: an Apply refused says nothing was written, and wins.
+ */
+export function logChangedNotice(current: Key | null, applied: boolean): Key {
+  return applied ? "log.changedNothingWritten" : (current ?? "log.changed");
+}
+
+/**
+ * Whether a change of the dive-log settings leaves the log in use alone:
+ * only the location of the other application changed (an import, the
+ * previous plug-in's settings). `kindInUse` is the application of the log
+ * shown, as the back end resolved it. Nothing needs reading again then.
+ */
+export function sameLogSetting(before: Settings["source"], after: Settings["source"], kindInUse: SourceKind): boolean {
+  const path = (s: Settings["source"]) => (kindInUse === "subsurface" ? s.subsurfacePath : s.macDivePath);
+  return before.kind === after.kind && path(before) === path(after);
+}
+
+let lastSearch = Date.now();
+/**
+ * Number of a photo search the screen asks for now, higher than any before
+ * (also across a reload of the window): the back end keeps the latest only.
+ */
+export const nextSearchNumber = () => ++lastSearch;
 
 /** Why a setting was not changed (a ChangeError from the back end). */
 export function changeErrorText(error: unknown): string {

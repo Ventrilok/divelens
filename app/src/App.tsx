@@ -14,16 +14,16 @@ import {
   updateSettings,
 } from "./api";
 import { unitsInUse } from "./collectionPlace";
-import { latestOnly, logWatch } from "./diveLog";
+import { latestOnly, logChangedNotice, logWatch, sameLogSetting } from "./diveLog";
 import { profiles } from "./profiles";
 import { isReadyScreen, Sidebar, type Screen } from "./components/Sidebar";
-import { lang, setLanguage, t } from "./i18n";
+import { lang, setLanguage, t, type Key } from "./i18n";
 import { CollectionsScreen, type Phase } from "./screens/CollectionsScreen";
 import { DivesScreen } from "./screens/DivesScreen";
 import { TagScreen } from "./screens/TagScreen";
 import { SettingsScreen, type LogState } from "./screens/SettingsScreen";
 import { SourceError } from "./screens/SourceError";
-import type { AppInfo, LightroomStatus, LoadError, Settings, Sort, SourceInfo } from "./types";
+import type { AppInfo, LightroomStatus, LoadError, Settings, Sort, SourceInfo, SourceKind } from "./types";
 import "./App.css";
 
 const offline: LightroomStatus = {
@@ -47,6 +47,10 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   // Tag Selection's Cancel starts it again from scratch.
   const [tagRun, setTagRun] = useState(0);
+  // Why a flow started again (an action was refused: the dive log changed).
+  // Shown once on the screen the diver lands on, until the next step,
+  // Apply, Cancel, another screen, or Close.
+  const [logNotice, setLogNotice] = useState<Key | null>(null);
 
   // While collections are being written, the screen stays put so that the
   // summary is seen. Leaving the summary, whichever way, unchecks the dives.
@@ -59,6 +63,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   // always opens step 1, with the checked dives kept (none after a summary).
   const open = useCallback((s: Screen) => {
     if (phase.current === "writing") return;
+    setLogNotice(null);
     if (phase.current === "summary") setChosen(new Set());
     setScreen(s);
     if (s === "collections") setStep("dives");
@@ -99,18 +104,34 @@ function App({ initialSettings }: { initialSettings: Settings }) {
 
   // The dive log is read again whenever the application or its location
   // changes, whichever way (Settings, the dive-log error screen, an import,
-  // the previous plugin's settings taken over).
-  const sourceKey = JSON.stringify(settings.source);
-  useEffect(load, [load, sourceKey]);
+  // the previous plugin's settings taken over). A change of the other
+  // application's location only reads nothing: the log in use stays on
+  // screen, and so do the flows.
+  const source = settings.source;
+  const sourceKey = JSON.stringify(source);
+  const readFor = useRef(source);
+  const kindInUse = useRef<SourceKind | null>(null);
+  kindInUse.current =
+    state.status === "ok" ? state.log.source.kind : state.status === "error" ? (state.failure.source?.kind ?? null) : null;
+  useEffect(() => {
+    const before = readFor.current;
+    readFor.current = source;
+    if (before !== source && kindInUse.current && sameLogSetting(before, source, kindInUse.current)) return;
+    load();
+  }, [load, sourceKey]);
 
   // The back end refused an action on a dive log that is no longer the
-  // configured one: read the log and the settings again.
+  // configured one: read the log and the settings again, and say why on the
+  // screen the diver lands on.
   useEffect(() => {
-    onLogChanged(() => {
+    onLogChanged((applied) => {
+      setLogNotice((current) => logChangedNotice(current, applied));
       load();
       getSettings().then(setSettings);
     });
   }, [load]);
+  const notice = logNotice && t(logNotice);
+  const dismissNotice = useCallback(() => setLogNotice(null), []);
 
   // While Lightroom is being written to, the dive log cannot change. Events
   // win over the first answer, which may arrive after one of them.
@@ -207,7 +228,12 @@ function App({ initialSettings }: { initialSettings: Settings }) {
           onSelect={setChosen}
           sort={sort}
           onSort={onSort}
-          onNext={() => setStep("adjust")}
+          notice={notice}
+          onDismissNotice={dismissNotice}
+          onNext={() => {
+            setLogNotice(null);
+            setStep("adjust");
+          }}
         />
       )}
       {log && screen === "collections" && adjusting && (
@@ -216,7 +242,10 @@ function App({ initialSettings }: { initialSettings: Settings }) {
           lr={lr}
           settings={settings}
           chosen={chosen}
-          onChooseDives={() => setStep("dives")}
+          onChooseDives={() => {
+            setLogNotice(null);
+            setStep("dives");
+          }}
           onDone={() => {
             setChosen(new Set());
             setStep("dives");
@@ -227,7 +256,18 @@ function App({ initialSettings }: { initialSettings: Settings }) {
         />
       )}
       {log && screen === "tag" && (
-        <TagScreen key={tagRun} log={log} lr={lr} sort={sort} onCancel={() => setTagRun((n) => n + 1)} />
+        <TagScreen
+          key={tagRun}
+          log={log}
+          lr={lr}
+          sort={sort}
+          notice={notice}
+          onDismissNotice={dismissNotice}
+          onCancel={() => {
+            setLogNotice(null);
+            setTagRun((n) => n + 1);
+          }}
+        />
       )}
     </div>
   );

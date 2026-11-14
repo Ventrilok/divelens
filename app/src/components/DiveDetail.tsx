@@ -1,7 +1,6 @@
 // Dive detail card. Shared by Create Collections (step 1) and Tag Selection.
 
 import { lazy, Suspense, useEffect, useState } from "react";
-import { isLogChanged } from "../diveLog";
 import { formatDepth, formatDiveSpan, formatDuration, formatGps, formatTemps } from "../format";
 import { t } from "../i18n";
 import { profiles } from "../profiles";
@@ -13,10 +12,7 @@ import { Stars } from "./Stars";
 // The map library is large: loaded the first time a dive with GPS shows.
 const DiveMap = lazy(() => import("./DiveMap"));
 
-type ProfileState =
-  | { status: "loading" }
-  | { status: "ok"; samples: Sample[] }
-  | { status: "error"; logChanged: boolean };
+type ProfileState = { status: "loading" } | { status: "ok"; samples: Sample[] } | { status: "error" };
 
 /** Profile of a dive of `log`, the dive log the screen shows. */
 function useProfile(log: LogRef, dive: Dive): ProfileState {
@@ -34,7 +30,7 @@ function useProfile(log: LogRef, dive: Dive): ProfileState {
     profiles
       .load(source, dive.id)
       .then((samples) => live && setState({ status: "ok", samples }))
-      .catch((e: unknown) => live && setState({ status: "error", logChanged: isLogChanged(e) }));
+      .catch(() => live && setState({ status: "error" }));
     return () => {
       live = false;
     };
@@ -65,11 +61,7 @@ function Profile({ log, dive, units }: { log: LogRef; dive: Dive; units: Units }
         <ProfileChart samples={state.samples} units={units} />
       ) : (
         <div className="profile-placeholder">
-          {state.status === "loading"
-            ? t("detail.profileLoading")
-            : state.status === "error" && state.logChanged
-              ? t("log.changed")
-              : t("detail.profileError")}
+          {state.status === "loading" ? t("detail.profileLoading") : t("detail.profileError")}
         </div>
       )}
       <figcaption>

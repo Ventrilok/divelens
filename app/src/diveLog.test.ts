@@ -1,8 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { importErrorText } from "./backup";
-import { changeErrorText, isLogChanged, latestOnly, logRef, logWatch } from "./diveLog";
-import { setLanguage } from "./i18n";
-import type { SourceInfo, SourceKind } from "./types";
+import {
+  changeErrorText,
+  isLogChanged,
+  latestOnly,
+  logChangedNotice,
+  logRef,
+  logWatch,
+  nextSearchNumber,
+  sameLogSetting,
+} from "./diveLog";
+import { setLanguage, t } from "./i18n";
+import type { Settings, SourceInfo, SourceKind } from "./types";
 
 beforeEach(() => setLanguage("en"));
 
@@ -103,5 +112,38 @@ describe("one dive log at a time", () => {
     expect(changeErrorText({ kind: "writeInProgress" })).toBe(
       "Écriture dans Lightroom en cours : le carnet de plongée pourra être changé une fois celle-ci terminée.",
     );
+  });
+
+  it("reads nothing again when only the other application's location changed", () => {
+    const source = (kind: SourceKind, macDivePath: string | null, subsurfacePath: string | null): Settings["source"] => ({
+      kind,
+      macDivePath,
+      subsurfacePath,
+    });
+    const before = source("subsurface", null, "/Logs/diver.xml");
+    expect(sameLogSetting(before, source("subsurface", "/Old/MacDive.sqlite", "/Logs/diver.xml"), "subsurface")).toBe(true);
+    expect(sameLogSetting(before, source("subsurface", null, "/Logs/other.xml"), "subsurface")).toBe(false);
+    expect(sameLogSetting(before, source("subsurface", null, null), "subsurface"), "standard location").toBe(false);
+    expect(sameLogSetting(before, source("macDive", null, "/Logs/diver.xml"), "subsurface"), "application").toBe(false);
+    // Windows, settings copied from a Mac: Subsurface in use whatever the file says.
+    const copied = source("macDive", "/Dives/MacDive.sqlite", "/Logs/diver.xml");
+    expect(sameLogSetting(copied, source("macDive", null, "/Logs/diver.xml"), "subsurface")).toBe(true);
+    expect(sameLogSetting(copied, source("macDive", "/Dives/MacDive.sqlite", null), "subsurface")).toBe(false);
+  });
+
+  it("says why the flow started again, an Apply first", () => {
+    expect(t(logChangedNotice(null, false))).toBe("The dive log has changed: start again.");
+    expect(t(logChangedNotice(null, true))).toBe("The dive log has changed. Nothing was written: start again.");
+    expect(logChangedNotice("log.changedNothingWritten", false)).toBe("log.changedNothingWritten");
+    setLanguage("fr");
+    expect(t(logChangedNotice(null, true))).toBe("Le carnet de plongée a changé. Rien n'a été écrit : recommencez.");
+    expect(t(logChangedNotice(null, false))).toBe("Le carnet de plongée a changé : recommencez.");
+  });
+
+  it("numbers photo searches in the order they are asked for, above any earlier window", () => {
+    const first = nextSearchNumber();
+    const second = nextSearchNumber();
+    expect(second).toBeGreaterThan(first);
+    expect(first).toBeGreaterThanOrEqual(Date.now() - 60_000);
   });
 });

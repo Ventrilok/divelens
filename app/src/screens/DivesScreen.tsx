@@ -5,6 +5,7 @@ import { DiveDetail } from "../components/DiveDetail";
 import { DiveList } from "../components/DiveList";
 import { FilterBar } from "../components/FilterBar";
 import { Icon } from "../components/Icon";
+import { LogNotice } from "../components/LogNotice";
 import { Steps } from "../components/Steps";
 import { formatRange } from "../format";
 import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters, type Sort } from "../filters";
@@ -18,6 +19,8 @@ export function DivesScreen({
   onSelect: setSelected,
   sort,
   onSort: setSort,
+  notice,
+  onDismissNotice,
   onNext,
 }: {
   log: DiveLog;
@@ -26,6 +29,9 @@ export function DivesScreen({
   /** Remembered between launches (Settings). */
   sort: Sort;
   onSort: (s: Sort) => void;
+  /** Why the flow started again (the dive log changed), shown once. */
+  notice: string | null;
+  onDismissNotice: () => void;
   onNext: () => void;
 }) {
   const units = log.units;
@@ -96,6 +102,7 @@ export function DivesScreen({
           </select>
         </label>
       </header>
+      {notice && <LogNotice text={notice} onDismiss={onDismissNotice} />}
 
       <FilterBar
         dives={dives}

@@ -655,39 +655,56 @@ impl From<ApplyOutcome> for CollectionsError {
     }
 }
 
+/// Hands a request to the plugin link (never waits); its answer comes on the
+/// request's own reply channel.
+fn send(app: &AppHandle, command: Command) -> Result<(), CollectionsError> {
+    let state = app.state::<Lightroom>();
+    if !state.status.lock().expect("lightroom state").connected {
+        return Err(CollectionsError::NotConnected);
+    }
+    state
+        .commands
+        .lock()
+        .expect("lightroom commands")
+        .send(command)
+        .map_err(|_| CollectionsError::NotConnected)
+}
+
 /// Sends a request to the plugin and waits for its answer.
 fn ask<T>(
     app: &AppHandle,
     command: impl FnOnce(mpsc::Sender<T>) -> Command,
 ) -> Result<T, CollectionsError> {
-    let state = app.state::<Lightroom>();
-    if !state.status.lock().expect("lightroom state").connected {
-        return Err(CollectionsError::NotConnected);
-    }
     let (reply, answer) = mpsc::channel();
-    let sent = state
-        .commands
-        .lock()
-        .expect("lightroom commands")
-        .send(command(reply));
-    if sent.is_err() {
-        return Err(CollectionsError::NotConnected);
-    }
+    send(app, command(reply))?;
     answer.recv().map_err(|_| CollectionsError::LinkLost)
 }
 
 /// Finds in Lightroom every photo of the chosen dives' period (whole
 /// catalog) and their cameras. The dives and their profiles are read now,
 /// from `log`, the dive log the screen shows, and kept for "Apply".
+/// `search` numbers the search, higher than any the screen asked for before.
 #[tauri::command]
 async fn find_collection_photos(
     app: AppHandle,
     log: LogId,
+    search: u64,
     dive_ids: Vec<String>,
 ) -> Result<Period, CollectionsError> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<CollectionsState>();
-        let number = state.searches.lock().expect("collections").start();
+        let number = search;
+        if !state.searches.lock().expect("collections").start(number) {
+            return Err(CollectionsError::NoPhotos);
+        }
+        // A search a newer one replaced stops at once.
+        let replaced = || {
+            !state
+                .searches
+                .lock()
+                .expect("collections")
+                .is_latest(number)
+        };
         let info = source_info(&app);
         log.check(&info)?;
         let source = open(&app, &info).map_err(|detail| CollectionsError::Source { detail })?;
@@ -701,27 +718,32 @@ async fn find_collection_photos(
         // Which dives get photos depends on the offsets, not known yet: every
         // profile is read. One that does not read fails "Apply" only if it
         // is needed, as before.
-        let profiles = dives
-            .iter()
-            .filter(|d| d.has_profile)
-            .map(|d| (d.id.clone(), source.profile(&d.id)))
-            .collect();
-        // Lightroom keeps the photos of its last search only: a search that a
-        // newer one replaced while it read the profiles stops here.
-        if !state
-            .searches
-            .lock()
-            .expect("collections")
-            .is_latest(number)
-        {
-            return Err(CollectionsError::NoPhotos);
+        let mut profiles = std::collections::HashMap::new();
+        for dive in dives.iter().filter(|d| d.has_profile) {
+            if replaced() {
+                return Err(CollectionsError::NoPhotos);
+            }
+            profiles.insert(dive.id.clone(), source.profile(&dive.id));
         }
-        let (f, t) = (from.clone(), to.clone());
-        let found = ask(&app, |reply| Command::FindPhotos {
-            from: f,
-            to: t,
-            reply,
-        })??;
+        // Lightroom keeps the photos of its last search only. Checked and
+        // sent under the search lock: a newer search cannot start in between
+        // and reach Lightroom first.
+        let (reply, answer) = mpsc::channel();
+        {
+            let searches = state.searches.lock().expect("collections");
+            if !searches.is_latest(number) {
+                return Err(CollectionsError::NoPhotos);
+            }
+            send(
+                &app,
+                Command::FindPhotos {
+                    from: from.clone(),
+                    to: to.clone(),
+                    reply,
+                },
+            )?;
+        }
+        let found = answer.recv().map_err(|_| CollectionsError::LinkLost)??;
         let offsets = Offsets::load(&config_dir(&app), info.kind);
         let session = Session::new(found.search, dives, found.photos, &offsets)
             .read_from(log.clone(), profiles);
@@ -1104,7 +1126,12 @@ mod tests {
         };
         let (a, b) = (at("/Logs/a.xml"), at("/Logs/b.xml"));
         let session = || Session::new(1, Vec::new(), Vec::new(), &Offsets::default());
-        let start = || searches.lock().unwrap().start();
+        let next = std::cell::Cell::new(100);
+        let start = || {
+            next.set(next.get() + 1);
+            assert!(searches.lock().unwrap().start(next.get()));
+            next.get()
+        };
 
         // The log changed in Settings while Lightroom searched.
         let n = start();

@@ -121,11 +121,11 @@ pub struct Preview {
     pub ignored: usize,
 }
 
-/// The photo searches of "Create Collections". Each gets a number when it
-/// starts; only the latest one started keeps its session, and every later
-/// step (live counts, "Suggest", "Apply") names the search it works on. A
-/// slower, older search (more dives, more profiles to read) can then never
-/// replace the newer one the screen shows.
+/// The photo searches of "Create Collections". The screen numbers each one,
+/// in the order it asks for them; only the latest one keeps its session, and
+/// every later step (live counts, "Suggest", "Apply") names the search it
+/// works on. A slower, older search (more dives, more profiles to read) can
+/// then never replace the newer one the screen shows.
 #[derive(Default)]
 pub struct Searches {
     started: u64,
@@ -133,10 +133,14 @@ pub struct Searches {
 }
 
 impl Searches {
-    /// Number of a search starting now.
-    pub fn start(&mut self) -> u64 {
-        self.started += 1;
-        self.started
+    /// Starts search `number`, unless a search numbered as high or higher
+    /// started already (the screen asked for this one earlier).
+    pub fn start(&mut self, number: u64) -> bool {
+        if number <= self.started {
+            return false;
+        }
+        self.started = number;
+        true
     }
 
     /// No newer search started since search `number`.
@@ -775,9 +779,11 @@ mod tests {
         let read = log(SourceKind::Subsurface, "/Logs/diver.xml");
         let mut searches = Searches::default();
         // Many dives checked, Next: this search reads every profile, slowly.
-        let older = searches.start();
+        let older = 1_700_000_000_001;
+        assert!(searches.start(older));
         // Back to step 1, only dive B kept, Next: a quicker search.
-        let newer = searches.start();
+        let newer = older + 1;
+        assert!(searches.start(newer));
         // Done reading its profiles, the older one does not even ask
         // Lightroom: the plug-in keeps the photos of the newer one only.
         assert!(!searches.is_latest(older));
@@ -816,13 +822,28 @@ mod tests {
     #[test]
     fn a_newer_search_replaces_the_kept_one() {
         let mut searches = Searches::default();
-        let first = searches.start();
+        let first = 7;
+        assert!(searches.start(first));
         assert!(searches.finish(first, session(&Offsets::default())));
-        let second = searches.start();
+        let second = 8;
+        assert!(searches.start(second));
         assert!(searches.get(first).is_some(), "until the next one finishes");
         assert!(searches.finish(second, session(&Offsets::default())));
         assert!(searches.get(first).is_none());
         assert!(searches.get(second).is_some());
+    }
+
+    #[test]
+    fn the_screen_sets_the_order_of_its_searches() {
+        let mut searches = Searches::default();
+        // The dev window runs each effect twice: the abandoned first search
+        // may reach the back end after the live one, and is refused.
+        assert!(searches.start(11));
+        assert!(!searches.start(10), "asked for earlier");
+        assert!(!searches.start(11), "the same search twice");
+        assert!(searches.is_latest(11));
+        assert!(!searches.finish(10, session(&Offsets::default())));
+        assert!(searches.get(10).is_none());
     }
 
     #[test]
