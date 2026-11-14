@@ -111,7 +111,8 @@ export type ReaderError =
   | { kind: "oldFormat"; detail: string }
   | { kind: "severalLogs"; detail: string }
   | { kind: "unknownDive"; detail: string }
-  | { kind: "badProfile"; detail: string };
+  | { kind: "badProfile"; detail: string }
+  | { kind: "decoder"; detail: string };
 
 export interface LoadError {
   source: SourceInfo;
