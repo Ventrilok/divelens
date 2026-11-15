@@ -36,6 +36,22 @@ On a Mac, the first time Lightroom opens the app, macOS may ask you to confirm o
 
 The app needs Microsoft's **WebView2**, which is already present on Windows 11 and on most Windows 10 computers. If the app does not open, install the "Microsoft Edge WebView2 Runtime" from Microsoft's website.
 
+### Uninstall
+
+Your photos keep their dive data and their collections in the catalog: they come back if you install Dive Lens again.
+
+**On a Mac**
+
+1. Quit Lightroom.
+2. In the Finder, choose **Go › Go to Folder…**, paste `~/Library/Application Support/Adobe/Lightroom/Modules`, then move **DiveLens.lrplugin** to the Trash. If you installed Dive Lens from the zip, remove it first in **File › Plug-in Manager…** (**Remove**), then move the DiveLens.lrplugin folder to the Trash from where you had put it.
+3. Optional, to erase Dive Lens's settings as well: move the folder `~/Library/Application Support/com.querton.divelens.desktop` to the Trash.
+
+**On Windows**
+
+1. Quit Lightroom.
+2. **Settings › Apps › Installed apps › Dive Lens › Uninstall**. If you installed Dive Lens from the zip, remove it in **File › Plug-in Manager…** (**Remove**), then delete the DiveLens.lrplugin folder from where you had put it.
+3. Optional, to erase Dive Lens's settings as well: delete the folder `%APPDATA%\com.querton.divelens.desktop`.
+
 ---
 
 ## 2. Open Dive Lens
@@ -189,6 +205,8 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 **"MacDive database not found".** The database may have moved, for example to iCloud: use **Locate the database…** or **Settings › Choose…**. If it is in iCloud, check that it is downloaded on this Mac.
 
 **"The dive log has changed…".** The dive log in use changed (in Settings, for example) while Dive Lens was working with the previous one, so the action was refused. After **Apply**, the orange notice reads "The dive log has changed. Nothing was written: start again." After an action that writes nothing (finding the photos, showing a profile), it reads "The dive log has changed: start again." It shows on step 1 of Create Collections or on Tag Selection, until you click **Close** or move on. Choose the dives again: they now come from the new log.
+
+**Dive Lens is disabled after installing.** Lightroom may show Dive Lens as disabled, in particular when a previous Dive Lens plug-in had been disabled before it was removed. In **File › Plug-in Manager…**, choose Dive Lens, click **Enable**, then **Done**. You only do this once.
 
 **"Lightroom not connected".** Open Lightroom Classic, check in **File › Plug-in Manager** that Dive Lens is enabled, then choose one of the Dive Lens menus again.
 
