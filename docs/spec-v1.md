@@ -119,7 +119,7 @@ Tous les réglages sont gérés **dans l'application**. **[Décidé]** Le gestio
 
 Au premier lancement, l'application reprend automatiquement les réglages existants du plugin actuel : emplacement de la base et ordre d'affichage. L'utilisateur n'a rien à ressaisir. **[Décidé]** Le nouveau plugin garde le même identifiant, il lit donc directement les réglages de l'ancien et les transmet à l'application à la connexion. La reprise n'a lieu qu'une fois, et ne remplace jamais un réglage déjà choisi dans l'application. **[Décidé, 2026-11-12]**
 
-**Écran Réglages [Décidé, 2026-11-12]** — sections, dans l'ordre : Carnet de plongée, Affichage, Écriture sur les photos, Collections, Sauvegarde des réglages (F11, depuis le 2026-11-13), Diagnostic, À propos. Chaque modification est enregistrée immédiatement, sans bouton « Enregistrer ». La section « Mises à jour » (F13) de la maquette est masquée tant que cette fonction n'existe pas.
+**Écran Réglages [Décidé, 2026-11-12]** — sections, dans l'ordre : Carnet de plongée, Affichage, Écriture sur les photos, Collections, Sauvegarde des réglages (F11, depuis le 2026-11-13), Mises à jour (F13, depuis le 2026-11-15), Diagnostic, À propos. Chaque modification est enregistrée immédiatement, sans bouton « Enregistrer ».
 
 - **Source de plongée** : MacDive (Mac) ou Subsurface (Mac et Windows). Emplacement pré-rempli avec l'emplacement standard de l'application choisie, modifiable via un sélecteur. Pas de recherche automatique ailleurs sur le disque. **[Décidé]**
   - Sur Windows, seul Subsurface est proposé : MacDive n'apparaît pas dans la liste. **[Décidé, 2026-11-12]**
@@ -397,15 +397,23 @@ Diffusion **[Décidé]** : un seul texte source, publié à deux endroits :
 
 **[Décidé : oui]** L'application vérifie s'il existe une nouvelle version de Dive Lens et propose de l'installer.
 
-Pas dans le premier écran Réglages : il faut d'abord la clé de signature des mises à jour et le circuit de publication. La section « Mises à jour » apparaîtra avec. **[Décidé, 2026-11-12]**
-
-- Une mise à jour remplace **tout le paquet** : l'application et la partie Lightroom. **[Proposé]**
-- Vérification au lancement, au plus une fois par jour, avec un réglage pour la désactiver et un bouton « Vérifier maintenant ». **[Proposé]**
+- **Tout le paquet** est remplacé : l'application et la partie Lightroom. **[Décidé, 2026-11-15]**
+- **Vérification** au lancement de l'application, au plus une fois par jour, avec un réglage pour la désactiver (activé par défaut) et un bouton « Vérifier maintenant ». Une vérification automatique qui échoue (hors ligne) n'affiche rien ; « Vérifier maintenant » dit pourquoi. **[Décidé, 2026-11-15]**
+- **Versions stables seulement** : une pré-version n'est jamais proposée, et il n'y a pas de bêta. **[Décidé, 2026-11-15]**
+- **Signalement [Décidé, 2026-11-15]** : un bandeau au-dessus de l'écran en cours, « Dive Lens 2.1.0 est disponible. [Voir] [×] ». [Voir] ouvre Réglages › Mises à jour ; [×] ferme le bandeau jusqu'à la version suivante **[Proposé]**. Le bandeau ne s'affiche pas sur l'écran Réglages, qui le dit dans sa section.
+- **Réglages › Mises à jour [Décidé, 2026-11-15]**, entre « Sauvegarde des réglages » et « Diagnostic », comme dans la maquette : « Vérifier automatiquement » (« Au lancement, au plus une fois par jour. Rien ne s'installe sans votre accord. ») et « Dive Lens <version> » avec la dernière vérification et « Vérifier maintenant ». Quand une version est trouvée : « Version 2.1.0 disponible », [Installer], un lien « Nouveautés » vers la page de la version sur GitHub, et « Après l'installation, redémarrez Lightroom pour terminer la mise à jour. » Pendant l'installation : une barre de progression.
+- **Pas de notes dans l'application**, seulement le lien vers la page de la version : l'application sera traduite dans d'autres langues, aucun texte ne vient du serveur. **[Décidé, 2026-11-15]**
+- **Rien ne s'installe sans l'accord de l'utilisateur** (bouton [Installer]), ni pendant une écriture dans Lightroom ; aucune écriture ne commence pendant le remplacement. **[Décidé, 2026-11-15]**
+- **Installation [Décidé, 2026-11-15]** : l'application télécharge le fichier de son système, vérifie sa signature, remplace le dossier du plugin là où il est, puis redémarre sur Réglages.
+  - Mac : le fichier est le zip du dossier du plugin ; il est décompressé à côté du dossier, vérifié (signature Apple comprise), puis échangé avec l'ancien. L'ancienne version reste à côté, cachée, jusqu'au lancement suivant ; si l'échange échoue, elle est remise en place.
+  - Windows : le fichier est l'installateur, lancé sans fenêtre sur le dossier en place (on ne peut pas renommer un dossier dont le programme tourne). La version affichée dans « Applications installées » reste juste. Une copie installée avec le zip ailleurs y apparaît ensuite, à son emplacement.
+  - Rien ne reste à côté du dossier sous un nom en `.lrplugin` : Lightroom le chargerait comme un second Dive Lens.
+- **Copie qui ne peut pas se mettre à jour** (dossier non modifiable) : « Télécharger depuis GitHub » à la place de [Installer]. Une version de développement (hors d'un dossier de plugin) ne vérifie rien d'elle-même et ne s'installe jamais. **[Décidé, 2026-11-15]**
+- **Ensuite** : tant que Lightroom tourne avec l'ancienne partie Dive Lens (autre version, ou autre protocole de liaison), un bandeau dit « Redémarrez Lightroom pour terminer la mise à jour de Dive Lens. », et la barre latérale « Redémarrez Lightroom » au lieu de « Lightroom non connecté ». Lightroom ne recharge sa partie Dive Lens qu'au redémarrage. **[Décidé, 2026-11-15]**
+- **Signature** : chaque fichier de mise à jour est signé avec la clé de mise à jour Dive Lens (section 9), et la signature porte le numéro de version ; l'application refuse un fichier dont la signature ne correspond pas à sa clé publique ou nomme une autre version. Signature Apple et Windows : section 9. **[Décidé]**
+- **Hébergement** sur **GitHub Releases** : chaque version publie `latest.json`, qui nomme le fichier de chaque système et sa signature ; l'application le lit à l'adresse de la dernière version publiée. Un brouillon n'est jamais proposé : c'est la publication qui propose la version à tous. querton.com garde la présentation, la documentation et le lien de don. **[Décidé]**
 - **Numérotation [Décidé]** : la première version publique est la **2.0.0**, pour marquer la rupture avec le plugin 0.x. Versions de développement en 0.x d'ici là.
-- Rien ne s'installe sans l'accord de l'utilisateur : « Version 2.1 disponible — nouveautés — Installer ». **[Proposé]**
-- Après installation, un message demande de redémarrer Lightroom, car Lightroom ne recharge sa partie Dive Lens qu'au redémarrage. **[Proposé]**
-- Paquets signés avec la clé de mise à jour Dive Lens, pour qu'une mise à jour falsifiée soit refusée. Signature Apple et Windows : plus tard (section 9). **[Décidé]**
-- Fichiers de mise à jour hébergés sur **GitHub Releases**. **[Décidé]** querton.com garde la présentation, la documentation et le lien de don.
+- **Première version** : une copie installée avant la première version qui contient F13 ne se met jamais à jour seule ; F13 doit donc être dans la 2.0.0. **[Décidé, 2026-11-15]**
 - Mises à jour ouvertes à tous (plugin gratuit). **[Décidé]**
 
 ## 6. Inventaire des écrans (entrée des maquettes)
@@ -422,7 +430,7 @@ Description fonctionnelle seulement. La mise en page est une décision du propri
 | **Liste des plongées** | Plongées (F4), indicateur de courbe ; étape 1 de « Créer les collections », pas d'écran à part | Rechercher, sélectionner une ou plusieurs plongées |
 | **Créer les collections** (F5) | Plongées choisies avec compteur de photos chacune, appareils détectés, décalage et marge, total | Régler le décalage par appareil, « Suggérer », régler la marge, Appliquer |
 | **Tagger la sélection** (F8) | Sélection Lightroom en direct (nombre, vignettes), plongée choisie, appareils de la sélection avec leur décalage et le nombre de photos dans la plongée quand elle a une courbe, lieu (site de la plongée ou autre site : pays › lieu › site, GPS) | Cocher données de plongée et/ou lieu, choisir, régler le décalage par appareil, « Suggérer », Appliquer |
-| **Réglages** (F2, F3, F7, F10) | Source de plongée et état de la base, langue, unités, option altitude et son explication, emplacement des collections, journal, à propos | Modifier, afficher le journal, exporter et importer les réglages (F11) ; F13 plus tard |
+| **Réglages** (F2, F3, F7, F10, F13) | Source de plongée et état de la base, langue, unités, option altitude et son explication, emplacement des collections, mises à jour, journal, à propos | Modifier, afficher le journal, exporter et importer les réglages (F11), vérifier et installer une mise à jour (F13) |
 | **Résultat d'application** | Collections créées, photos écrites, plongées sans photo | Fermer |
 
 États à couvrir dans les maquettes : liaison perdue, base introuvable, plongée sans courbe, aucune photo trouvée, écriture en cours avec progression **[Décidé]**.
