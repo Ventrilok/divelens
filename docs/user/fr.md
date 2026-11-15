@@ -60,6 +60,9 @@ Dive Lens n'a pas de fenêtre dans Lightroom. Tout se passe dans l'application D
 
 - **Bibliothèque › Modules externes › Créer les collections…**
 - **Bibliothèque › Modules externes › Tagger la sélection…** (seulement quand des photos sont sélectionnées)
+- **Aide › Modules externes › Réglages de Dive Lens…**, qui ouvre l'application sur **Réglages** (section 5)
+
+L'entrée Dive Lens de **Fichier › Gestionnaire de modules externes…** a aussi les boutons **Ouvrir Dive Lens** et **Ouvrir les réglages**, et les liens vers le site web de Dive Lens et vers son code source sur GitHub.
 
 Lightroom doit rester ouvert pendant que vous utilisez l'application. La barre latérale de l'application indique si Lightroom est connecté et combien de photos sont sélectionnées. Si elle affiche **Lightroom déconnecté**, rien ne peut être écrit : vérifiez que Lightroom est ouvert et que le module est activé dans le gestionnaire de modules externes.
 
@@ -165,6 +168,7 @@ Chaque modification est enregistrée immédiatement.
 - **Copier la profondeur dans l'altitude GPS** (désactivé par défaut) : écrit aussi la profondeur de chaque photo comme une altitude négative, en mètres.
   - Le champ Profondeur de Dive Lens n'existe que dans Lightroom : il disparaît à l'export.
   - L'altitude GPS suit la photo exportée et se voit dans les autres logiciels.
+  - Dive Lens écrit toujours l'altitude GPS en mètres, la norme de ce champ, quelles que soient les unités choisies ici. Avec des profondeurs en pieds, la même photo montre donc 60 ft dans le champ Profondeur de Dive Lens, et son altitude GPS est en mètres (18,3 m sous le niveau de la mer) : c'est normal.
   - La copie remplace une altitude GPS déjà présente sur la photo ; **Édition › Annuler** dans Lightroom la remet. Les photos sans profondeur gardent la leur.
 
 **Collections**
