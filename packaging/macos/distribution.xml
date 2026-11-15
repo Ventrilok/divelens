@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Dive Lens installer for macOS, used by build-pkg.sh. It installs for the
+current user only (no administrator password), into their Lightroom Modules
+folder, so the app's own updates can later replace it without a password.
+@VERSION@ is replaced when the installer is built.
+-->
+<installer-gui-script minSpecVersion="2">
+    <title>Dive Lens</title>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <domains enable_anywhere="false" enable_currentUserHome="true" enable_localSystem="false"/>
+    <allowed-os-versions>
+        <os-version min="11.0"/>
+    </allowed-os-versions>
+    <choices-outline>
+        <line choice="divelens"/>
+    </choices-outline>
+    <choice id="divelens" visible="false">
+        <pkg-ref id="com.querton.divelens.plugin"/>
+    </choice>
+    <pkg-ref id="com.querton.divelens.plugin" version="@VERSION@" onConclusion="none">DiveLens-component.pkg</pkg-ref>
+</installer-gui-script>

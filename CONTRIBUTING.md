@@ -37,6 +37,7 @@ Repository layout:
 | `third_party/libdivecomputer/` | libdivecomputer itself, as a git submodule pinned to a validated commit. |
 | `app/` | The Tauri 2 app: front end in `app/src`, Rust side in `app/src-tauri` (crate `divelens`). |
 | `plugin/DiveLens.lrdevplugin/` | The Lightroom plug-in, shipped as plain Lua source (no compile step). |
+| `packaging/` | The installers built by the release workflow: a `.pkg` for macOS and an Inno Setup script for Windows. Both install the plug-in folder, with the app inside, for the current user in Lightroom's Modules folder. |
 | `docs/` | Specification, user guide, and pages for contributors in `docs/contributing/`. |
 
 The three Rust crates form one Cargo workspace at the root, with a single `target/` folder and a single `Cargo.lock`.

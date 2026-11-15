@@ -12,26 +12,27 @@ Dive Lens est gratuit et open source (GPL v3).
 
 Il vous faut Lightroom Classic et MacDive ou Subsurface sur le même ordinateur. Sur Windows, seul Subsurface est proposé.
 
+**Vous utilisiez l'ancien module Dive Lens (0.9 et avant) ?** Avant d'utiliser l'installateur, retirez-le : dans Lightroom, **Fichier › Gestionnaire de modules externes…**, choisissez Dive Lens, **Supprimer**, puis **Terminé**. Si le bouton **Supprimer** est grisé, l'ancien module est déjà là où l'installateur le remplacera : il n'y a rien à faire. Vos photos gardent leurs infos de plongée, et l'application reprend vos réglages (emplacement du carnet et ordre des plongées) à son premier lancement. Dive Lens est désormais gratuit : plus de clé de licence.
+
+### Avec l'installateur
+
+1. Quittez Lightroom.
+2. Téléchargez l'installateur de votre système : `DiveLens-<version>-macOS.pkg` ou `DiveLens-<version>-Windows-Setup.exe`.
+3. Ouvrez-le et suivez les étapes. Il installe Dive Lens pour votre compte seulement, sans mot de passe administrateur.
+4. Lancez Lightroom : les menus Dive Lens sont dans **Bibliothèque › Modules externes**. Il n'y a rien à ajouter dans le gestionnaire de modules externes.
+
+Sur Windows, l'installateur n'est pas encore signé : Windows peut afficher **« Windows a protégé votre ordinateur »**. Cliquez sur **Informations complémentaires**, puis **Exécuter quand même**.
+
+### Avec le zip, à la main
+
 1. Téléchargez le zip de votre système : `DiveLens-<version>-macOS.zip` ou `DiveLens-<version>-Windows.zip`.
 2. Décompressez-le. Vous obtenez un dossier **DiveLens.lrplugin** (sur Mac, il apparaît comme un seul fichier). L'application Dive Lens est rangée dedans.
-3. Placez ce dossier à un endroit où il restera, par exemple dans Documents. Lightroom le charge depuis cet endroit à chaque démarrage.
+3. Placez ce dossier à un endroit où il restera, par exemple dans Documents. Lightroom le charge depuis cet endroit à chaque démarrage. Si vous utilisiez l'ancien module, quittez Lightroom et remplacez plutôt l'ancien dossier DiveLens.lrplugin par le nouveau, au même endroit : l'étape 4 est alors inutile.
 4. Dans Lightroom : **Fichier › Gestionnaire de modules externes… › Ajouter**, choisissez le dossier **DiveLens.lrplugin**, puis **Terminé**.
 
-**Vous utilisiez l'ancien module Dive Lens (0.9 et avant) ?** Quittez Lightroom, remplacez l'ancien dossier DiveLens.lrplugin par le nouveau au même endroit, puis relancez Lightroom. Vos photos gardent leurs infos de plongée, et l'application reprend vos réglages (emplacement du carnet et ordre des plongées) à son premier lancement. Dive Lens est désormais gratuit : plus de clé de licence.
+Sur Mac, la première fois que Lightroom ouvre l'application, macOS peut demander de confirmer l'ouverture d'une application téléchargée : cliquez sur **Ouvrir**. Sur Windows, l'application n'est pas encore signée : si Windows affiche **« Windows a protégé votre ordinateur »**, cliquez sur **Informations complémentaires**, puis **Exécuter quand même**. Une seule fois suffit.
 
-### Premier lancement sur Mac
-
-Cette version n'est pas encore signée par Apple. La première fois que Lightroom ouvre l'application, macOS refuse de l'ouvrir, faute de pouvoir vérifier le développeur.
-
-1. Fermez le message (**OK**, pas **Placer dans la corbeille**).
-2. Ouvrez **Réglages Système › Confidentialité et sécurité**. Vers le bas, une ligne indique que Dive Lens a été bloquée : cliquez sur **Ouvrir quand même** et confirmez avec votre mot de passe.
-3. Choisissez à nouveau le menu Dive Lens dans Lightroom.
-
-Une seule fois suffit.
-
-### Premier lancement sur Windows
-
-Cette version n'est pas encore signée. Quand Lightroom ouvre l'application la première fois, Windows peut afficher **« Windows a protégé votre ordinateur »** : cliquez sur **Informations complémentaires**, puis **Exécuter quand même**. Une seule fois suffit.
+### WebView2 sur Windows
 
 L'application a besoin de **WebView2** de Microsoft, déjà présent sur Windows 11 et sur la plupart des Windows 10. Si l'application ne s'ouvre pas, installez « Microsoft Edge WebView2 Runtime » depuis le site de Microsoft.
 
@@ -191,7 +192,7 @@ Les champs Dive Lens restent dans le catalogue Lightroom : ils ne sont pas écri
 
 **« Lightroom déconnecté ».** Ouvrez Lightroom Classic, vérifiez dans **Fichier › Gestionnaire de modules externes** que Dive Lens est activé, puis choisissez à nouveau un des menus Dive Lens.
 
-**L'application ne s'ouvre pas (Mac).** Voir « Premier lancement sur Mac » plus haut : macOS la bloque tant que vous n'avez pas cliqué une fois sur **Ouvrir quand même**.
+**L'application ne s'ouvre pas (Mac).** Si macOS indique qu'il ne peut pas vérifier l'application, téléchargez à nouveau Dive Lens depuis sa page de publication : les versions publiées sont signées et vérifiées par Apple, et s'ouvrent sans ce message.
 
 **Passer de MacDive à Subsurface.** Rien à migrer. Relancer une plongée retrouve sa collection quand le nom « numéro - site » est identique ; sinon une nouvelle collection est créée à côté. Les décalages d'horloge sont mémorisés séparément pour chaque application.
 

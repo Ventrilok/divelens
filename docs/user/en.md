@@ -12,26 +12,27 @@ Dive Lens is free and open source (GPL v3).
 
 You need Lightroom Classic and MacDive or Subsurface on the same computer. On Windows, only Subsurface is available.
 
+**Coming from the previous Dive Lens plug-in (0.9 and earlier)?** Before using the installer, remove it: in Lightroom, **File › Plug-in Manager…**, choose Dive Lens, **Remove**, then **Done**. If **Remove** is greyed out, the old plug-in is already where the installer will replace it: there is nothing to do. Your photos keep their dive data, and the app takes over your previous settings (log location and dive order) on its first launch. Dive Lens is now free: there is no licence key any more.
+
+### With the installer
+
+1. Quit Lightroom.
+2. Download the installer for your system: `DiveLens-<version>-macOS.pkg` or `DiveLens-<version>-Windows-Setup.exe`.
+3. Open it and follow the steps. It installs Dive Lens for your account only, without an administrator password.
+4. Start Lightroom: the Dive Lens menus are in **Library › Plug-in Extras**. There is nothing to add in the Plug-in Manager.
+
+On Windows, the installer is not signed yet: Windows may show **"Windows protected your PC"**. Click **More info**, then **Run anyway**.
+
+### With the zip, by hand
+
 1. Download the zip for your system: `DiveLens-<version>-macOS.zip` or `DiveLens-<version>-Windows.zip`.
 2. Unzip it. You get a folder named **DiveLens.lrplugin** (on a Mac it looks like a single file). The Dive Lens app is inside it.
-3. Move this folder to a place where it will stay, for example your Documents folder. Lightroom loads it from there each time it starts.
+3. Move this folder to a place where it will stay, for example your Documents folder. Lightroom loads it from there each time it starts. If you used the previous plug-in, quit Lightroom and replace the old DiveLens.lrplugin folder with the new one at the same place instead: you can then skip step 4.
 4. In Lightroom: **File › Plug-in Manager… › Add**, choose the **DiveLens.lrplugin** folder, then **Done**.
 
-**Coming from the previous Dive Lens plug-in (0.9 and earlier)?** Quit Lightroom, replace the old DiveLens.lrplugin folder with the new one at the same place, and start Lightroom again. Your photos keep their dive data, and the app takes over your previous settings (log location and dive order) on its first launch. Dive Lens is now free: there is no licence key any more.
+On a Mac, the first time Lightroom opens the app, macOS may ask you to confirm opening an app downloaded from the internet: click **Open**. On Windows, the app is not signed yet: if Windows shows **"Windows protected your PC"**, click **More info**, then **Run anyway**. You only do this once.
 
-### First launch on a Mac
-
-This version is not yet signed by Apple. The first time Lightroom opens the app, macOS refuses to open it, saying it cannot check the developer.
-
-1. Close the message (**Done**, not **Move to Trash**).
-2. Open **System Settings › Privacy & Security**. Near the bottom, a line says Dive Lens was blocked: click **Open Anyway** and confirm with your password.
-3. Choose the Dive Lens menu in Lightroom again.
-
-You only do this once.
-
-### First launch on Windows
-
-This version is not yet signed. When Lightroom opens the app for the first time, Windows may show **"Windows protected your PC"**: click **More info**, then **Run anyway**. You only do this once.
+### WebView2 on Windows
 
 The app needs Microsoft's **WebView2**, which is already present on Windows 11 and on most Windows 10 computers. If the app does not open, install the "Microsoft Edge WebView2 Runtime" from Microsoft's website.
 
@@ -191,7 +192,7 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 
 **"Lightroom not connected".** Open Lightroom Classic, check in **File › Plug-in Manager** that Dive Lens is enabled, then choose one of the Dive Lens menus again.
 
-**The app does not open (Mac).** See "First launch on a Mac" above: macOS blocks it until you click **Open Anyway** once.
+**The app does not open (Mac).** If macOS says it cannot check the app, download Dive Lens again from its release page: published versions are signed and checked by Apple, and open without this message.
 
 **Switching from MacDive to Subsurface.** Nothing to migrate. Running a dive again finds its collection when the name "<number> - <site>" is the same; otherwise a new collection is created next to it. Clock offsets are remembered separately for each application.
 
