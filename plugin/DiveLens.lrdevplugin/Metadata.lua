@@ -1,5 +1,6 @@
 --[[
-DiveLens metadata fields, shown in Lightroom's DiveLens metadata panel.
+DiveLens metadata fields, shown in Lightroom's DiveLens metadata panel,
+except the hidden one (no title), which only the plugin reads.
 
 Compatibility contract: these ids and their types keep existing catalogs
 valid. New fields are added, never renamed; the schema version goes up when
@@ -115,8 +116,20 @@ return {
             browsable = true,
             version = 1,
         },
+        {
+            -- Altitude marker (spec F7, section 7): the GPS altitude, in
+            -- metres, Dive Lens last wrote on the photo, as text. It tells
+            -- the altitude Dive Lens wrote from one the camera or the user
+            -- set (Tagging.altitudeClears). Hidden: without a title, the
+            -- field shows in no panel and cannot be searched or browsed
+            -- (Lightroom SDK: searchable and browsable need a title).
+            id = "WrittenAltitude",
+            dataType = "string",
+            version = 1,
+        },
     },
 
-    -- 2: per-photo fields added; 3: Source added (no data to migrate).
-    schemaVersion = 3,
+    -- 2: per-photo fields added; 3: Source added; 4: WrittenAltitude added
+    -- (no data to migrate).
+    schemaVersion = 4,
 }

@@ -7,6 +7,8 @@ folder, so the app's own updates can later replace it without a password.
 -->
 <installer-gui-script minSpecVersion="2">
     <title>Dive Lens</title>
+    <!-- Last screen, in English or French following macOS (resources/*.lproj). -->
+    <conclusion file="conclusion.html" mime-type="text/html"/>
     <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
     <domains enable_anywhere="false" enable_currentUserHome="true" enable_localSystem="false"/>
     <allowed-os-versions>
