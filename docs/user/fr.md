@@ -36,6 +36,22 @@ Sur Mac, la première fois que Lightroom ouvre l'application, macOS peut demande
 
 L'application a besoin de **WebView2** de Microsoft, déjà présent sur Windows 11 et sur la plupart des Windows 10. Si l'application ne s'ouvre pas, installez « Microsoft Edge WebView2 Runtime » depuis le site de Microsoft.
 
+### Désinstaller
+
+Vos photos gardent leurs infos de plongée et leurs collections dans le catalogue : elles réapparaissent si vous réinstallez Dive Lens.
+
+**Sur Mac**
+
+1. Quittez Lightroom.
+2. Dans le Finder, menu **Aller › Aller au dossier…**, collez `~/Library/Application Support/Adobe/Lightroom/Modules`, puis mettez **DiveLens.lrplugin** à la corbeille. Si vous aviez installé Dive Lens avec le zip, mettez à la corbeille le dossier DiveLens.lrplugin là où vous l'aviez placé, après l'avoir retiré dans **Fichier › Gestionnaire de modules externes…** (**Supprimer**).
+3. Facultatif, pour effacer aussi les réglages de Dive Lens : mettez à la corbeille le dossier `~/Library/Application Support/com.querton.divelens.desktop`.
+
+**Sur Windows**
+
+1. Quittez Lightroom.
+2. **Paramètres › Applications › Applications installées › Dive Lens › Désinstaller**. Si vous aviez installé Dive Lens avec le zip, retirez-le dans **Fichier › Gestionnaire de modules externes…** (**Supprimer**), puis supprimez le dossier DiveLens.lrplugin là où vous l'aviez placé.
+3. Facultatif, pour effacer aussi les réglages de Dive Lens : supprimez le dossier `%APPDATA%\com.querton.divelens.desktop`.
+
 ---
 
 ## 2. Ouvrir Dive Lens
@@ -189,6 +205,8 @@ Les champs Dive Lens restent dans le catalogue Lightroom : ils ne sont pas écri
 **« Base MacDive introuvable ».** La base a peut-être été déplacée, par exemple dans iCloud : utilisez **Localiser la base…** ou **Réglages › Choisir…**. Si elle est dans iCloud, vérifiez qu'elle est bien téléchargée sur ce Mac.
 
 **« Le carnet de plongée a changé… ».** Le carnet en service a changé (dans les réglages, par exemple) pendant que Dive Lens travaillait sur le précédent : l'action a donc été refusée. Après **Appliquer**, le bandeau orange indique « Le carnet de plongée a changé. Rien n'a été écrit : recommencez. » Après une action qui n'écrit rien (recherche des photos, affichage d'une courbe), il indique « Le carnet de plongée a changé : recommencez. » Il s'affiche à l'étape 1 de Créer les collections ou dans Tagger la sélection, jusqu'à ce que vous cliquiez sur **Fermer** ou passiez à la suite. Choisissez à nouveau les plongées : elles viennent maintenant du nouveau carnet.
+
+**Dive Lens est désactivé après l'installation.** Lightroom peut présenter Dive Lens désactivé, notamment quand un module Dive Lens précédent avait été désactivé avant d'être retiré. Dans **Fichier › Gestionnaire de modules externes…**, choisissez Dive Lens, cliquez sur **Activer**, puis **Terminé**. Une seule fois suffit.
 
 **« Lightroom déconnecté ».** Ouvrez Lightroom Classic, vérifiez dans **Fichier › Gestionnaire de modules externes** que Dive Lens est activé, puis choisissez à nouveau un des menus Dive Lens.
 
