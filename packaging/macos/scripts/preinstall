@@ -1,0 +1,10 @@
+#!/bin/sh
+# Runs before the Dive Lens installer copies its files. $2 is the folder the
+# plug-in goes into (the user's Lightroom Modules folder). Removes the
+# previous Dive Lens plug-in folder there, so that no file of an earlier
+# version is left. Part of Dive Lens, GPL-3.0-or-later.
+target="$2/DiveLens.lrplugin"
+if [ -n "$2" ] && [ -d "$target" ]; then
+    rm -rf "$target"
+fi
+exit 0

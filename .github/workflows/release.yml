@@ -1,12 +1,15 @@
 name: Release
 
 # Builds the package people download: the Lightroom plug-in folder
-# (DiveLens.lrplugin) with the app inside, one zip for macOS (Intel and Apple
-# Silicon) and one for Windows. The plug-in finds the app next to its own
-# files (plugin/DiveLens.lrdevplugin/Launch.lua).
+# (DiveLens.lrplugin) with the app inside, for macOS (Intel and Apple Silicon)
+# and Windows, each as an installer and as a zip. The installers put the
+# folder in the current user's Lightroom Modules folder, where Lightroom loads
+# it by itself (packaging/); the zip is for installing by hand. The plug-in
+# finds the app next to its own files (plugin/DiveLens.lrdevplugin/Launch.lua).
 #
-# - A pull request that changes this workflow builds the package as a test:
-#   the zips are kept as run artifacts, nothing is published.
+# - A pull request that changes this workflow or the packaging builds the
+#   package as a test: the files are kept as run artifacts, nothing is
+#   published.
 # - Pushing a version tag (v2.0.0) builds it and attaches it to a DRAFT
 #   GitHub release; the owner reviews and publishes it by hand.
 #
@@ -23,6 +26,7 @@ on:
   pull_request:
     paths:
       - .github/workflows/release.yml
+      - packaging/**
       - app/src-tauri/tauri.conf.json
       - plugin/DiveLens.lrdevplugin/Launch.lua
   workflow_dispatch:
@@ -226,10 +230,98 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path DiveLens.lrplugin -DestinationPath "DiveLens-${{ steps.version.outputs.version }}-Windows.zip"
 
+      # Signed with the Developer ID Installer certificate, notarized, with
+      # Apple's ticket attached. Without the signing secrets there is no
+      # installer (pull request from a fork).
+      - name: Installer (macOS)
+        if: matrix.name == 'macOS' && steps.signing.outputs.signed == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          IDENTITY: ${{ steps.signing.outputs.installer-identity }}
+        run: |
+          pkg="package/DiveLens-$VERSION-macOS.pkg"
+          packaging/macos/build-pkg.sh package/DiveLens.lrplugin "$VERSION" "$pkg" "$IDENTITY"
+          pkgutil --check-signature "$pkg"
+
+          result=$(xcrun notarytool submit "$pkg" \
+            --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" \
+            --wait --timeout 30m --output-format json) || true
+          echo "$result"
+          if [ "$(jq -r .status <<< "$result")" != Accepted ]; then
+            xcrun notarytool log "$(jq -r .id <<< "$result")" \
+              --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" || true
+            echo "::error::Apple did not notarize the installer."
+            exit 1
+          fi
+          xcrun stapler staple "$pkg"
+          xcrun stapler validate "$pkg"
+          assessment=$(spctl --assess --type install -vv "$pkg" 2>&1)
+          echo "$assessment"
+          case "$assessment" in
+            *"source=Notarized Developer ID"*) ;;
+            *) echo "::error::Gatekeeper does not accept the installer as notarized."; exit 1 ;;
+          esac
+
+      - name: Try the installer (macOS)
+        if: matrix.name == 'macOS' && steps.signing.outputs.signed == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          installer -pkg "package/DiveLens-$VERSION-macOS.pkg" -target CurrentUserHomeDirectory
+          plugin="$HOME/Library/Application Support/Adobe/Lightroom/Modules/DiveLens.lrplugin"
+          ls -la "$plugin"
+          test -f "$plugin/Info.lua"
+          codesign --verify --deep --strict "$plugin/Dive Lens.app"
+          # Owned by the user, so that an update can replace it without a password.
+          owner=$(stat -f %Su "$plugin/Dive Lens.app")
+          if [ "$owner" != "$(id -un)" ]; then
+            echo "::error::Installed files belong to $owner, not to the user."
+            exit 1
+          fi
+
+      - name: Installer (Windows)
+        if: matrix.name == 'Windows'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { $iscc = (Get-Command ISCC.exe -ErrorAction Stop).Source }
+          # Windows' numeric file version takes the version without its label.
+          $numeric = ($env:VERSION -split '-')[0]
+          & $iscc "/DVersion=$env:VERSION" "/DNumericVersion=$numeric" `
+            "/DPluginDir=$PWD\package\DiveLens.lrplugin" "/DOutputDir=$PWD\package" `
+            packaging\windows\divelens.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Try the installer (Windows)
+        if: matrix.name == 'Windows'
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $setup = "package\DiveLens-$env:VERSION-Windows-Setup.exe"
+          Start-Process -FilePath $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          $plugin = Join-Path $env:APPDATA 'Adobe\Lightroom\Modules\DiveLens.lrplugin'
+          Get-ChildItem $plugin
+          foreach ($file in 'Info.lua', 'Dive Lens.exe') {
+            if (-not (Test-Path (Join-Path $plugin $file))) { Write-Error "$file was not installed"; exit 1 }
+          }
+          $uninstaller = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Dive Lens\Uninstall') -Filter 'unins*.exe' | Select-Object -First 1
+          # The uninstaller relaunches itself from a temporary copy and returns
+          # at once: wait for the app to be gone.
+          Start-Process -FilePath $uninstaller.FullName -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          $app = Join-Path $plugin 'Dive Lens.exe'
+          for ($i = 0; $i -lt 60 -and (Test-Path $app); $i++) { Start-Sleep -Seconds 1 }
+          if (Test-Path $app) { Write-Error 'The uninstaller left the app'; exit 1 }
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: DiveLens-${{ matrix.name }}
-          path: package/DiveLens-*.zip
+          path: |
+            package/DiveLens-*.zip
+            package/DiveLens-*.pkg
+            package/DiveLens-*-Setup.exe
           if-no-files-found: error
 
       - name: Remove the signing keychain (macOS)
@@ -256,7 +348,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           ls -la dist
-          gh release create "$TAG" dist/*.zip \
+          gh release create "$TAG" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --draft \
             --title "Dive Lens ${TAG#v}" \
