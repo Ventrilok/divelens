@@ -1,4 +1,4 @@
-; Dive Lens installer for Windows (Inno Setup 6).
+﻿; Dive Lens installer for Windows (Inno Setup 6).
 ;
 ; Installs for the current user only (no administrator rights) the plug-in
 ; folder DiveLens.lrplugin, with the app inside, into the user's Lightroom
@@ -9,6 +9,8 @@
 ; Built by the release workflow:
 ;   ISCC /DVersion=2.0.0 /DNumericVersion=2.0.0 /DPluginDir=<DiveLens.lrplugin>
 ;        /DOutputDir=<folder> packaging\windows\divelens.iss
+;
+; Saved as UTF-8 with a byte-order mark, so that "Pierre-Benoît" reads right.
 ;
 ; Part of Dive Lens, GPL-3.0-or-later.
 
@@ -48,6 +50,8 @@ SetupIconFile=..\..\app\src-tauri\icons\icon.ico
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
+; English or French, following Windows, without asking.
+ShowLanguageDialog=auto
 Compression=lzma2
 SolidCompression=yes
 OutputDir={#OutputDir}
