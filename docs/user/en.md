@@ -98,6 +98,7 @@ Good to know:
 - The photo's time is its **original capture time**, so a TIFF that came back from Photoshop is matched like its original.
 - A photo that would fall in two dives goes to the closer one.
 - Running a group of dives again only adds: photos already filed stay where they are (correct them by hand if needed), and photos found again get their values rewritten.
+- A photo found again without a depth (now at the surface, or in a dive without a profile), or in another dive while **Copy depth to GPS altitude** is off, loses the GPS altitude Dive Lens copied there before. An altitude from the camera, or one you set or changed yourself, stays.
 
 **Undo.** **Edit › Undo** in Lightroom reverts everything in one step, GPS and altitude included.
 

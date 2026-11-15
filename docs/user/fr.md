@@ -98,6 +98,7 @@ Bon à savoir :
 - L'heure d'une photo est son **heure de prise de vue d'origine** : un TIFF revenu de Photoshop est rattaché comme son original.
 - Une photo qui tomberait dans deux plongées va à la plus proche.
 - Relancer un groupe de plongées ne fait qu'ajouter : les photos déjà rangées restent où elles sont (corrigez-les à la main si besoin), et les photos retrouvées voient leurs valeurs réécrites.
+- Une photo retrouvée sans profondeur (désormais en surface, ou dans une plongée sans courbe), ou dans une autre plongée alors que **Copier la profondeur dans l'altitude GPS** est désactivé, perd l'altitude GPS que Dive Lens y avait copiée. Une altitude venue de l'appareil, ou que vous avez saisie ou modifiée vous-même, est conservée.
 
 **Annuler.** **Édition › Annuler** dans Lightroom défait tout en une seule fois, GPS et altitude compris.
 
