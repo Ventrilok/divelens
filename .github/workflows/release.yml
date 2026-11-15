@@ -10,8 +10,12 @@ name: Release
 # - Pushing a version tag (v2.0.0) builds it and attaches it to a DRAFT
 #   GitHub release; the owner reviews and publishes it by hand.
 #
-# Not signed yet (spec, section 9): the macOS app gets an ad-hoc signature
-# only, so macOS reports an unidentified developer rather than a damaged app.
+# Signing (spec, section 9): the macOS app is signed with the owner's
+# Developer ID and notarized by Apple, so it opens without a warning. The
+# certificates and the notarization key come from the repository's secrets;
+# they are never available to a pull request from a fork, which gets an
+# ad-hoc signature instead (a version tag always requires them). The Windows
+# app is not signed yet.
 
 on:
   push:
@@ -79,12 +83,91 @@ jobs:
       - run: npm ci
         working-directory: app
 
+      # A keychain of its own for this run, holding the two Developer ID
+      # certificates (Application signs the app, Installer the .pkg) and
+      # Apple's intermediate certificate that makes them valid. Tauri signs
+      # and notarizes the app with the identity and the API key it is given.
+      - name: Prepare signing (macOS)
+        id: signing
+        if: matrix.name == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_INSTALLER_CERTIFICATE }}
+          APPLE_INSTALLER_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERTIFICATE_PASSWORD }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            if [ "$GITHUB_REF_TYPE" = tag ]; then
+              echo "::error::A release needs the signing secrets."
+              exit 1
+            fi
+            echo "::warning::No signing secrets (pull request from a fork?): ad-hoc signature only."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "app-identity=-" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(openssl rand -base64 32)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+
+          # Apple's Developer ID G2 intermediate, checked against its known
+          # fingerprint: the certificates were issued under it.
+          curl -sSfL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          fingerprint=$(openssl x509 -inform DER -in "$RUNNER_TEMP/DeveloperIDG2CA.cer" -noout -fingerprint -sha256 | cut -d= -f2)
+          if [ "$fingerprint" != "F1:6C:D3:C5:4C:7F:83:CE:A4:BF:1A:3E:6A:08:19:C8:AA:A8:E4:A1:52:8F:D1:44:71:5F:35:06:43:D2:DF:3A" ]; then
+            echo "::error::Unexpected Developer ID G2 certificate: $fingerprint"
+            exit 1
+          fi
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain"
+
+          import_p12() {
+            printf '%s' "$1" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$2" \
+              -T /usr/bin/codesign -T /usr/bin/productbuild -T /usr/bin/pkgbuild
+            rm -f "$RUNNER_TEMP/cert.p12"
+          }
+          import_p12 "$APPLE_CERTIFICATE" "$APPLE_CERTIFICATE_PASSWORD"
+          import_p12 "$APPLE_INSTALLER_CERTIFICATE" "$APPLE_INSTALLER_CERTIFICATE_PASSWORD"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+
+          identity() {
+            security find-identity -v -p "$1" "$keychain" | sed -n "s/.*\"\(Developer ID $2: .*\)\"/\1/p" | head -n 1
+          }
+          app_identity=$(identity codesigning Application)
+          installer_identity=$(identity basic Installer)
+          if [ -z "$app_identity" ] || [ -z "$installer_identity" ]; then
+            security find-identity -v "$keychain"
+            echo "::error::The Developer ID certificates are not valid in the signing keychain."
+            exit 1
+          fi
+          echo "Signing as: $app_identity / $installer_identity"
+
+          printf '%s' "$APPLE_API_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          {
+            echo "signed=true"
+            echo "keychain=$keychain"
+            echo "app-identity=$app_identity"
+            echo "installer-identity=$installer_identity"
+          } >> "$GITHUB_OUTPUT"
+          # Read by Tauri to notarize the app, and by the .pkg step.
+          {
+            echo "APPLE_API_KEY=$APPLE_API_KEY"
+            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER"
+            echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8"
+          } >> "$GITHUB_ENV"
+
       - name: Build the app (macOS, Intel and Apple Silicon)
         if: matrix.name == 'macOS'
         working-directory: app
         env:
-          # Ad-hoc signature until the Developer ID certificate exists.
-          APPLE_SIGNING_IDENTITY: "-"
+          APPLE_SIGNING_IDENTITY: ${{ steps.signing.outputs.app-identity }}
         run: npm run tauri build -- --target universal-apple-darwin --bundles app
 
       - name: Build the app (Windows)
@@ -101,7 +184,8 @@ jobs:
           cp plugin/DiveLens.lrdevplugin/* "$out/"
           cp LICENSE "$out/"
           if [ "${{ matrix.name }}" = macOS ]; then
-            cp -R "target/universal-apple-darwin/release/bundle/macos/Dive Lens.app" "$out/"
+            # ditto keeps the signed, notarized bundle exactly as it is.
+            ditto "target/universal-apple-darwin/release/bundle/macos/Dive Lens.app" "$out/Dive Lens.app"
           else
             cp target/release/divelens.exe "$out/Dive Lens.exe"
           fi
@@ -116,7 +200,18 @@ jobs:
           echo "Architectures: $archs"
           case "$archs" in *x86_64*arm64*|*arm64*x86_64*) ;; *) echo "::error::Not a universal app: $archs"; exit 1 ;; esac
           codesign --verify --deep --strict --verbose=2 "$app"
-          codesign -dv "$app" 2>&1 | grep -E "Identifier|Signature|Format"
+          codesign -dv "$app" 2>&1 | grep -E "Identifier|Signature|Format|Authority|TeamIdentifier"
+          if [ "${{ steps.signing.outputs.signed }}" = true ]; then
+            # Notarized, with Apple's ticket attached, and accepted by
+            # Gatekeeper as a diver's Mac would check it.
+            xcrun stapler validate "$app"
+            assessment=$(spctl --assess --type exec -vv "$app" 2>&1)
+            echo "$assessment"
+            case "$assessment" in
+              *"source=Notarized Developer ID"*) ;;
+              *) echo "::error::Gatekeeper does not accept the app as notarized."; exit 1 ;;
+            esac
+          fi
 
       - name: Zip (macOS)
         if: matrix.name == 'macOS'
@@ -136,6 +231,12 @@ jobs:
           name: DiveLens-${{ matrix.name }}
           path: package/DiveLens-*.zip
           if-no-files-found: error
+
+      - name: Remove the signing keychain (macOS)
+        if: always() && steps.signing.outputs.signed == 'true'
+        run: |
+          security delete-keychain "${{ steps.signing.outputs.keychain }}" || true
+          rm -f "$RUNNER_TEMP/AuthKey.p8"
 
   release:
     name: Draft release
