@@ -91,6 +91,10 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .dot-warn { background: var(--warn); }
 .status-catalog { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.content { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.content > .screen { min-height: 0; }
+.update-banner { margin: 16px 28px 0; }
+.update-banner-actions { display: inline-flex; align-items: center; gap: 4px; }
 .screen { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 24px 28px; }
 .screen-center { align-items: center; justify-content: center; }
 .screen-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }

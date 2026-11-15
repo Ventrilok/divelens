@@ -1,10 +1,10 @@
-// Settings screen (spec F2, F3, F7, F10, F11). Every change is saved at once;
+// Settings screen (spec F2, F3, F7, F10, F11, F13). Every change is saved at once;
 // the app follows it live (language, units, dive log location).
 
 import { useEffect, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { checkSettingsFile, collectionSets, exportSettings, importSettings } from "../api";
+import { checkSettingsFile, checkUpdate, collectionSets, exportSettings, importSettings, installUpdate } from "../api";
 import { fileName, importErrorText } from "../backup";
 import { flattenSets, pathKey, placeLabel, setExists } from "../collectionPlace";
 import { Icon } from "../components/Icon";
@@ -20,7 +20,18 @@ import {
   readText,
   withLocation,
 } from "../sourceText";
-import type { AppInfo, CollectionSet, DiveLog, ImportCheck, LightroomStatus, LoadError, Settings, SourceInfo } from "../types";
+import { failureText, isBusy, stateLine } from "../updates";
+import type {
+  AppInfo,
+  CollectionSet,
+  DiveLog,
+  ImportCheck,
+  LightroomStatus,
+  LoadError,
+  Settings,
+  SourceInfo,
+  UpdateStatus,
+} from "../types";
 
 const SOURCE_CODE = "https://github.com/Ventrilok/divelens";
 
@@ -371,11 +382,113 @@ function BackupSection({
   );
 }
 
+function UpdatesSection({
+  settings,
+  update,
+  info,
+  writing,
+  onChange,
+}: {
+  settings: Settings;
+  update: UpdateStatus | null;
+  info: AppInfo | null;
+  /** Lightroom is being written to: nothing is installed meanwhile. */
+  writing: boolean;
+  onChange: (p: Patch) => void;
+}) {
+  const phase = update?.phase ?? { state: "idle" as const };
+  const notes = update?.notesUrl ?? null;
+  const releases = update?.releasesUrl ?? null;
+  // The version found, while it can still be installed (again, after a failure).
+  const found =
+    phase.state === "available"
+      ? phase.version
+      : phase.state === "failed" && phase.reason !== "notInstallable"
+        ? phase.version
+        : null;
+  const byHand = update !== null && (!update.installable || (phase.state === "failed" && phase.reason === "notInstallable"));
+
+  let explain: React.ReactNode = null;
+  if (phase.state === "downloading" || phase.state === "installing") {
+    const text =
+      phase.state === "downloading"
+        ? t("update.downloading", { version: phase.version })
+        : t("update.installing", { version: phase.version });
+    const percent = phase.state === "downloading" ? phase.percent : 100;
+    explain = (
+      <div className="set-explain" role="status">
+        <span>{text}</span>
+        <div className="bar" aria-hidden="true">
+          <div className="bar-fill" style={{ width: `${percent ?? 0}%` }} />
+        </div>
+      </div>
+    );
+  } else if (found || phase.state === "failed") {
+    const version = found ?? (phase.state === "failed" ? phase.version : null);
+    explain = (
+      <div className="set-explain" role={phase.state === "failed" ? "alert" : "status"}>
+        {phase.state === "failed" && <span className="set-warn">{failureText(phase.reason)}</span>}
+        {version && <b className="set-ask">{t("update.newVersion", { version })}</b>}
+        {version && byHand && <span>{t("update.downloadHint")}</span>}
+        {version && !byHand && <span>{t("update.restartAfter")}</span>}
+        {version && !byHand && writing && <span className="set-note">{t("update.err.writing")}</span>}
+        {version && (
+          <div className="set-actions">
+            {byHand ? (
+              <button type="button" className="btn btn-p" onClick={() => openUrl(notes ?? releases ?? SOURCE_CODE)}>
+                {t("update.download")}
+              </button>
+            ) : (
+              <button type="button" className="btn btn-p" disabled={writing} onClick={() => installUpdate()}>
+                {t("update.install")}
+              </button>
+            )}
+            {notes && (
+              <button type="button" className="btn btn-g" onClick={() => openUrl(notes)}>
+                {t("update.notes")}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <section className="card" aria-labelledby="s-upd">
+      <h2 id="s-upd" className="sec">
+        {t("settings.updates")}
+      </h2>
+      <Row title={t("settings.autoCheck")} hint={t("settings.autoCheckHint")}>
+        <input
+          className="sw"
+          type="checkbox"
+          role="switch"
+          aria-label={t("settings.autoCheckLabel")}
+          checked={settings.checkUpdates}
+          onChange={(e) => onChange({ checkUpdates: e.target.checked })}
+        />
+      </Row>
+      <Row
+        title={t("settings.appVersion", { version: info?.version ?? "" })}
+        hint={update ? stateLine(update) : undefined}
+        top={explain !== null}
+      >
+        <button type="button" className="btn btn-s" disabled={isBusy(update)} onClick={() => checkUpdate()}>
+          {t("update.checkNow")}
+        </button>
+        {explain}
+      </Row>
+    </section>
+  );
+}
+
 export function SettingsScreen({
   settings,
   logState,
   lr,
   info,
+  update,
   writing,
   error,
   onChange,
@@ -384,6 +497,7 @@ export function SettingsScreen({
   logState: LogState;
   lr: LightroomStatus;
   info: AppInfo | null;
+  update: UpdateStatus | null;
   /** Lightroom is being written to: the dive log cannot change. */
   writing: boolean;
   /** Why the last change was not made (a ChangeError), or null. */
@@ -477,6 +591,8 @@ export function SettingsScreen({
         <CollectionsSection settings={settings} lr={lr} onChange={onChange} />
 
         <BackupSection settings={settings} logState={logState} writing={writing} onChange={onChange} />
+
+        <UpdatesSection settings={settings} update={update} info={info} writing={writing} onChange={onChange} />
 
         <section className="card" aria-labelledby="s-diag">
           <h2 id="s-diag" className="sec">

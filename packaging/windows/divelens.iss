@@ -74,3 +74,15 @@ Type: filesandordirs; Name: "{app}\*"
 
 [Files]
 Source: "{#PluginDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[Run]
+; An update made by the app (spec F13) runs this installer silently with
+; /update=1, then quits: start the new version, on Settings. A first
+; installation starts nothing.
+Filename: "{app}\Dive Lens.exe"; Parameters: "--after-update --screen settings"; Flags: nowait; Check: IsUpdate
+
+[Code]
+function IsUpdate: Boolean;
+begin
+  Result := ExpandConstant('{param:update|0}') = '1';
+end;

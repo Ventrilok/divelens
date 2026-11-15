@@ -49,7 +49,7 @@ Your photos keep their dive data and their collections in the catalog: they come
 **On Windows**
 
 1. Quit Lightroom.
-2. **Settings › Apps › Installed apps › Dive Lens › Uninstall**. If you installed Dive Lens from the zip, remove it in **File › Plug-in Manager…** (**Remove**), then delete the DiveLens.lrplugin folder from where you had put it.
+2. **Settings › Apps › Installed apps › Dive Lens › Uninstall**. If you installed Dive Lens from the zip, remove it in **File › Plug-in Manager…** (**Remove**), then delete the DiveLens.lrplugin folder from where you had put it. Once Dive Lens has updated it, a copy installed from the zip is listed in **Installed apps** too: uninstall it from there.
 3. Optional, to erase Dive Lens's settings as well: delete the folder `%APPDATA%\com.querton.divelens.desktop`.
 
 ---
@@ -173,12 +173,21 @@ Every change is saved at once.
 
 **Settings backup**
 - **Export or import**: to get your settings back on another computer, or after reinstalling.
-- **Export…** saves them in a file, named "Dive Lens settings.json" unless you choose another name. The file holds: the dive application and the log location of each one, language, units, the GPS altitude option, where the collections go, the log level and the order of the dive list. The clock offsets remembered for each camera are not in it: they stay on this computer.
+- **Export…** saves them in a file, named "Dive Lens settings.json" unless you choose another name. The file holds: the dive application and the log location of each one, language, units, the GPS altitude option, where the collections go, the automatic check for updates, the log level and the order of the dive list. The clock offsets remembered for each camera are not in it: they stay on this computer.
 - **Import…** asks before changing anything: **Replace** puts the file's settings in place of every setting on this screen, **Cancel** leaves them as they are.
 - If the file's dive log is not on this computer, Dive Lens says so and keeps its location until you choose the right one (**Choose…**, or **Choose a file…** / **Choose a folder…** for Subsurface). If the collection set chosen in **Place in** is not in this catalog, Create Collections says so: choose another place in Settings.
 - A file from a Mac that uses MacDive, imported on Windows: Dive Lens uses Subsurface, the application available there, and keeps the MacDive location: these settings, exported again and imported on a Mac, still use MacDive there.
 - A file that does not look like a Dive Lens settings file is refused, and nothing changes. A file exported by an earlier version of Dive Lens can still be imported.
 - After an import, Dive Lens no longer takes over the previous plug-in's settings (section 1): the imported settings are the ones kept.
+
+**Updates**
+- **Check automatically** (on by default): when Dive Lens starts, at most once a day, it looks on GitHub for a new version. Nothing is installed without your consent.
+- **Check now** looks at once. Under **Dive Lens <version>**, the line says whether your version is up to date and when it was last checked.
+- When a new version exists, a banner at the top of the screen says so: **See** opens this section, **×** closes the banner until the next version. Here, **What's new** opens the version's page on GitHub, and **Install** installs it.
+- **Install** downloads the new version, checks that it comes from Dive Lens (signature), replaces the app and the Lightroom part, then Dive Lens starts again. Not while Lightroom is being written to.
+- Then **restart Lightroom**: it loads the new Dive Lens part only when it starts. Until then, Dive Lens shows "Restart Lightroom to finish updating Dive Lens."
+- On Windows, a copy installed with the zip then appears in **Settings › Apps › Installed apps**, where you had put it.
+- If Dive Lens cannot change its folder, it offers **Download from GitHub**: then install the new version yourself (section 1).
 
 **Diagnostics**
 - **Log level**: Normal or Detailed. Raise it only to report a problem.
@@ -222,4 +231,6 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 ## 8. Privacy
 
 - Your dive log is only read, never modified. MacDive or Subsurface can stay open meanwhile.
-- Dive Lens sends no dive data anywhere. The only Internet access is the site map: the map service (OpenFreeMap, OpenStreetMap data) receives the area of the map displayed, nothing else. Without Internet, the map is replaced by the message "Map unavailable without Internet."
+- Dive Lens sends no dive data anywhere. It goes on the Internet for two things only:
+  - the site map: the map service (OpenFreeMap, OpenStreetMap data) receives the area of the map displayed, nothing else. Without Internet, the map is replaced by the message "Map unavailable without Internet.";
+  - updates: GitHub receives the request for the latest version, and the download if you install, nothing else. **Settings › Updates › Check automatically** turns off the check at launch.

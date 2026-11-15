@@ -26,6 +26,15 @@ name: Release
 # they are never available to a pull request from a fork, which gets an
 # ad-hoc signature instead (a release always requires them). The Windows
 # app is not signed yet.
+#
+# Updates (spec F13): the app updates itself from the file of its system,
+# signed with the Dive Lens update key (secrets TAURI_SIGNING_PRIVATE_KEY and
+# TAURI_SIGNING_PRIVATE_KEY_PASSWORD): the macOS zip, the Windows installer.
+# latest.json names them with their signatures; once the draft is published,
+# the app finds it at releases/latest/download/latest.json. The app refuses
+# a file whose signature does not match its public key
+# (app/src-tauri/tauri.conf.json) or names another version: latest.json is
+# only made once each signature was checked against that key.
 
 on:
   push:
@@ -373,6 +382,33 @@ jobs:
           for ($i = 0; $i -lt 60 -and (Test-Path $app); $i++) { Start-Sleep -Seconds 1 }
           if (Test-Path $app) { Write-Error 'The uninstaller left the app'; exit 1 }
 
+      # Without the key (pull request from a fork) there is no signature, and
+      # no latest.json; a release always requires it.
+      - name: Sign the update file
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          RELEASE: ${{ needs.decide.outputs.release }}
+        working-directory: app
+        run: |
+          if [ "${{ matrix.name }}" = macOS ]; then
+            file="../package/DiveLens-$VERSION-macOS.zip"
+          else
+            file="../package/DiveLens-$VERSION-Windows-Setup.exe"
+          fi
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            if [ "$RELEASE" = true ]; then
+              echo "::error::A release needs the update key."
+              exit 1
+            fi
+            echo "::warning::No update key (pull request from a fork?): the update file is not signed."
+            exit 0
+          fi
+          # The version goes into the signature: the app refuses it for any other.
+          npx tauri signer sign --app-version "$VERSION" "$file"
+          ls -la "$file.sig"
+
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: DiveLens-${{ matrix.name }}
@@ -380,6 +416,7 @@ jobs:
             package/DiveLens-*.zip
             package/DiveLens-*.pkg
             package/DiveLens-*-Setup.exe
+            package/DiveLens-*.sig
           if-no-files-found: error
 
       - name: Remove the signing keychain (macOS)
@@ -388,9 +425,98 @@ jobs:
           security delete-keychain "${{ steps.signing.outputs.keychain }}" || true
           rm -f "$RUNNER_TEMP/AuthKey.p8"
 
+  # latest.json, once both signatures are checked against the public key the
+  # app carries. Made for a pull request too, kept as a run artifact.
+  manifest:
+    name: Update manifest
+    needs: [decide, package]
+    if: needs.decide.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: |
+            app/package.json
+            app/src-tauri/tauri.conf.json
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Check the signatures and write latest.json
+        id: manifest
+        env:
+          RELEASE: ${{ needs.decide.outputs.release }}
+        run: |
+          version=$(jq -r .version app/package.json)
+          pubkey=$(jq -r '.plugins.updater.pubkey // empty' app/src-tauri/tauri.conf.json)
+          mac="dist/DiveLens-$version-macOS.zip"
+          win="dist/DiveLens-$version-Windows-Setup.exe"
+          if [ ! -f "$mac.sig" ] || [ ! -f "$win.sig" ]; then
+            if [ "$RELEASE" = true ]; then
+              echo "::error::The update files are not signed."
+              exit 1
+            fi
+            echo "::warning::The update files are not signed: no latest.json."
+            exit 0
+          fi
+          if [ -z "$pubkey" ]; then
+            echo "::error::No update public key in app/src-tauri/tauri.conf.json: the app could not check any update."
+            exit 1
+          fi
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq minisign > /dev/null
+          printf '%s' "$pubkey" | base64 --decode > "$RUNNER_TEMP/update.pub"
+          for file in "$mac" "$win"; do
+            base64 --decode < "$file.sig" > "$RUNNER_TEMP/file.minisig"
+            if ! minisign -V -p "$RUNNER_TEMP/update.pub" -m "$file" -x "$RUNNER_TEMP/file.minisig" > "$RUNNER_TEMP/verified" 2>&1; then
+              cat "$RUNNER_TEMP/verified"
+              echo "::error::$(basename "$file"): its signature does not match the app's public key."
+              exit 1
+            fi
+            # The trusted comment, covered by the signature: tab-separated fields.
+            if ! grep '^Trusted comment:' "$RUNNER_TEMP/verified" | tr '\t' '\n' | grep -qx "version:$version"; then
+              cat "$RUNNER_TEMP/verified"
+              echo "::error::$(basename "$file"): the signature does not name version $version."
+              exit 1
+            fi
+            echo "$(basename "$file"): signature checked"
+          done
+
+          base="https://github.com/$GITHUB_REPOSITORY/releases/download/v$version"
+          # Both Mac processors get the same universal app.
+          jq -n \
+            --arg version "$version" \
+            --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg mac_url "$base/$(basename "$mac")" \
+            --arg mac_sig "$(cat "$mac.sig")" \
+            --arg win_url "$base/$(basename "$win")" \
+            --arg win_sig "$(cat "$win.sig")" \
+            '{
+              version: $version,
+              pub_date: $date,
+              platforms: {
+                "darwin-aarch64": { url: $mac_url, signature: $mac_sig },
+                "darwin-x86_64": { url: $mac_url, signature: $mac_sig },
+                "windows-x86_64": { url: $win_url, signature: $win_sig }
+              }
+            }' > latest.json
+          cat latest.json
+          echo "made=true" >> "$GITHUB_OUTPUT"
+
+      - if: steps.manifest.outputs.made == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: DiveLens-update-manifest
+          path: latest.json
+          if-no-files-found: error
+
   release:
     name: Draft release
-    needs: [decide, package]
+    needs: [decide, package, manifest]
     if: needs.decide.outputs.release == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -408,6 +534,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.decide.outputs.version }}
         run: |
+          # The signatures are in latest.json; the .sig files are not published.
+          rm -f dist/*.sig
+          test -f dist/latest.json
           ls -la dist
           tag="v$VERSION"
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then

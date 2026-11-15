@@ -250,6 +250,9 @@ pub struct Settings {
     /// The previous plugin's settings were looked at (done once).
     #[serde(deserialize_with = "lenient")]
     pub legacy_imported: bool,
+    /// Look for a new version at launch, at most once a day (spec F13).
+    #[serde(deserialize_with = "lenient")]
+    pub check_updates: bool,
 }
 
 impl Default for Settings {
@@ -264,6 +267,7 @@ impl Default for Settings {
             log_level: LogLevel::default(),
             dive_sort: None,
             legacy_imported: false,
+            check_updates: true,
         }
     }
 }
@@ -455,6 +459,7 @@ mod tests {
         assert_eq!(s.language, Language::System);
         assert_eq!(s.log_level, LogLevel::Normal);
         assert_eq!(s.dive_sort, None);
+        assert!(s.check_updates);
     }
 
     #[test]
@@ -786,6 +791,7 @@ mod tests {
         assert_eq!(s.units.depth, DepthChoice::Feet);
         assert_eq!(s.collections, CollectionsPlace::default());
         assert!(!s.legacy_imported, "machine state is never imported");
+        assert!(s.check_updates, "updates are looked for unless turned off");
         // A newer version: unknown settings are ignored, the rest is kept.
         let s = Settings::from_export(
             r#"{"version":7,"language":"fr","trips":{"on":true},"logLevel":"verbose"}"#,

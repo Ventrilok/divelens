@@ -49,7 +49,7 @@ Vos photos gardent leurs infos de plongée et leurs collections dans le catalogu
 **Sur Windows**
 
 1. Quittez Lightroom.
-2. **Paramètres › Applications › Applications installées › Dive Lens › Désinstaller**. Si vous aviez installé Dive Lens avec le zip, retirez-le dans **Fichier › Gestionnaire de modules externes…** (**Supprimer**), puis supprimez le dossier DiveLens.lrplugin là où vous l'aviez placé.
+2. **Paramètres › Applications › Applications installées › Dive Lens › Désinstaller**. Si vous aviez installé Dive Lens avec le zip, retirez-le dans **Fichier › Gestionnaire de modules externes…** (**Supprimer**), puis supprimez le dossier DiveLens.lrplugin là où vous l'aviez placé. Une fois mise à jour par Dive Lens, une copie installée avec le zip figure elle aussi dans **Applications installées** : désinstallez-la de là.
 3. Facultatif, pour effacer aussi les réglages de Dive Lens : supprimez le dossier `%APPDATA%\com.querton.divelens.desktop`.
 
 ---
@@ -173,12 +173,21 @@ Chaque modification est enregistrée immédiatement.
 
 **Sauvegarde des réglages**
 - **Exporter ou importer** : pour retrouver vos réglages sur un autre ordinateur, ou après une réinstallation.
-- **Exporter…** les enregistre dans un fichier, nommé « Réglages Dive Lens.json » sauf si vous choisissez un autre nom. Le fichier contient : l'application de plongée et l'emplacement du carnet de chacune, la langue, les unités, l'option altitude GPS, l'emplacement des collections, le niveau du journal et l'ordre de la liste des plongées. Les décalages d'horloge retenus pour chaque appareil n'y figurent pas : ils restent sur cet ordinateur.
+- **Exporter…** les enregistre dans un fichier, nommé « Réglages Dive Lens.json » sauf si vous choisissez un autre nom. Le fichier contient : l'application de plongée et l'emplacement du carnet de chacune, la langue, les unités, l'option altitude GPS, l'emplacement des collections, la vérification automatique des mises à jour, le niveau du journal et l'ordre de la liste des plongées. Les décalages d'horloge retenus pour chaque appareil n'y figurent pas : ils restent sur cet ordinateur.
 - **Importer…** demande confirmation avant de rien changer : **Remplacer** met les réglages du fichier à la place de tous ceux de cet écran, **Annuler** les laisse tels quels.
 - Si le carnet du fichier n'est pas sur cet ordinateur, Dive Lens le signale et garde son emplacement jusqu'à ce que vous indiquiez le bon (**Choisir…**, ou **Choisir un fichier…** / **Choisir un dossier…** pour Subsurface). Si l'ensemble de collections choisi dans **Placer dans** n'est pas dans ce catalogue, Créer les collections le signale : choisissez un autre emplacement dans les réglages.
 - Un fichier venu d'un Mac réglé sur MacDive, importé sur Windows : Dive Lens utilise Subsurface, l'application disponible sur Windows, et garde l'emplacement MacDive : ces réglages, exportés à nouveau puis importés sur un Mac, y utilisent toujours MacDive.
 - Un fichier qui ne ressemble pas à un fichier de réglages Dive Lens est refusé, et rien ne change. Un fichier exporté par une version antérieure de Dive Lens reste importable.
 - Après un import, Dive Lens ne reprend plus les réglages de l'ancien module (section 1) : ce sont ceux du fichier qui sont gardés.
+
+**Mises à jour**
+- **Vérifier automatiquement** (activé par défaut) : au lancement de Dive Lens, au plus une fois par jour, Dive Lens regarde sur GitHub s'il existe une nouvelle version. Rien ne s'installe sans votre accord.
+- **Vérifier maintenant** le fait tout de suite. Sous **Dive Lens <version>**, la ligne dit si votre version est à jour et quand la dernière vérification a eu lieu.
+- Quand une nouvelle version existe, un bandeau le signale en haut de l'écran : **Voir** ouvre cette section, **×** ferme le bandeau jusqu'à la version suivante. Ici, **Nouveautés** ouvre la page de la version sur GitHub, et **Installer** l'installe.
+- **Installer** télécharge la nouvelle version, vérifie qu'elle vient bien de Dive Lens (signature), remplace l'application et la partie Lightroom, puis Dive Lens redémarre. Pas pendant une écriture dans Lightroom.
+- Ensuite, **redémarrez Lightroom** : il ne charge la nouvelle partie Dive Lens qu'à son démarrage. Jusque-là, Dive Lens affiche « Redémarrez Lightroom pour terminer la mise à jour de Dive Lens. »
+- Sur Windows, une copie installée avec le zip apparaît ensuite dans **Paramètres › Applications › Applications installées**, à l'endroit où vous l'aviez placée.
+- Si Dive Lens ne peut pas modifier son dossier, il propose **Télécharger depuis GitHub** : installez alors la nouvelle version vous-même (section 1).
 
 **Diagnostic**
 - **Niveau du journal** : Normal ou Détaillé. À augmenter seulement pour signaler un problème.
@@ -222,4 +231,6 @@ Les champs Dive Lens restent dans le catalogue Lightroom : ils ne sont pas écri
 ## 8. Confidentialité
 
 - Votre carnet de plongée est seulement lu, jamais modifié. MacDive ou Subsurface peuvent rester ouverts pendant ce temps.
-- Dive Lens n'envoie aucune donnée de plongée nulle part. Le seul accès à Internet est la carte du site : le service de carte (OpenFreeMap, données OpenStreetMap) reçoit la zone de carte affichée, rien d'autre. Sans Internet, la carte est remplacée par le message « Carte indisponible sans Internet. »
+- Dive Lens n'envoie aucune donnée de plongée nulle part. Il n'accède à Internet que pour deux choses :
+  - la carte du site : le service de carte (OpenFreeMap, données OpenStreetMap) reçoit la zone de carte affichée, rien d'autre. Sans Internet, la carte est remplacée par le message « Carte indisponible sans Internet. » ;
+  - les mises à jour : GitHub reçoit la demande de la dernière version, et le téléchargement si vous installez, rien d'autre. **Réglages › Mises à jour › Vérifier automatiquement** coupe la vérification au lancement.

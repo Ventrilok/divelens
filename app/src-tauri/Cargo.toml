@@ -27,6 +27,10 @@ log = { version = "0.4", features = ["std"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-single-instance = "2"
 plist = "1.10.3"
+# Updates (spec F13): checks GitHub Releases, downloads and verifies the
+# signature; installing is ours (the whole plug-in folder is replaced).
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
+semver = "1"
 
 [dev-dependencies]
 # Runs the plugin's pure-Lua modules under Lua 5.1, the version Lightroom embeds.
