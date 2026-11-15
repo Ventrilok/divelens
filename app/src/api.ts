@@ -21,6 +21,7 @@ import type {
   Settings,
   TagChoice,
   TagPreview,
+  UpdateStatus,
 } from "./types";
 
 let logChanged = (_applied: boolean) => {};
@@ -120,3 +121,14 @@ export const suggestOffsets = (search: number, cameras: string[]) =>
 /** Writes the dives found with photo search `search`, which must come from `log`; rejects with a CollectionsError. */
 export const applyCollections = (log: LogRef, search: number, choices: CollectionChoices) =>
   onLog(invoke<CollectionsResult>("apply_collections", { log, search, choices }), true);
+
+/** Where the update stands (spec F13). */
+export const updateStatus = () => invoke<UpdateStatus>("update_status");
+/** Looks for a new version; `automatic`: only if checks are on and the last one is a day old. */
+export const checkUpdate = (automatic = false) => invoke<void>("check_update", { automatic });
+/** Closes the notice of `version` until a newer one comes. */
+export const dismissUpdate = (version: string) => invoke<void>("dismiss_update", { version });
+/** Downloads and installs the version found; Dive Lens then starts again. */
+export const installUpdate = () => invoke<void>("install_update");
+export const onUpdateStatus = (handler: (s: UpdateStatus) => void): Promise<UnlistenFn> =>
+  listen<UpdateStatus>("update-status", (e) => handler(e.payload));

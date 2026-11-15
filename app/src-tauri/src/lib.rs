@@ -6,6 +6,7 @@ mod offsets;
 mod selection;
 mod settings;
 mod units;
+mod update;
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -20,6 +21,7 @@ use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
 use divelens_core::{Capabilities, Dive, Error, Site};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_updater::UpdaterExt;
 
 use collections::{Choices, Period, Preview, Searches, Session};
 use dive_log::{LogChanged, LogId, SourceInfo, WriteInProgress, Writes, guarded_change};
@@ -156,6 +158,10 @@ fn change_settings(
             send_log_level(app, after.log_level);
         }
         let _ = app.emit("settings-changed", after.clone());
+        if after.check_updates && !before.check_updates {
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move { check_update(app, true).await });
+        }
     }
     Ok(after)
 }
@@ -1015,6 +1021,256 @@ async fn collection_sets(app: AppHandle) -> Result<Vec<CollectionSet>, Collectio
     .expect("collection sets task failed")
 }
 
+/// Updates (spec F13): what this copy is, where the update stands, and the
+/// update the last check found, ready to download.
+struct Updates {
+    copy: update::Copy,
+    phase: Mutex<update::Phase>,
+    found: Mutex<Option<tauri_plugin_updater::Update>>,
+}
+
+fn update_status_of(app: &AppHandle) -> update::Status {
+    let updates = app.state::<Updates>();
+    let state = update::State::load(&config_dir(app));
+    update::Status {
+        phase: updates.phase.lock().expect("update phase").clone(),
+        installable: updates.copy.installable(),
+        last_check: state.last_check,
+        dismissed: state.dismissed,
+        notes_url: updates
+            .found
+            .lock()
+            .expect("update")
+            .as_ref()
+            .map(|u| update::notes_url(&u.version)),
+        releases_url: update::RELEASES_URL,
+    }
+}
+
+fn set_phase(app: &AppHandle, phase: update::Phase) {
+    *app.state::<Updates>().phase.lock().expect("update phase") = phase;
+    let _ = app.emit("update-status", update_status_of(app));
+}
+
+/// Where the update stands; changes arrive as `update-status` events.
+#[tauri::command]
+fn update_status(app: AppHandle) -> update::Status {
+    update_status_of(&app)
+}
+
+/// Asks GitHub for the latest stable version (`latest.json`, or the address
+/// in `DIVELENS_UPDATE_URL`), as offered to this system.
+async fn find_update(
+    app: &AppHandle,
+) -> Result<Option<tauri_plugin_updater::Update>, tauri_plugin_updater::Error> {
+    let mut builder = app
+        .updater_builder()
+        .target(update::target())
+        .version_comparator(|current, remote| update::is_offered(&current, &remote.version));
+    if let Ok(url) = std::env::var(update::URL_VARIABLE) {
+        log::info!("update: looking at {url}");
+        builder = builder.endpoints(vec![url.parse()?])?;
+    }
+    builder.build()?.check().await
+}
+
+/// Looks for a new version. `automatic` (at launch, or when the setting is
+/// turned on): only when checks are on, this copy is an installed one, and
+/// the last check is a day old; a failure then shows nothing.
+#[tauri::command]
+async fn check_update(app: AppHandle, automatic: bool) {
+    let dir = config_dir(&app);
+    if automatic {
+        let installed = app.state::<Updates>().copy.folder().is_some();
+        let due = update::due(update::State::load(&dir).last_check, update::now());
+        if !Settings::load(&dir).check_updates || !installed || !due {
+            return;
+        }
+    }
+    {
+        let updates = app.state::<Updates>();
+        let mut phase = updates.phase.lock().expect("update phase");
+        if matches!(
+            *phase,
+            update::Phase::Checking
+                | update::Phase::Downloading { .. }
+                | update::Phase::Installing { .. }
+        ) {
+            return;
+        }
+        *phase = update::Phase::Checking;
+    }
+    let _ = app.emit("update-status", update_status_of(&app));
+    match find_update(&app).await {
+        Ok(found) => {
+            let mut state = update::State::load(&dir);
+            state.last_check = Some(update::now());
+            if let Err(e) = state.save(&dir) {
+                log::warn!("update: last check not saved: {e}");
+            }
+            let phase = match &found {
+                Some(u) => {
+                    log::info!("update: Dive Lens {} available", u.version);
+                    update::Phase::Available {
+                        version: u.version.clone(),
+                    }
+                }
+                None => {
+                    log::info!("update: up to date");
+                    update::Phase::UpToDate
+                }
+            };
+            *app.state::<Updates>().found.lock().expect("update") = found;
+            set_phase(&app, phase);
+        }
+        Err(e) => {
+            log::warn!("update: check failed: {e}");
+            set_phase(
+                &app,
+                if automatic {
+                    update::Phase::Idle
+                } else {
+                    update::Phase::Failed {
+                        reason: update::failure_of(&e),
+                        version: None,
+                    }
+                },
+            );
+        }
+    }
+}
+
+/// The diver closed the notice of `version`: it comes back for a newer one.
+#[tauri::command]
+fn dismiss_update(app: AppHandle, version: String) {
+    let dir = config_dir(&app);
+    let mut state = update::State::load(&dir);
+    state.dismissed = Some(version);
+    if let Err(e) = state.save(&dir) {
+        log::warn!("update: closed notice not saved: {e}");
+    }
+    let _ = app.emit("update-status", update_status_of(&app));
+}
+
+/// Downloads the update found, checks its signature, replaces the plug-in
+/// folder and starts the new version; this app then quits. Never while
+/// Lightroom is being written to, and no write starts meanwhile.
+#[tauri::command]
+async fn install_update(app: AppHandle) {
+    let updates = app.state::<Updates>();
+    let found = updates.found.lock().expect("update").clone();
+    let Some(found) = found else {
+        return;
+    };
+    let version = found.version.clone();
+    let fail = |reason, detail: String| {
+        log::error!("update: Dive Lens {version} not installed: {detail}");
+        set_phase(
+            &app,
+            update::Phase::Failed {
+                reason,
+                version: Some(version.clone()),
+            },
+        );
+    };
+    let folder = match (&updates.copy, updates.copy.installable()) {
+        (update::Copy::Plugin { folder, .. }, true) => folder.clone(),
+        _ => {
+            return fail(
+                update::Failure::NotInstallable,
+                format!("{:?}", updates.copy),
+            );
+        }
+    };
+    if app.state::<Writes>().in_progress() {
+        return fail(
+            update::Failure::Writing,
+            "Lightroom is being written to".into(),
+        );
+    }
+    {
+        let mut phase = updates.phase.lock().expect("update phase");
+        if matches!(
+            *phase,
+            update::Phase::Downloading { .. } | update::Phase::Installing { .. }
+        ) {
+            return;
+        }
+        *phase = update::Phase::Downloading {
+            version: version.clone(),
+            percent: None,
+        };
+    }
+    let _ = app.emit("update-status", update_status_of(&app));
+    log::info!(
+        "update: downloading Dive Lens {version} from {}",
+        found.download_url
+    );
+    let mut done: u64 = 0;
+    let mut shown = None;
+    let bytes = found
+        .download(
+            |chunk, total| {
+                done += chunk as u64;
+                let percent = total
+                    .filter(|t| *t > 0)
+                    .map(|t| (done * 100 / t).min(100) as u8);
+                if percent != shown {
+                    shown = percent;
+                    set_phase(
+                        &app,
+                        update::Phase::Downloading {
+                            version: version.clone(),
+                            percent,
+                        },
+                    );
+                }
+            },
+            || {},
+        )
+        .await;
+    let bytes = match bytes {
+        Ok(bytes) => bytes,
+        Err(e) => return fail(update::failure_of(&e), e.to_string()),
+    };
+    set_phase(
+        &app,
+        update::Phase::Installing {
+            version: version.clone(),
+        },
+    );
+    let handle = app.clone();
+    let installed = tauri::async_runtime::spawn_blocking(move || {
+        let writes = handle.state::<Writes>();
+        writes.exclusive(|writing| {
+            if writing {
+                return Err(update::InstallError {
+                    reason: update::Failure::Writing,
+                    detail: "Lightroom is being written to".into(),
+                });
+            }
+            let new_app = update::install(&folder, &bytes, &found.version)?;
+            log::info!(
+                "update: Dive Lens {} installed in {}",
+                found.version,
+                folder.display()
+            );
+            if let Err(e) = update::relaunch(&new_app) {
+                log::error!("update: new version not started: {e}");
+            }
+            handle.exit(0);
+            // Holds off any write to Lightroom until this app has quit.
+            std::thread::sleep(Duration::from_secs(30));
+            Ok(())
+        })
+    })
+    .await
+    .expect("update task failed");
+    if let Err(e) = installed {
+        fail(e.reason, e.detail);
+    }
+}
+
 /// Screen asked for on the command line (`--screen tag`), when Lightroom
 /// launched the app from one of its menus.
 #[tauri::command]
@@ -1043,6 +1299,17 @@ fn bring_to_front(app: &AppHandle) {
 fn show_screen(app: &AppHandle, screen: String) {
     bring_to_front(app);
     let _ = app.emit("show-screen", screen);
+}
+
+/// Shows `status` when it differs from the one shown.
+fn show_status(app: &AppHandle, status: Status) {
+    let state = app.state::<Lightroom>();
+    let mut shown = state.status.lock().expect("lightroom state");
+    if *shown != status {
+        *shown = status.clone();
+        drop(shown);
+        let _ = app.emit("lightroom-status", status);
+    }
 }
 
 /// Keeps trying to reach the plugin for as long as the app runs: whichever of
@@ -1088,6 +1355,7 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                                 (key, c.from.clone(), c.to.clone())
                             })
                             .collect();
+                        status.restart_lightroom = status.other_version(&version);
                         let dive_app = source_info(&app).app;
                         let cover =
                             offsets::corrected_range(&Offsets::load(&dir, dive_app), &ranges);
@@ -1139,6 +1407,10 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                     }
                 },
             );
+            // A plug-in from before an update, still running in Lightroom.
+            if let End::Protocol(_) = end {
+                show_status(&app, Status::other_protocol(&link));
+            }
             // Log changes only: a stale link file fails every second.
             let text = format!("{end:?}");
             if last_end.as_ref() != Some(&text) {
@@ -1147,6 +1419,9 @@ fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) {
                 }
                 last_end = Some(text);
             }
+        } else {
+            // Lightroom quit: nothing left to restart.
+            show_status(&app, Status::default());
         }
         std::thread::sleep(Duration::from_secs(1));
     }
@@ -1165,6 +1440,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             dive_apps,
             app_info,
@@ -1188,7 +1464,11 @@ pub fn run() {
             collections_preview,
             suggest_offsets,
             apply_collections,
-            collection_sets
+            collection_sets,
+            update_status,
+            check_update,
+            dismiss_update,
+            install_update
         ])
         .setup(|app| {
             let settings = Settings::load(&config_dir(app.handle()));
@@ -1213,6 +1493,20 @@ pub fn run() {
             app.manage(CollectionsState::default());
             app.manage(TagState::default());
             app.manage(Kept::default());
+            let copy = std::env::current_exe()
+                .map(|exe| update::Copy::locate(&exe))
+                .unwrap_or(update::Copy::Development);
+            log::info!("update: this copy is {copy:?}");
+            if let Some(folder) = copy.folder() {
+                update::clean_up(folder);
+            }
+            app.manage(Updates {
+                copy,
+                phase: Mutex::new(update::Phase::default()),
+                found: Mutex::new(None),
+            });
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move { check_update(handle, true).await });
             // Writes are told to the UI from a thread of their own, in order:
             // never from under the lock that settings changes wait on.
             let (writing, told) = mpsc::channel::<bool>();
