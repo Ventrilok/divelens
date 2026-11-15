@@ -67,7 +67,8 @@ sed "s/@VERSION@/$version/" "$here/distribution.xml" > "$work/distribution.xml"
 
 if [ -n "$identity" ]; then
     productbuild --distribution "$work/distribution.xml" --package-path "$work" \
-        --sign "$identity" "$out"
+        --resources "$here/resources" --sign "$identity" "$out"
 else
-    productbuild --distribution "$work/distribution.xml" --package-path "$work" "$out"
+    productbuild --distribution "$work/distribution.xml" --package-path "$work" \
+        --resources "$here/resources" "$out"
 fi
