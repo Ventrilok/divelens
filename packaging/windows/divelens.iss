@@ -61,6 +61,13 @@ OutputBaseFilename=DiveLens-{#Version}-Windows-Setup
 Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
 
+[Messages]
+; Last screen. No shortcut is created, so Inno Setup shows the "NoIcons" text.
+en.FinishedLabelNoIcons=Dive Lens is installed.%n%nIf Lightroom Classic is open, quit it and start it again: Lightroom loads Dive Lens only when it starts.%n%nThe Dive Lens menus are in Library › Plug-in Extras.
+en.FinishedLabel=Dive Lens is installed.%n%nIf Lightroom Classic is open, quit it and start it again: Lightroom loads Dive Lens only when it starts.%n%nThe Dive Lens menus are in Library › Plug-in Extras.
+fr.FinishedLabelNoIcons=Dive Lens est installé.%n%nSi Lightroom Classic est ouvert, quittez-le et relancez-le : Lightroom ne charge Dive Lens qu'à son démarrage.%n%nLes menus Dive Lens sont dans Bibliothèque › Modules externes.
+fr.FinishedLabel=Dive Lens est installé.%n%nSi Lightroom Classic est ouvert, quittez-le et relancez-le : Lightroom ne charge Dive Lens qu'à son démarrage.%n%nLes menus Dive Lens sont dans Bibliothèque › Modules externes.
+
 [InstallDelete]
 ; Start from an empty plug-in folder: no file of an earlier version is left.
 Type: filesandordirs; Name: "{app}\*"
