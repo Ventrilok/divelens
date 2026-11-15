@@ -1,12 +1,32 @@
 --[[
 Plug-in Manager entry. Lightroom shows the version itself; this adds the link
-state and a button to open the app. All settings live in the app.
+state, buttons to open the app (on Create Collections or on Settings), and the
+Dive Lens website and source code. All settings live in the app.
 
 Part of DiveLens, GPL-3.0-or-later.
 ]]
 
+local LrHttp = import "LrHttp"
+
 local Launch = require "Launch"
 local Link = require "Link"
+
+local WEBSITE = "www.querton.com/divelens"
+local GITHUB = "github.com/Ventrilok/divelens"
+
+-- An address as shown, with a button opening it in the browser.
+local function linkRow(f, text, button, address)
+    return f:row {
+        f:static_text {
+            title = text,
+            fill_horizontal = 1,
+        },
+        f:push_button {
+            title = button,
+            action = function() LrHttp.openUrlInBrowser("https://" .. address) end,
+        },
+    }
+end
 
 return {
     sectionsForTopOfDialog = function(f, _)
@@ -25,7 +45,19 @@ return {
                         title = LOC "$$$/DiveLens/PluginManager/Open=Open Dive Lens",
                         action = function() Launch.open("collections") end,
                     },
+                    f:push_button {
+                        title = LOC "$$$/DiveLens/PluginManager/OpenSettings=Open Settings",
+                        action = function() Launch.open("settings") end,
+                    },
                 },
+                linkRow(f,
+                    LOC("$$$/DiveLens/PluginManager/Website=Website: ^1", WEBSITE),
+                    LOC "$$$/DiveLens/PluginManager/OpenWebsite=Open Website",
+                    WEBSITE),
+                linkRow(f,
+                    LOC("$$$/DiveLens/PluginManager/GitHub=GitHub: ^1", GITHUB),
+                    LOC "$$$/DiveLens/PluginManager/OpenGitHub=Open GitHub",
+                    GITHUB),
             },
         }
     end,

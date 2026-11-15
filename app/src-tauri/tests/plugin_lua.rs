@@ -332,6 +332,98 @@ fn every_plugin_file_compiles_under_lua_5_1() {
 }
 
 #[test]
+fn menu_items_open_existing_plugin_files() {
+    let lua = lua();
+    let menus: Vec<(String, String)> = lua
+        .load(
+            r#"
+            local info, found = require "Info", {}
+            for _, list in ipairs { info.LrLibraryMenuItems, info.LrHelpMenuItems } do
+                for _, item in ipairs(list) do found[#found + 1] = { item.title, item.file } end
+            end
+            return found
+            "#,
+        )
+        .eval::<Vec<Vec<String>>>()
+        .unwrap()
+        .into_iter()
+        .map(|pair| (pair[0].clone(), pair[1].clone()))
+        .collect();
+    assert_eq!(
+        menus.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(),
+        [
+            "Create Collections…",
+            "Tag Selection…",
+            "Dive Lens Settings…"
+        ]
+    );
+    for (title, file) in &menus {
+        assert!(plugin_dir().join(file).is_file(), "{title}: no {file}");
+    }
+}
+
+/// The `$$$/DiveLens/…` texts of `source`: key and text, in order. A text runs
+/// from after the `=` to the closing quote (no plugin text holds a quote).
+fn localized_texts(source: &str) -> Vec<(String, String)> {
+    let mut texts = Vec::new();
+    let mut rest = source;
+    while let Some(start) = rest.find("$$$/DiveLens/") {
+        rest = &rest[start..];
+        let end = rest.find('"').expect("unterminated text");
+        let (key, text) = rest[..end].split_once('=').expect("text without a key");
+        texts.push((key.to_string(), text.to_string()));
+        rest = &rest[end..];
+    }
+    texts
+}
+
+/// The `^1`…`^9` placeholders of a text, sorted.
+fn placeholders(text: &str) -> Vec<char> {
+    let mut found: Vec<char> = text
+        .split('^')
+        .skip(1)
+        .filter_map(|s| s.chars().next().filter(char::is_ascii_digit))
+        .collect();
+    found.sort_unstable();
+    found
+}
+
+#[test]
+fn every_plugin_text_has_its_french_translation() {
+    let dir = plugin_dir();
+    let mut english = std::collections::BTreeMap::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|e| e == "lua") {
+            let code = std::fs::read_to_string(&path).unwrap();
+            for (key, text) in localized_texts(&code) {
+                if let Some(other) = english.insert(key.clone(), text.clone()) {
+                    assert_eq!(other, text, "{key}: two English texts");
+                }
+            }
+        }
+    }
+    let french: std::collections::BTreeMap<_, _> =
+        localized_texts(&std::fs::read_to_string(dir.join("TranslatedStrings_fr.txt")).unwrap())
+            .into_iter()
+            .collect();
+    for (key, text) in &english {
+        let fr = french
+            .get(key)
+            .unwrap_or_else(|| panic!("{key}: no French text"));
+        assert!(!fr.trim().is_empty(), "{key}: empty French text");
+        assert_eq!(
+            placeholders(fr),
+            placeholders(text),
+            "{key}: placeholders differ"
+        );
+    }
+    for key in french.keys() {
+        assert!(english.contains_key(key), "{key}: translated, never used");
+    }
+}
+
+#[test]
 fn photos_are_described_with_wall_clock_times() {
     let lua = lua();
     run(
