@@ -409,6 +409,7 @@ jobs:
             exit 1
           fi
 
+          sudo apt-get update -qq
           sudo apt-get install -y -qq minisign > /dev/null
           printf '%s' "$pubkey" | base64 --decode > "$RUNNER_TEMP/update.pub"
           for file in "$mac" "$win"; do

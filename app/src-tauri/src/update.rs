@@ -37,6 +37,8 @@ const PLUGIN_ID: &str = "com.querton.divelens";
 const STAGING: &str = ".DiveLens-update";
 /// Next to the plug-in folder: the previous version, until the next launch.
 const PREVIOUS: &str = ".DiveLens-previous";
+/// Windows: where the installer is downloaded, in the temporary folder.
+const INSTALLER_DIR: &str = "DiveLens-update";
 /// The file keeping when updates were last looked for.
 const STATE_FILE: &str = "update.json";
 /// An automatic check happens at most this often.
@@ -45,24 +47,25 @@ pub const CHECK_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
 /// What this copy of the app is.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Copy {
-    /// Inside a Dive Lens plug-in folder, as installed. `writable`: the
-    /// folder and the one holding it can be changed, so the update can
-    /// replace it.
-    Plugin { folder: PathBuf, writable: bool },
+    /// In a plug-in folder (`*.lrplugin`), as installed. Whether the update
+    /// can replace it is only checked when the diver installs
+    /// ([`check_installable`]).
+    Plugin { folder: PathBuf },
     /// Anywhere else, such as a development build: never updated.
     Development,
 }
 
 impl Copy {
     /// Finds the plug-in folder holding the app at `exe` (the running
-    /// program). On macOS, an app opened from a downloaded zip may run from
-    /// a temporary read-only copy (App Translocation): the folder is looked
-    /// for where it really is.
+    /// program), from the path alone: reading next to the app at launch
+    /// could make macOS ask for access to the folder holding it (a zip copy
+    /// in Documents, say) when the diver did nothing. On macOS, an app
+    /// opened from a downloaded zip may run from a temporary read-only copy
+    /// (App Translocation): the folder is looked for where it really is.
     pub fn locate(exe: &Path) -> Self {
         let exe = original_path(exe).unwrap_or_else(|| exe.to_path_buf());
         match container(&exe).and_then(Path::parent) {
-            Some(folder) if is_plugin_folder(folder) => Copy::Plugin {
-                writable: writable(folder),
+            Some(folder) if folder.extension().is_some_and(|e| e == "lrplugin") => Copy::Plugin {
                 folder: folder.to_path_buf(),
             },
             _ => Copy::Development,
@@ -71,15 +74,34 @@ impl Copy {
 
     pub fn folder(&self) -> Option<&Path> {
         match self {
-            Copy::Plugin { folder, .. } => Some(folder),
+            Copy::Plugin { folder } => Some(folder),
             Copy::Development => None,
         }
     }
 
-    /// The update can be installed here.
+    /// The update is offered for installing here (it may still turn out
+    /// impossible: [`check_installable`]).
     pub fn installable(&self) -> bool {
-        matches!(self, Copy::Plugin { writable: true, .. })
+        matches!(self, Copy::Plugin { .. })
     }
+}
+
+/// Before downloading: `folder` is a Dive Lens plug-in folder that this
+/// app can replace.
+pub fn check_installable(folder: &Path) -> Result<(), InstallError> {
+    if !is_plugin_folder(folder) {
+        return Err(InstallError::new(
+            Failure::NotInstallable,
+            format!("{} is not a Dive Lens plug-in folder", folder.display()),
+        ));
+    }
+    if !writable(folder) {
+        return Err(InstallError::new(
+            Failure::NotInstallable,
+            format!("{} cannot be changed", folder.display()),
+        ));
+    }
+    Ok(())
 }
 
 /// What sits in the plug-in folder: the app bundle on macOS
@@ -120,14 +142,15 @@ fn writable(folder: &Path) -> bool {
     can_write_in(folder) && folder.parent().is_some_and(can_write_in)
 }
 
-/// The version written in a plug-in folder's `Info.lua` (`display`, the
-/// full version).
+/// The version written in a plug-in folder's `Info.lua`: the string given
+/// to `display` (the full version), wherever the word also appears.
 pub fn plugin_version(folder: &Path) -> Option<String> {
     let info = std::fs::read_to_string(folder.join("Info.lua")).ok()?;
-    let rest = &info[info.find("display")?..];
-    let start = rest.find('"')? + 1;
-    let end = start + rest[start..].find('"')?;
-    Some(rest[start..end].to_string())
+    info.match_indices("display").find_map(|(at, word)| {
+        let value = info[at + word.len()..].trim_start().strip_prefix('=')?;
+        let value = value.trim_start().strip_prefix('"')?;
+        Some(value[..value.find('"')?].to_string())
+    })
 }
 
 /// The name of this system in `latest.json`.
@@ -269,15 +292,19 @@ pub fn failure_of(error: &tauri_plugin_updater::Error) -> Failure {
     }
 }
 
-/// Removes what an earlier update left next to the plug-in folder: the
-/// previous version (the app that installed the update ran from it until
-/// it quit) and anything prepared but not installed.
+/// Passed to the new version when an update starts it.
+pub const AFTER_UPDATE: &str = "--after-update";
+
+/// Removes what the update left, once the new version runs: next to the
+/// plug-in folder, the previous version (the app that installed the update
+/// ran from it until it quit) and anything prepared but not installed; the
+/// Windows installer in the temporary folder.
 pub fn clean_up(folder: &Path) {
-    let Some(parent) = folder.parent() else {
-        return;
-    };
-    for name in [PREVIOUS, STAGING] {
-        let path = parent.join(name);
+    let mut left = vec![std::env::temp_dir().join(INSTALLER_DIR)];
+    if let Some(parent) = folder.parent() {
+        left.extend([parent.join(PREVIOUS), parent.join(STAGING)]);
+    }
+    for path in left {
         if path.exists() {
             match std::fs::remove_dir_all(&path) {
                 Ok(()) => log::info!("update: removed {}", path.display()),
@@ -436,7 +463,7 @@ pub fn relaunch(app: &Path) -> std::io::Result<()> {
         .arg("-c")
         .arg(
             "while kill -0 \"$1\" 2>/dev/null; do sleep 0.2; done; \
-             exec /usr/bin/open \"$2\" --args --screen settings",
+             exec /usr/bin/open \"$2\" --args --after-update --screen settings",
         )
         .arg("sh")
         .arg(std::process::id().to_string())
@@ -459,7 +486,7 @@ pub fn install(folder: &Path, bytes: &[u8], version: &str) -> Result<PathBuf, In
     const DETACHED_PROCESS: u32 = 0x0000_0008;
     const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
 
-    let dir = std::env::temp_dir().join("DiveLens-update");
+    let dir = std::env::temp_dir().join(INSTALLER_DIR);
     if dir.exists() {
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -678,10 +705,10 @@ mod tests {
         assert_eq!(
             Copy::locate(&exe),
             Copy::Plugin {
-                folder: folder.clone(),
-                writable: true
+                folder: folder.clone()
             }
         );
+        assert!(check_installable(&folder).is_ok());
 
         // A development build, in the repository's target folder.
         let build = dir.join("target/release");
@@ -691,6 +718,12 @@ mod tests {
         // The repository's development plug-in folder.
         let dev = plugin(&dir, "DiveLens.lrdevplugin", "2.1.0");
         assert!(!is_plugin_folder(&dev));
+        let dev_exe = if cfg!(target_os = "macos") {
+            dev.join("Dive Lens.app/Contents/MacOS/divelens")
+        } else {
+            dev.join("Dive Lens.exe")
+        };
+        assert_eq!(Copy::locate(&dev_exe), Copy::Development);
 
         // Another plug-in.
         let other = dir.join("Other.lrplugin");
@@ -702,7 +735,20 @@ mod tests {
         .unwrap();
         assert!(!is_plugin_folder(&other));
         assert!(!is_plugin_folder(&dir.join("Missing.lrplugin")));
+        // Found by its name, refused when installing.
+        let refused = check_installable(&other).unwrap_err();
+        assert_eq!(refused.reason, Failure::NotInstallable);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn reads_the_version_of_the_repository_plug_in() {
+        let plugin =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugin/DiveLens.lrdevplugin");
+        assert_eq!(
+            plugin_version(&plugin).as_deref(),
+            Some(env!("CARGO_PKG_VERSION"))
+        );
     }
 
     #[test]

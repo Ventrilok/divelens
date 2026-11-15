@@ -72,7 +72,7 @@ Source: "{#PluginDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 ; An update made by the app (spec F13) runs this installer silently with
 ; /update=1, then quits: start the new version, on Settings. A first
 ; installation starts nothing.
-Filename: "{app}\Dive Lens.exe"; Parameters: "--screen settings"; Flags: nowait; Check: IsUpdate
+Filename: "{app}\Dive Lens.exe"; Parameters: "--after-update --screen settings"; Flags: nowait; Check: IsUpdate
 
 [Code]
 function IsUpdate: Boolean;

@@ -1173,15 +1173,15 @@ async fn install_update(app: AppHandle) {
             },
         );
     };
-    let folder = match (&updates.copy, updates.copy.installable()) {
-        (update::Copy::Plugin { folder, .. }, true) => folder.clone(),
-        _ => {
-            return fail(
-                update::Failure::NotInstallable,
-                format!("{:?}", updates.copy),
-            );
-        }
+    let Some(folder) = updates.copy.folder().map(Path::to_path_buf) else {
+        return fail(
+            update::Failure::NotInstallable,
+            format!("{:?}", updates.copy),
+        );
     };
+    if let Err(e) = update::check_installable(&folder) {
+        return fail(e.reason, e.detail);
+    }
     if app.state::<Writes>().in_progress() {
         return fail(
             update::Failure::Writing,
@@ -1497,7 +1497,9 @@ pub fn run() {
                 .map(|exe| update::Copy::locate(&exe))
                 .unwrap_or(update::Copy::Development);
             log::info!("update: this copy is {copy:?}");
-            if let Some(folder) = copy.folder() {
+            if let Some(folder) = copy.folder()
+                && std::env::args().any(|a| a == update::AFTER_UPDATE)
+            {
                 update::clean_up(folder);
             }
             app.manage(Updates {
