@@ -583,6 +583,7 @@ export function SettingsScreen({
             <div className="set-explain">
               <span>{t("settings.altitude1")}</span>
               <span>{t("settings.altitude2")}</span>
+              <span>{t("settings.altitudeMetres")}</span>
               <span className="set-warn">{t("settings.altitude3")}</span>
             </div>
           </Row>
