@@ -99,8 +99,10 @@ pub struct PhotoTags {
     pub photo_elapsed: Option<String>,
     /// `±HH:MM`, always written.
     pub clock_offset: String,
-    /// GPS altitude to write, in metres (spec F7: the depth, negative);
-    /// `None` leaves the photo's altitude untouched.
+    /// GPS altitude to write, in metres (spec F7: the depth, negative); the
+    /// plugin records it in the photo's altitude marker. `None` writes no
+    /// altitude: the photo keeps the one it has, unless the plugin finds it
+    /// is one Dive Lens wrote from a depth now cleared or another dive's.
     pub gps_altitude: Option<f64>,
     /// Depth at the photo, in metres (for the altitude copy).
     #[serde(skip)]
@@ -136,7 +138,7 @@ pub struct CollectionsRequest {
 
 impl CollectionsRequest {
     /// Copies each photo's depth to its GPS altitude, negative (spec F7).
-    /// Photos without a depth keep their altitude.
+    /// Photos without a depth get no altitude (see `PhotoTags::gps_altitude`).
     pub fn copy_depth_to_altitude(&mut self) {
         copy_depth_to_altitude(self.groups.iter_mut().flat_map(|g| &mut g.photos));
     }
@@ -437,7 +439,7 @@ mod tests {
         assert_eq!(photos[0].gps_altitude, Some(-18.4));
         assert_eq!(
             photos[1].gps_altitude, None,
-            "surface photo keeps its altitude"
+            "surface photo: no altitude written"
         );
         assert_eq!(altitude(0.02), 0.0);
         assert!(altitude(0.02).is_sign_positive());

@@ -6,7 +6,10 @@ altitude in the second (splitGps).
 
 "Create Collections" requests are planned per dive with planCollections;
 a photo's GPS altitude (the depth, negative) is written only when the
-request carries one, otherwise the photo keeps its altitude.
+request carries one, and recorded in the altitude marker (WrittenAltitude,
+photoChanges). Otherwise the photo keeps its altitude, unless it is the one
+Dive Lens wrote from a depth now cleared or another dive's (altitudeClears,
+photoWrites).
 
 A "tag the selection" request that writes a dive on a photo already carrying
 another one also clears that photo's own values (retagChanges).
@@ -96,9 +99,15 @@ local PER_PHOTO = { "PhotoDepth", "PhotoTemp", "PhotoElapsed", "ClockOffset" }
 -- The fields that tell one dive from another (spec F8).
 local DIVE_IDENTITY = { "Source", "StartDate", "DiveId" }
 
---- DiveLens fields "Tag Selection" reads on each photo before writing a dive
---- (see retagChanges).
-Tagging.RETAG_FIELDS = { "Source", "StartDate", "DiveId", "PhotoDepth", "PhotoTemp", "PhotoElapsed", "ClockOffset" }
+--- The hidden field recording the GPS altitude Dive Lens last wrote on a
+--- photo, in metres, as text: the altitude marker (Metadata.lua, spec F7).
+Tagging.MARKER = "WrittenAltitude"
+
+--- DiveLens fields "Tag Selection" and "Create Collections" read on each
+--- photo before writing a dive (see retagChanges, photoWrites).
+Tagging.RETAG_FIELDS = {
+    "Source", "StartDate", "DiveId", "PhotoDepth", "PhotoTemp", "PhotoElapsed", "ClockOffset", Tagging.MARKER,
+}
 
 local FT_PER_M = 3.28084 -- as core/src/tags.rs
 
@@ -128,11 +137,52 @@ end
 
 --- True when the GPS `altitude` (metres) is, to the decimetre, the one Dive
 --- Lens derives from the PhotoDepth value `depth` (the depth, negative,
---- rounded to the decimetre: core/src/tags.rs, altitude).
+--- rounded to the decimetre: core/src/tags.rs, altitude). The rule for a
+--- photo without an altitude marker (see altitudeClears).
 function Tagging.isDerivedAltitude(altitude, depth)
     local m = Tagging.depthMetres(depth)
     if type(altitude) ~= "number" or not m then return false end
     return round(altitude * 10) == -round(m * 10)
+end
+
+--- The altitude marker's text for an altitude written, in metres: the
+--- number as the link writes numbers (Json.lua), "-18.4".
+function Tagging.markerText(altitude)
+    return string.format("%.14g", altitude)
+end
+
+--- Changes for a photo whose depth Dive Lens clears, or replaces with
+--- another dive's (`photo`: what it carries before the write, RETAG_FIELDS
+--- and `gpsAltitude`). The GPS altitude is shared with the camera and the
+--- user: it is cleared only when it is Dive Lens's own, and when in doubt
+--- it stays (spec F7, F8).
+---   - With a marker: the altitude is Dive Lens's own when it still equals
+---     the marker, to the centimetre (Lightroom may store it as a float):
+---     the altitude and the marker are cleared. Otherwise it was changed
+---     since (by hand, by another tool, or a second write that did not
+---     happen): it stays, and the marker, no longer true, is cleared. A
+---     marker that is not a number counts as changed.
+---   - Without a marker (photos written before the marker, or never by
+---     Dive Lens): cleared when it is the one derived from the photo's
+---     depth (isDerivedAltitude).
+--- The changes go in the two writes as splitGps puts them: the marker in
+--- the first, the altitude in the second.
+function Tagging.altitudeClears(photo)
+    local altitude = photo.gpsAltitude
+    local marker = filled(photo[Tagging.MARKER])
+    local clearMarker = { kind = "plugin", field = Tagging.MARKER, value = nil }
+    local clearAltitude = { kind = "raw", field = "gpsAltitude", value = nil }
+    if marker then
+        local written = tonumber(marker)
+        if type(altitude) == "number" and written and round(altitude * 100) == round(written * 100) then
+            return { clearAltitude, clearMarker }
+        end
+        return { clearMarker }
+    end
+    if Tagging.isDerivedAltitude(altitude, filled(photo.PhotoDepth)) then
+        return { clearAltitude }
+    end
+    return {}
 end
 
 --- True when `changes` (from Tagging.plan) write a dive, not only a location.
@@ -147,8 +197,7 @@ end
 --- Tagging.plan) when the photo already carries another dive (spec F8): its
 --- own values belonged to that dive and are cleared (only those it has, so
 --- an empty list means nothing to clear). Its GPS altitude is cleared only
---- when it is exactly the one Dive Lens derived from the old depth: the
---- field is shared with the camera and the user, so when in doubt it stays.
+--- when it is Dive Lens's own (altitudeClears).
 ---
 --- `photo` is what the photo carries before the write: the RETAG_FIELDS
 --- values and `gpsAltitude` (metres or nil). Nothing for the same dive
@@ -174,9 +223,7 @@ function Tagging.retagChanges(photo, changes)
             extra[#extra + 1] = { kind = "plugin", field = field, value = nil }
         end
     end
-    if Tagging.isDerivedAltitude(photo.gpsAltitude, filled(photo.PhotoDepth)) then
-        extra[#extra + 1] = { kind = "raw", field = "gpsAltitude", value = nil }
-    end
+    for _, c in ipairs(Tagging.altitudeClears(photo)) do extra[#extra + 1] = c end
     return extra
 end
 
@@ -223,8 +270,17 @@ end
 
 -- One photo's own values, as the app sent them (core/src/tags.rs,
 -- PhotoTags): its per-photo fields (a missing value clears the field), its
--- clock offset, and its GPS altitude when there is one to write. Returns the
--- photo's id and its changes, or nil and a reason.
+-- clock offset, and its GPS altitude when there is one to write, with the
+-- altitude marker recording it. Returns the photo's id and its changes, or
+-- nil and a reason.
+--
+-- The marker is a Dive Lens field, so splitGps puts it in the first write,
+-- with the other Dive Lens fields; the altitude goes in the second (spec
+-- section 3). Never the marker in the second write: Lightroom's Undo of a
+-- GPS or an altitude has only been checked written alone. If the second
+-- write does not happen, the marker and the altitude disagree, and
+-- altitudeClears then leaves the altitude: the safe side. One Undo reverts
+-- both writes, marker included.
 local function photoChanges(photo)
     if type(photo) ~= "table" or not text(photo.id) or not text(photo.clockOffset) then
         return nil, "bad photo"
@@ -238,6 +294,7 @@ local function photoChanges(photo)
     local altitude = value(photo.gpsAltitude)
     if type(altitude) == "number" then
         changes[#changes + 1] = { kind = "raw", field = "gpsAltitude", value = altitude }
+        changes[#changes + 1] = { kind = "plugin", field = Tagging.MARKER, value = Tagging.markerText(altitude) }
     end
     return photo.id, changes
 end
@@ -265,8 +322,9 @@ end
 --- `extra` (from retagChanges) without what `own`, a photo's per-photo
 --- changes (planPhotos), writes again: a photo taken during the dive gets
 --- its new values instead of having the other dive's cleared. The other
---- dive's GPS altitude is still cleared when no new one is written (the
---- copy to the altitude is off), as for the photos outside the dive.
+--- dive's GPS altitude and its marker are still cleared when no new one is
+--- written (the copy to the altitude is off), as for the photos outside the
+--- dive.
 function Tagging.notOverwritten(extra, own)
     local set = {}
     for _, c in ipairs(own or {}) do set[c.kind .. ":" .. c.field] = true end
@@ -277,17 +335,36 @@ function Tagging.notOverwritten(extra, own)
     return kept
 end
 
---- One photo of a "Tag Selection" write, as Link.lua makes it: `changes`
---- (from plan) for every photo; what the other dive the photo carried left
---- (retagChanges, from `before`, what the photo carries; nil: nothing read);
---- and the photo's own values, `own` (from planPhotos; nil: none, the photo
---- is not in the dive), which replace what the other dive left. Returns the
---- changes of the first catalog write, those of the second (GPS and
---- altitude, Tagging.splitGps), and whether the photo carried another
+-- True when a photo's own values (`own`, from photoChanges) give it a depth.
+local function writesDepth(own)
+    for _, c in ipairs(own) do
+        if c.kind == "plugin" and c.field == "PhotoDepth" then return filled(c.value) ~= nil end
+    end
+    return false
+end
+
+--- One photo of a "Tag Selection" or "Create Collections" write, as Link.lua
+--- makes it: `changes` (from plan, or a group's common changes) for every
+--- photo; what the other dive the photo carried left (retagChanges, from
+--- `before`, what the photo carries; nil: nothing read); and the photo's
+--- own values, `own` (from planPhotos or planCollections; nil: none, the
+--- photo is not in the dive), which replace what the other dive left. When
+--- `own` clears the photo's depth (Create Collections: a photo now at the
+--- surface, or in a dive without a profile), the altitude Dive Lens derived
+--- from the old depth goes too, even for the same dive (altitudeClears).
+--- Returns the changes of the first catalog write, those of the second (GPS
+--- and altitude, Tagging.splitGps), and whether the photo carried another
 --- dive's values (cleared or replaced).
 function Tagging.photoWrites(changes, before, own)
     local extra = before and Tagging.retagChanges(before, changes) or {}
     local replaced = #extra > 0
+    if before and own and not writesDepth(own) then
+        local listed = {}
+        for _, c in ipairs(extra) do listed[c.kind .. ":" .. c.field] = true end
+        for _, c in ipairs(Tagging.altitudeClears(before)) do
+            if not listed[c.kind .. ":" .. c.field] then extra[#extra + 1] = c end
+        end
+    end
     if own then extra = Tagging.notOverwritten(extra, own) end
     local first, second = Tagging.splitGps(changes, extra, own or {})
     return first, second, replaced

@@ -284,10 +284,12 @@ end
 
 -- Writes a photo's GPS position and altitude (the second list of
 -- Tagging.splitGps), inside the second catalog write. Returns whether its
--- GPS altitude was cleared (a photo that carried another dive,
--- Tagging.retagChanges), and whether Lightroom refused to clear it. When in
--- doubt, the altitude is left: one Lightroom refuses to clear stays, and
--- the rest of the write goes on.
+-- GPS altitude was cleared (Dive Lens's own, from a depth cleared or
+-- another dive's, Tagging.altitudeClears), and whether Lightroom refused to
+-- clear it. When in doubt, the altitude is left: one Lightroom refuses to
+-- clear stays, and the rest of the write goes on. Its marker, cleared in
+-- the first write, is then missing: the next write falls back to the rule
+-- for photos without a marker, which keeps it unless it matches the depth.
 local function writeGps(photo, changes)
     local cleared, refused = false, false
     for _, change in ipairs(changes) do
@@ -357,8 +359,10 @@ local function logSecondWrite(later, second)
 end
 
 -- What the photos carry before a dive is written on them, for
--- Tagging.retagChanges: { [photo] = { RETAG_FIELDS..., gpsAltitude } }.
+-- Tagging.photoWrites: { [photo] = { RETAG_FIELDS..., gpsAltitude } },
+-- the altitude marker among the RETAG_FIELDS.
 local function photosBefore(catalog, photos)
+    if #photos == 0 then return {} end
     local fields = catalog:batchGetPropertyForPlugin(photos, _PLUGIN, Tagging.RETAG_FIELDS)
     local raw = catalog:batchGetRawMetadata(photos, { "gpsAltitude" })
     local before = {}
@@ -376,7 +380,8 @@ end
 -- second (Tagging.splitGps, writeGpsLater), so one Undo reverts it all. A
 -- photo that carried another dive also loses that dive's own values
 -- (Tagging.retagChanges), read from the photo inside the first write; its
--- altitude, when cleared, in the second. With per-photo values
+-- altitude, when cleared, in the second, and its altitude marker in the
+-- first, with the other Dive Lens fields. With per-photo values
 -- (Tagging.planPhotos), the selection must be exactly the one described to
 -- the app (describeSelection): otherwise nothing is written. The photos
 -- taken during the dive get their values, and the other dive's are not
@@ -506,6 +511,9 @@ end
 -- if needed), its data and location on its photos, and each photo's own
 -- values. Two catalog writes under one Undo name, the GPS and altitude in
 -- the second (Tagging.splitGps, writeGpsLater), so one Undo reverts it all.
+-- What each photo carries is read inside the first write, as Tag Selection
+-- does: an altitude Dive Lens wrote from a depth now cleared, or from
+-- another dive's, is cleared in the second write (Tagging.photoWrites).
 -- Always answers the app.
 local function applyCollections(s, message)
     local id = message.id
@@ -544,30 +552,30 @@ local function applyCollections(s, message)
     local existing = {}
     for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
 
-    -- Each photo found: its changes for the first write, and its GPS
-    -- position and altitude for the second (Tagging.splitGps).
-    local total, later = 0, {}
+    -- The photos found, in the catalog.
+    local total, found = 0, {}
     for _, g in ipairs(groups) do
         total = total + #g.photos
         for _, p in ipairs(g.photos) do
             p.photo = s.search.photos[p.id]
-            if p.photo then
-                local gps
-                p.now, gps = Tagging.splitGps(g.common, p.changes)
-                if #gps > 0 then later[#later + 1] = { photo = p.photo, changes = gps } end
-            end
+            if p.photo then found[#found + 1] = p.photo end
         end
     end
     local undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)"
     local progress = Tagging.progress(total, PROGRESS_EVERY)
-    local results = {}
+    local results, later = {}, {}
     local ok, status = LrTasks.pcall(function()
         return catalog:withWriteAccessDo(undoName, function()
+            local before = photosBefore(catalog, found)
             for gi, g in ipairs(groups) do
                 local photos = {}
                 for _, p in ipairs(g.photos) do
                     if p.photo then
-                        write(p.photo, p.now)
+                        -- Its changes for the first write, and its GPS
+                        -- position and altitude for the second.
+                        local now, gps = Tagging.photoWrites(g.common, before[p.photo], p.changes)
+                        write(p.photo, now)
+                        if #gps > 0 then later[#later + 1] = { photo = p.photo, changes = gps } end
                         photos[#photos + 1] = p.photo
                     end
                     advance(s, id, total, progress)
@@ -592,7 +600,7 @@ local function applyCollections(s, message)
         return
     end
     logSecondWrite(later, second)
-    Log.info("collections written: %d groups, %d photos", #results, total)
+    Log.info("collections written: %d groups, %d photos (GPS altitude cleared on %d)", #results, total, second.cleared)
     send(s, { type = "collectionsApplied", id = id, groups = results })
 end
 

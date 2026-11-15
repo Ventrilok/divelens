@@ -81,6 +81,32 @@ pub struct Status {
     /// (Tag Selection's "covers the selection" hint); filled by the app.
     pub cover_from: Option<String>,
     pub cover_to: Option<String>,
+    /// Lightroom runs a Dive Lens plug-in of another version than this app,
+    /// or one speaking another protocol (then not connected): Dive Lens was
+    /// updated and Lightroom must restart to load its new plug-in (spec
+    /// F13). Filled by the app.
+    pub restart_lightroom: bool,
+}
+
+impl Status {
+    /// What the UI shows while Lightroom runs a plug-in speaking another
+    /// protocol than this app: not connected, Lightroom to restart.
+    pub fn other_protocol(link: &LinkFile) -> Self {
+        Self {
+            plugin_version: (!link.plugin.is_empty()).then(|| link.plugin.clone()),
+            restart_lightroom: true,
+            ..Self::default()
+        }
+    }
+
+    /// Whether the plug-in connected is another version than the app's.
+    pub fn other_version(&self, app_version: &str) -> bool {
+        self.connected
+            && self
+                .plugin_version
+                .as_deref()
+                .is_some_and(|plugin| plugin != app_version)
+    }
 }
 
 /// Capture times of the selected photos of one camera.
@@ -866,6 +892,25 @@ mod tests {
         let first = one_session_request_id();
         let second = one_session_request_id();
         assert!(second > first, "{second} after {first}");
+    }
+
+    #[test]
+    fn tells_when_lightroom_runs_another_version_of_the_plugin() {
+        let link: LinkFile = serde_json::from_str(
+            r#"{"plugin":"2.0.0","protocol":5,"receivePort":51000,"sendPort":51001,"token":"abc"}"#,
+        )
+        .unwrap();
+        let other = Status::other_protocol(&link);
+        assert!(other.restart_lightroom && !other.connected);
+        assert_eq!(other.plugin_version.as_deref(), Some("2.0.0"));
+        let connected = |plugin: &str| Status {
+            connected: true,
+            plugin_version: Some(plugin.into()),
+            ..Status::default()
+        };
+        assert!(connected("2.0.0").other_version("2.1.0"));
+        assert!(!connected("2.1.0").other_version("2.1.0"));
+        assert!(!Status::default().other_version("2.1.0"));
     }
 
     #[test]

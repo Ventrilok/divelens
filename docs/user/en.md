@@ -12,28 +12,45 @@ Dive Lens is free and open source (GPL v3).
 
 You need Lightroom Classic and MacDive or Subsurface on the same computer. On Windows, only Subsurface is available.
 
+**Coming from the previous Dive Lens plug-in (0.9 and earlier)?** Before using the installer, remove it: in Lightroom, **File › Plug-in Manager…**, choose Dive Lens, **Remove**, then **Done**. If **Remove** is greyed out, the old plug-in is already where the installer will replace it: there is nothing to do. Your photos keep their dive data, and the app takes over your previous settings (log location and dive order) on its first launch. Dive Lens is now free: there is no licence key any more.
+
+### With the installer
+
+1. Quit Lightroom.
+2. Download the installer for your system: `DiveLens-<version>-macOS.pkg` or `DiveLens-<version>-Windows-Setup.exe`.
+3. Open it and follow the steps. It installs Dive Lens for your account only, without an administrator password.
+4. Start Lightroom: the Dive Lens menus are in **Library › Plug-in Extras**. There is nothing to add in the Plug-in Manager.
+
+On Windows, the installer is not signed yet: Windows may show **"Windows protected your PC"**. Click **More info**, then **Run anyway**.
+
+### With the zip, by hand
+
 1. Download the zip for your system: `DiveLens-<version>-macOS.zip` or `DiveLens-<version>-Windows.zip`.
 2. Unzip it. You get a folder named **DiveLens.lrplugin** (on a Mac it looks like a single file). The Dive Lens app is inside it.
-3. Move this folder to a place where it will stay, for example your Documents folder. Lightroom loads it from there each time it starts.
+3. Move this folder to a place where it will stay, for example your Documents folder. Lightroom loads it from there each time it starts. If you used the previous plug-in, quit Lightroom and replace the old DiveLens.lrplugin folder with the new one at the same place instead: you can then skip step 4.
 4. In Lightroom: **File › Plug-in Manager… › Add**, choose the **DiveLens.lrplugin** folder, then **Done**.
 
-**Coming from the previous Dive Lens plug-in (0.9 and earlier)?** Quit Lightroom, replace the old DiveLens.lrplugin folder with the new one at the same place, and start Lightroom again. Your photos keep their dive data, and the app takes over your previous settings (log location and dive order) on its first launch. Dive Lens is now free: there is no licence key any more.
+On a Mac, the first time Lightroom opens the app, macOS may ask you to confirm opening an app downloaded from the internet: click **Open**. On Windows, the app is not signed yet: if Windows shows **"Windows protected your PC"**, click **More info**, then **Run anyway**. You only do this once.
 
-### First launch on a Mac
-
-This version is not yet signed by Apple. The first time Lightroom opens the app, macOS refuses to open it, saying it cannot check the developer.
-
-1. Close the message (**Done**, not **Move to Trash**).
-2. Open **System Settings › Privacy & Security**. Near the bottom, a line says Dive Lens was blocked: click **Open Anyway** and confirm with your password.
-3. Choose the Dive Lens menu in Lightroom again.
-
-You only do this once.
-
-### First launch on Windows
-
-This version is not yet signed. When Lightroom opens the app for the first time, Windows may show **"Windows protected your PC"**: click **More info**, then **Run anyway**. You only do this once.
+### WebView2 on Windows
 
 The app needs Microsoft's **WebView2**, which is already present on Windows 11 and on most Windows 10 computers. If the app does not open, install the "Microsoft Edge WebView2 Runtime" from Microsoft's website.
+
+### Uninstall
+
+Your photos keep their dive data and their collections in the catalog: they come back if you install Dive Lens again.
+
+**On a Mac**
+
+1. Quit Lightroom.
+2. In the Finder, choose **Go › Go to Folder…**, paste `~/Library/Application Support/Adobe/Lightroom/Modules`, then move **DiveLens.lrplugin** to the Trash. If you installed Dive Lens from the zip, remove it first in **File › Plug-in Manager…** (**Remove**), then move the DiveLens.lrplugin folder to the Trash from where you had put it.
+3. Optional, to erase Dive Lens's settings as well: move the folder `~/Library/Application Support/com.querton.divelens.desktop` to the Trash.
+
+**On Windows**
+
+1. Quit Lightroom.
+2. **Settings › Apps › Installed apps › Dive Lens › Uninstall**. If you installed Dive Lens from the zip, remove it in **File › Plug-in Manager…** (**Remove**), then delete the DiveLens.lrplugin folder from where you had put it. Once Dive Lens has updated it, a copy installed from the zip is listed in **Installed apps** too: uninstall it from there.
+3. Optional, to erase Dive Lens's settings as well: delete the folder `%APPDATA%\com.querton.divelens.desktop`.
 
 ---
 
@@ -97,6 +114,7 @@ Good to know:
 - The photo's time is its **original capture time**, so a TIFF that came back from Photoshop is matched like its original.
 - A photo that would fall in two dives goes to the closer one.
 - Running a group of dives again only adds: photos already filed stay where they are (correct them by hand if needed), and photos found again get their values rewritten.
+- A photo found again without a depth (now at the surface, or in a dive without a profile), or in another dive while **Copy depth to GPS altitude** is off, loses the GPS altitude Dive Lens copied there before. An altitude from the camera, or one you set or changed yourself, stays.
 
 **Undo.** **Edit › Undo** in Lightroom reverts everything in one step, GPS and altitude included.
 
@@ -155,12 +173,21 @@ Every change is saved at once.
 
 **Settings backup**
 - **Export or import**: to get your settings back on another computer, or after reinstalling.
-- **Export…** saves them in a file, named "Dive Lens settings.json" unless you choose another name. The file holds: the dive application and the log location of each one, language, units, the GPS altitude option, where the collections go, the log level and the order of the dive list. The clock offsets remembered for each camera are not in it: they stay on this computer.
+- **Export…** saves them in a file, named "Dive Lens settings.json" unless you choose another name. The file holds: the dive application and the log location of each one, language, units, the GPS altitude option, where the collections go, the automatic check for updates, the log level and the order of the dive list. The clock offsets remembered for each camera are not in it: they stay on this computer.
 - **Import…** asks before changing anything: **Replace** puts the file's settings in place of every setting on this screen, **Cancel** leaves them as they are.
 - If the file's dive log is not on this computer, Dive Lens says so and keeps its location until you choose the right one (**Choose…**, or **Choose a file…** / **Choose a folder…** for Subsurface). If the collection set chosen in **Place in** is not in this catalog, Create Collections says so: choose another place in Settings.
 - A file from a Mac that uses MacDive, imported on Windows: Dive Lens uses Subsurface, the application available there, and keeps the MacDive location: these settings, exported again and imported on a Mac, still use MacDive there.
 - A file that does not look like a Dive Lens settings file is refused, and nothing changes. A file exported by an earlier version of Dive Lens can still be imported.
 - After an import, Dive Lens no longer takes over the previous plug-in's settings (section 1): the imported settings are the ones kept.
+
+**Updates**
+- **Check automatically** (on by default): when Dive Lens starts, at most once a day, it looks on GitHub for a new version. Nothing is installed without your consent.
+- **Check now** looks at once. Under **Dive Lens <version>**, the line says whether your version is up to date and when it was last checked.
+- When a new version exists, a banner at the top of the screen says so: **See** opens this section, **×** closes the banner until the next version. Here, **What's new** opens the version's page on GitHub, and **Install** installs it.
+- **Install** downloads the new version, checks that it comes from Dive Lens (signature), replaces the app and the Lightroom part, then Dive Lens starts again. Not while Lightroom is being written to.
+- Then **restart Lightroom**: it loads the new Dive Lens part only when it starts. Until then, Dive Lens shows "Restart Lightroom to finish updating Dive Lens."
+- On Windows, a copy installed with the zip then appears in **Settings › Apps › Installed apps**, where you had put it.
+- If Dive Lens cannot change its folder, it offers **Download from GitHub**: then install the new version yourself (section 1).
 
 **Diagnostics**
 - **Log level**: Normal or Detailed. Raise it only to report a problem.
@@ -189,9 +216,11 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 
 **"The dive log has changed…".** The dive log in use changed (in Settings, for example) while Dive Lens was working with the previous one, so the action was refused. After **Apply**, the orange notice reads "The dive log has changed. Nothing was written: start again." After an action that writes nothing (finding the photos, showing a profile), it reads "The dive log has changed: start again." It shows on step 1 of Create Collections or on Tag Selection, until you click **Close** or move on. Choose the dives again: they now come from the new log.
 
+**Dive Lens is disabled after installing.** Lightroom may show Dive Lens as disabled, in particular when a previous Dive Lens plug-in had been disabled before it was removed. In **File › Plug-in Manager…**, choose Dive Lens, click **Enable**, then **Done**. You only do this once.
+
 **"Lightroom not connected".** Open Lightroom Classic, check in **File › Plug-in Manager** that Dive Lens is enabled, then choose one of the Dive Lens menus again.
 
-**The app does not open (Mac).** See "First launch on a Mac" above: macOS blocks it until you click **Open Anyway** once.
+**The app does not open (Mac).** If macOS says it cannot check the app, download Dive Lens again from its release page: published versions are signed and checked by Apple, and open without this message.
 
 **Switching from MacDive to Subsurface.** Nothing to migrate. Running a dive again finds its collection when the name "<number> - <site>" is the same; otherwise a new collection is created next to it. Clock offsets are remembered separately for each application.
 
@@ -202,4 +231,6 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 ## 8. Privacy
 
 - Your dive log is only read, never modified. MacDive or Subsurface can stay open meanwhile.
-- Dive Lens sends no dive data anywhere. The only Internet access is the site map: the map service (OpenFreeMap, OpenStreetMap data) receives the area of the map displayed, nothing else. Without Internet, the map is replaced by the message "Map unavailable without Internet."
+- Dive Lens sends no dive data anywhere. It goes on the Internet for two things only:
+  - the site map: the map service (OpenFreeMap, OpenStreetMap data) receives the area of the map displayed, nothing else. Without Internet, the map is replaced by the message "Map unavailable without Internet.";
+  - updates: GitHub receives the request for the latest version, and the download if you install, nothing else. **Settings › Updates › Check automatically** turns off the check at launch.

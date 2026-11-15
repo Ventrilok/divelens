@@ -33,6 +33,18 @@ export function isReadyScreen(id: string): id is Screen {
 }
 
 function LightroomLine({ lr }: { lr: LightroomStatus }) {
+  // A plug-in from before an update, which this app cannot talk to.
+  if (!lr.connected && lr.restartLightroom) {
+    return (
+      <>
+        <div className="status-line">
+          <span className="dot dot-warn" />
+          <span className="status-title">{t("lr.restart")}</span>
+        </div>
+        <div>{t("lr.restartHint")}</div>
+      </>
+    );
+  }
   if (!lr.connected) {
     return (
       <>

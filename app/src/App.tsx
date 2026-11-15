@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   appInfo,
+  dismissUpdate,
   getSettings,
   initialScreen,
   lightroomStatus,
@@ -11,7 +12,9 @@ import {
   onLogChanged,
   onSettingsChanged,
   onShowScreen,
+  onUpdateStatus,
   updateSettings,
+  updateStatus,
 } from "./api";
 import { unitsInUse } from "./collectionPlace";
 import { latestOnly, logChangedNotice, logWatch, sameLogSetting } from "./diveLog";
@@ -23,7 +26,9 @@ import { DivesScreen } from "./screens/DivesScreen";
 import { TagScreen } from "./screens/TagScreen";
 import { SettingsScreen, type LogState } from "./screens/SettingsScreen";
 import { SourceError } from "./screens/SourceError";
-import type { AppInfo, LightroomStatus, LoadError, Settings, Sort, SourceInfo, SourceKind } from "./types";
+import { UpdateBanner } from "./components/UpdateBanner";
+import { noticeVersion } from "./updates";
+import type { AppInfo, LightroomStatus, LoadError, Settings, Sort, SourceInfo, SourceKind, UpdateStatus } from "./types";
 import "./App.css";
 
 const offline: LightroomStatus = {
@@ -37,6 +42,7 @@ const offline: LightroomStatus = {
   selectionTo: null,
   coverFrom: null,
   coverTo: null,
+  restartLightroom: false,
 };
 
 function App({ initialSettings }: { initialSettings: Settings }) {
@@ -187,6 +193,25 @@ function App({ initialSettings }: { initialSettings: Settings }) {
     return () => stops.forEach((p) => p.then((stop) => stop()));
   }, [open]);
 
+  // Updates (spec F13): where they stand, then live changes.
+  const [update, setUpdate] = useState<UpdateStatus | null>(null);
+  useEffect(() => {
+    let heard = false;
+    const stop = onUpdateStatus((u) => {
+      heard = true;
+      setUpdate(u);
+    });
+    updateStatus().then((u) => {
+      if (!heard) setUpdate(u);
+    });
+    return () => {
+      stop.then((f) => f());
+    };
+  }, []);
+  // The notice of a new version shows above the other screens; Settings
+  // tells it in its Updates section.
+  const newVersion = screen === "settings" ? null : noticeVersion(update);
+
   // Units in use: the dive application's unless forced in Settings.
   const okLog = state.status === "ok" ? state.log : null;
   const log = useMemo(
@@ -204,71 +229,80 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   return (
     <div className="app" key={lang}>
       <Sidebar current={screen} onGo={(s) => s !== screen && open(s)} log={log} lr={lr} />
-      {screen === "settings" && (
-        <SettingsScreen
-          settings={settings}
-          logState={state}
-          lr={lr}
-          info={info}
-          writing={writing}
-          error={saveError}
-          onChange={change}
+      <div className="content">
+        <UpdateBanner
+          version={newVersion}
+          restartLightroom={lr.restartLightroom}
+          onSee={() => open("settings")}
+          onClose={(version) => dismissUpdate(version)}
         />
-      )}
-      {screen !== "settings" && state.status === "loading" && (
-        <main className="screen screen-center">
-          <p className="muted">{t("dives.loading")}</p>
-        </main>
-      )}
-      {screen !== "settings" && state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
-      {log && screen === "collections" && !adjusting && (
-        <DivesScreen
-          log={log}
-          selected={chosen}
-          onSelect={setChosen}
-          sort={sort}
-          onSort={onSort}
-          notice={notice}
-          onDismissNotice={dismissNotice}
-          onNext={() => {
-            setLogNotice(null);
-            setStep("adjust");
-          }}
-        />
-      )}
-      {log && screen === "collections" && adjusting && (
-        <CollectionsScreen
-          log={log}
-          lr={lr}
-          settings={settings}
-          chosen={chosen}
-          onChooseDives={() => {
-            setLogNotice(null);
-            setStep("dives");
-          }}
-          onDone={() => {
-            setChosen(new Set());
-            setStep("dives");
-          }}
-          onRetryDives={(ids) => setChosen(new Set(ids))}
-          onOpenSettings={() => setScreen("settings")}
-          onPhase={onPhase}
-        />
-      )}
-      {log && screen === "tag" && (
-        <TagScreen
-          key={tagRun}
-          log={log}
-          lr={lr}
-          sort={sort}
-          notice={notice}
-          onDismissNotice={dismissNotice}
-          onCancel={() => {
-            setLogNotice(null);
-            setTagRun((n) => n + 1);
-          }}
-        />
-      )}
+        {screen === "settings" && (
+          <SettingsScreen
+            settings={settings}
+            logState={state}
+            lr={lr}
+            info={info}
+            update={update}
+            writing={writing}
+            error={saveError}
+            onChange={change}
+          />
+        )}
+        {screen !== "settings" && state.status === "loading" && (
+          <main className="screen screen-center">
+            <p className="muted">{t("dives.loading")}</p>
+          </main>
+        )}
+        {screen !== "settings" && state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
+        {log && screen === "collections" && !adjusting && (
+          <DivesScreen
+            log={log}
+            selected={chosen}
+            onSelect={setChosen}
+            sort={sort}
+            onSort={onSort}
+            notice={notice}
+            onDismissNotice={dismissNotice}
+            onNext={() => {
+              setLogNotice(null);
+              setStep("adjust");
+            }}
+          />
+        )}
+        {log && screen === "collections" && adjusting && (
+          <CollectionsScreen
+            log={log}
+            lr={lr}
+            settings={settings}
+            chosen={chosen}
+            onChooseDives={() => {
+              setLogNotice(null);
+              setStep("dives");
+            }}
+            onDone={() => {
+              setChosen(new Set());
+              setStep("dives");
+            }}
+            onRetryDives={(ids) => setChosen(new Set(ids))}
+            onOpenSettings={() => setScreen("settings")}
+            onPhase={onPhase}
+          />
+        )}
+        {log && screen === "tag" && (
+          <TagScreen
+            key={tagRun}
+            log={log}
+            lr={lr}
+            sort={sort}
+            notice={notice}
+            onDismissNotice={dismissNotice}
+            onCancel={() => {
+              setLogNotice(null);
+              setTagRun((n) => n + 1);
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 }

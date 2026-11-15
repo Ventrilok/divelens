@@ -37,6 +37,7 @@ Repository layout:
 | `third_party/libdivecomputer/` | libdivecomputer itself, as a git submodule pinned to a validated commit. |
 | `app/` | The Tauri 2 app: front end in `app/src`, Rust side in `app/src-tauri` (crate `divelens`). |
 | `plugin/DiveLens.lrdevplugin/` | The Lightroom plug-in, shipped as plain Lua source (no compile step). |
+| `packaging/` | The installers built by the release workflow: a `.pkg` for macOS and an Inno Setup script for Windows. Both install the plug-in folder, with the app inside, for the current user in Lightroom's Modules folder. |
 | `docs/` | Specification, user guide, and pages for contributors in `docs/contributing/`. |
 
 The three Rust crates form one Cargo workspace at the root, with a single `target/` folder and a single `Cargo.lock`.
@@ -91,6 +92,7 @@ From `app/`:
 | Dev window | `npm run tauri dev` (opens the app and keeps running, rebuilding as you edit) |
 | App build, macOS | `npm run tauri build -- --bundles app` (builds `Dive Lens.app`, skips the disk image) |
 | App build, Windows | `npm run tauri build -- --no-bundle` |
+| Release a version (maintainer) | `npm run release -- patch` (or `minor`, `major`, `prerelease`, a version; see [Version numbers](#version-numbers)) |
 | Change the version | `npm run set-version <version>` (see [Version numbers](#version-numbers)) |
 
 The front-end tests run in a UTC+14 time zone on purpose. Dive times are wall-clock times, as the dive computer recorded them, and must never shift with the time zone of the computer running Dive Lens; running far from most people's zone catches any accidental shift.
@@ -148,15 +150,23 @@ Continuous integration runs the same checks on **macOS and Windows** for every p
 
 ## Version numbers
 
-**The version of Dive Lens is set in one place: `version` in `app/package.json`.** Everything that shows a version takes it from there: the app bundle, Settings › About, the app log, Lightroom's Plug-in Manager, the zip names `DiveLens-<version>-…` and the release tag `v<version>`, which the release workflow checks.
+**The version of Dive Lens is set in one place: `version` in `app/package.json`.** Everything that shows a version takes it from there: the app bundle, Settings › About, the app log, Lightroom's Plug-in Manager, the installer and zip names `DiveLens-<version>-…` and the release tag `v<version>`.
 
-To change it, from `app/`:
+**Releasing a version** (maintainer only), from `app/`, on an up-to-date `main` without uncommitted changes:
+
+```sh
+npm run release -- patch        # or minor, major, prerelease, or a version: 2.1.0-beta.1
+```
+
+The script writes the new version everywhere (as `npm run set-version` below), commits it on a branch `build/release-<version>`, pushes it and opens the pull request `build: release <version>`, set to merge by itself once its checks pass. When it reaches `main`, the release workflow builds, signs and notarizes that version and drafts its GitHub release, with notes generated from the merged pull requests. Review the draft on the Releases page, then publish it: publishing creates the tag `v<version>`. If a build fails, run the Release workflow by hand on `main` (**Actions › Release › Run workflow**): it builds the same version again and replaces the draft's files. A published version is never rebuilt; release a new one. Publishing also offers the version to every installed copy of Dive Lens, which updates itself from it (`latest.json`, spec F13); a pre-release is never offered. The update files are signed with the Dive Lens update key, kept in the repository's secrets (`TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) and in the maintainer's password manager: a release cannot be built without it, and a lost key would leave every installed copy unable to update itself.
+
+To change the version by hand instead, from `app/`:
 
 ```sh
 npm run set-version 2.1.0
 ```
 
-This sets the version in `package.json` and `package-lock.json` (it is npm's own `npm version`, without a git commit or tag), then copies it to the files that cannot read `package.json`: the plug-in's `Info.lua` (Lightroom reads that file alone, without access to any other file) and the Rust workspace's `Cargo.toml` and `Cargo.lock`. The app reads its version from `package.json` when it is built, through `tauri.conf.json`. Never edit a copy by hand: `cargo test -p divelens` fails as soon as one differs. Commit all the changed files together; once that commit is on `main`, pushing the tag `v2.1.0` builds the release as a draft.
+This sets the version in `package.json` and `package-lock.json` (it is npm's own `npm version`, without a git commit or tag), then copies it to the files that cannot read `package.json`: the plug-in's `Info.lua` (Lightroom reads that file alone, without access to any other file) and the Rust workspace's `Cargo.toml` and `Cargo.lock`. The app reads its version from `package.json` when it is built, through `tauri.conf.json`. Never edit a copy by hand: `cargo test -p divelens` fails as soon as one differs. Commit all the changed files together. A commit that changes the version is a release: once it is on `main`, the release workflow drafts that version.
 
 The numbers follow [Semantic Versioning](https://semver.org): **MAJOR.MINOR.PATCH**.
 
@@ -170,7 +180,7 @@ A **pre-release** adds a label after a hyphen, for example `2.1.0-beta.1`, `2.1.
 - macOS: the app bundle carries the whole version (`2.1.0-beta.1`) as both its version and its build number. Apple documents both as numbers only, but Tauri builds the app with the label all the same.
 - Windows: the app's numeric file version drops the label (`2.1.0-beta.1` and `2.1.0` both read 2.1.0.0); its product version text keeps it. An MSI installer, which Dive Lens does not build, would accept only a numeric label of at most 65535 (`2.1.0-1`).
 - No build metadata (`2.1.0+7`): npm drops it, and the tests refuse it.
-- A tag such as `v2.1.0-beta.1` builds a draft release like any other; mark it as a pre-release on GitHub when publishing it.
+- A version with a label (`2.1.0-beta.1`) is drafted like any other, marked as a pre-release on GitHub.
 
 Three other numbers are **compatibility versions**, not the version of Dive Lens: they never change with it, and each changes only when its own format does.
 

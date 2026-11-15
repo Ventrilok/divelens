@@ -143,6 +143,8 @@ export interface LightroomStatus {
   /** The selection's range moved by each camera's remembered clock offset. */
   coverFrom: string | null;
   coverTo: string | null;
+  /** Lightroom runs the plug-in of another version (Dive Lens was updated): it must restart. */
+  restartLightroom: boolean;
 }
 
 /** Thumbnails of the selection received so far (data URLs, by position). */
@@ -299,6 +301,8 @@ export interface Settings {
   logLevel: "normal" | "detailed";
   diveSort: Sort | null;
   legacyImported: boolean;
+  /** Look for a new version at launch, at most once a day (spec F13). */
+  checkUpdates: boolean;
 }
 
 /** A settings file's dive log on this computer (spec F11). */
@@ -329,4 +333,31 @@ export interface AppInfo {
   os: string;
   /** The app's log file, next to the plugin's. */
   logPath: string | null;
+}
+
+/** Why looking for or installing an update failed (spec F13). */
+export type UpdateFailure = "network" | "signature" | "package" | "files" | "writing" | "notInstallable";
+
+/** Where the update stands. */
+export type UpdatePhase =
+  | { state: "idle" }
+  | { state: "checking" }
+  | { state: "upToDate" }
+  | { state: "available"; version: string }
+  | { state: "downloading"; version: string; percent: number | null }
+  | { state: "installing"; version: string }
+  | { state: "failed"; reason: UpdateFailure; version: string | null };
+
+export interface UpdateStatus {
+  phase: UpdatePhase;
+  /** The update can be installed here; otherwise it is downloaded by hand. */
+  installable: boolean;
+  /** Seconds since 1970. */
+  lastCheck: number | null;
+  /** The version whose notice was closed. */
+  dismissed: string | null;
+  /** Notes of the version found. */
+  notesUrl: string | null;
+  /** Where to download Dive Lens by hand. */
+  releasesUrl: string;
 }

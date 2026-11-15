@@ -132,15 +132,23 @@ fn plugin_keeps_its_identifier_and_fields() {
         r#"
         assert(require "Info".LrToolkitIdentifier == "com.querton.divelens")
         local metadata = require "Metadata"
-        assert(metadata.schemaVersion == 3)
-        local ids = {}
+        assert(metadata.schemaVersion == 4)
+        local ids, hidden = {}, {}
         for _, field in ipairs(metadata.metadataFieldsForPhotos) do
             assert(field.dataType == "string" and field.version == 1, field.id)
             ids[#ids + 1] = field.id
+            if field.title == nil then
+                -- The SDK: searchable and browsable only with a title.
+                assert(field.searchable == nil and field.browsable == nil and field.readOnly == nil, field.id)
+                hidden[#hidden + 1] = field.id
+            end
         end
         assert(table.concat(ids, ",") == "DiveId,StartDate,EndDate,Duration,MaxDepth,TempHigh,TempLow,Rating,"
-            .. "PhotoDepth,PhotoTemp,PhotoElapsed,ClockOffset,Source",
+            .. "PhotoDepth,PhotoTemp,PhotoElapsed,ClockOffset,Source,WrittenAltitude",
             table.concat(ids, ","))
+        -- The altitude marker only: the plugin's own record, never shown.
+        assert(table.concat(hidden, ",") == "WrittenAltitude", table.concat(hidden, ","))
+        assert(require "Tagging".MARKER == "WrittenAltitude")
         "#,
     );
 }
@@ -165,7 +173,11 @@ fn panel_shows_every_field_once_in_titled_sections() {
             end
         end
         for _, field in ipairs(require "Metadata".metadataFieldsForPhotos) do
-            assert(seen[field.id], field.id .. " missing from the panel")
+            if field.title then
+                assert(seen[field.id], field.id .. " missing from the panel")
+            else
+                assert(not seen[field.id], field.id .. " is hidden: not in the panel")
+            end
         end
         assert(table.concat(labels, ",") == "Photo,Dive,Site,Technical", table.concat(labels, ","))
         "#,
@@ -413,8 +425,10 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
             "11 PhotoElapsed=02:40",
             "11 ClockOffset=+04:01",
             "11 gpsAltitude=-10",
-            // At the surface: per-photo values cleared, offset kept, altitude
-            // untouched.
+            // The altitude marker: the altitude written, as text.
+            "11 WrittenAltitude=-10",
+            // At the surface: per-photo values cleared, offset kept, no
+            // altitude written.
             "12 PhotoDepth=nil",
             "12 PhotoTemp=nil",
             "12 PhotoElapsed=nil",
@@ -617,9 +631,10 @@ fn collections_write_gps_and_altitude_in_a_write_of_their_own() {
         [
             "11 2 raw gps=12.5,-45.25",
             "11 2 raw gpsAltitude=-10",
-            // 11 dive and location fields, 4 per-photo values.
-            "11 first write: 15",
-            // At the surface: no altitude.
+            // 11 dive and location fields, 4 per-photo values, and the
+            // altitude marker: in the first write, never with the altitude.
+            "11 first write: 16",
+            // At the surface: no altitude, no marker.
             "12 2 raw gps=12.5,-45.25",
             "12 first write: 15",
         ]
@@ -637,7 +652,7 @@ fn collections_write_gps_and_altitude_in_a_write_of_their_own() {
         writes(&request(&site, true)),
         [
             "11 2 raw gpsAltitude=-10",
-            "11 first write: 15",
+            "11 first write: 16",
             "12 first write: 15"
         ]
     );
@@ -668,12 +683,61 @@ fn progress_tells_the_first_write_only() {
     assert_eq!(reported(30), Vec::<u32>::new());
 }
 
-/// What a photo carries before "Tag Selection", as the plugin's own write
-/// path left it.
+/// What a photo carries before "Tag Selection" or "Create Collections", as
+/// the plugin's own write path left it.
 enum Before<'a> {
     Nothing,
     Tagged(&'a divelens_core::tags::TagRequest),
     Filed(&'a divelens_core::tags::CollectionsRequest),
+    /// Filed by a version that wrote no altitude marker.
+    FiledEarlier(&'a divelens_core::tags::CollectionsRequest),
+}
+
+/// Lua making the global `current`, what Link.lua reads on photo "1"
+/// before writing (photosBefore), from the globals `set_before` sets. It
+/// also defines the global `date`, the date format of these tests.
+const BEFORE_LUA: &str = r#"
+local Json = require "Json"
+local Tagging = require "Tagging"
+function date(iso) return "date(" .. iso .. ")" end
+local photo = {}
+local function write(changes)
+    for _, c in ipairs(changes) do photo[c.field] = c.value end
+end
+if tagged then write(assert(Tagging.plan(Json.decode(tagged), date))) end
+if filed then
+    local groups = assert(Tagging.planCollections(Json.decode(filed), date))
+    write(groups[1].common)
+    write(groups[1].photos[1].changes)
+end
+if earlier then photo[Tagging.MARKER] = nil end
+if altitude then photo.gpsAltitude = altitude end
+current = { gpsAltitude = photo.gpsAltitude }
+for _, field in ipairs(Tagging.RETAG_FIELDS) do current[field] = photo[field] end
+"#;
+
+/// Sets the globals BEFORE_LUA reads: what the photo carries (`before`),
+/// and its GPS altitude when `altitude` replaces it (the camera's, the
+/// user's, or the value as Lightroom stored it).
+fn set_before(lua: &Lua, before: Before, altitude: Option<f64>) {
+    let globals = lua.globals();
+    match before {
+        Before::Nothing => {}
+        Before::Tagged(r) => globals
+            .set("tagged", serde_json::to_string(r).unwrap())
+            .unwrap(),
+        Before::Filed(r) => globals
+            .set("filed", serde_json::to_string(r).unwrap())
+            .unwrap(),
+        Before::FiledEarlier(r) => {
+            globals
+                .set("filed", serde_json::to_string(r).unwrap())
+                .unwrap();
+            globals.set("earlier", true).unwrap();
+        }
+    }
+    globals.set("altitude", altitude).unwrap();
+    run(lua, BEFORE_LUA);
 }
 
 /// The extra changes "Tag Selection" makes on a photo left by `before` when
@@ -706,18 +770,9 @@ fn retag_lua(
 ) -> Vec<String> {
     let lua = lua();
     run(&lua, WRITES_LUA);
+    set_before(&lua, before, altitude);
     let globals = lua.globals();
     globals.set("split", split).unwrap();
-    match before {
-        Before::Nothing => {}
-        Before::Tagged(r) => globals
-            .set("tagged", serde_json::to_string(r).unwrap())
-            .unwrap(),
-        Before::Filed(r) => globals
-            .set("filed", serde_json::to_string(r).unwrap())
-            .unwrap(),
-    }
-    globals.set("altitude", altitude).unwrap();
     globals
         .set("input", serde_json::to_string(request).unwrap())
         .unwrap();
@@ -725,21 +780,6 @@ fn retag_lua(
         r#"
         local Json = require "Json"
         local Tagging = require "Tagging"
-        local function date(iso) return "date(" .. iso .. ")" end
-        local photo = {}
-        local function write(changes)
-            for _, c in ipairs(changes) do photo[c.field] = c.value end
-        end
-        if tagged then write(assert(Tagging.plan(Json.decode(tagged), date))) end
-        if filed then
-            local groups = assert(Tagging.planCollections(Json.decode(filed), date))
-            write(groups[1].common)
-            write(groups[1].photos[1].changes)
-        end
-        if altitude then photo.gpsAltitude = altitude end
-        -- What Link.lua reads on the photo before writing.
-        local current = { gpsAltitude = photo.gpsAltitude }
-        for _, field in ipairs(Tagging.RETAG_FIELDS) do current[field] = photo[field] end
         local request = Json.decode(input)
         local changes = assert(Tagging.plan(request, date))
         -- The photo is "1": its per-photo values when the request lists it
@@ -762,12 +802,42 @@ fn retag_lua(
     .unwrap()
 }
 
+/// Everything "Create Collections" writes, with `request`, on photo "1",
+/// left by `before` (see `retag`), in its two catalog writes (see
+/// `WRITES_LUA`).
+fn refile_writes(
+    before: Before,
+    altitude: Option<f64>,
+    request: &divelens_core::tags::CollectionsRequest,
+) -> Vec<String> {
+    let lua = lua();
+    run(&lua, WRITES_LUA);
+    set_before(&lua, before, altitude);
+    lua.globals()
+        .set("input", serde_json::to_string(request).unwrap())
+        .unwrap();
+    lua.load(
+        r#"
+        local Json = require "Json"
+        local Tagging = require "Tagging"
+        local groups = assert(Tagging.planCollections(Json.decode(input), date))
+        local p = groups[1].photos[1]
+        assert(p.id == "1")
+        -- What Link.lua writes, as it makes it.
+        return checked(Tagging.photoWrites(groups[1].common, current, p.changes))
+        "#,
+    )
+    .eval()
+    .unwrap()
+}
+
 mod retagging {
-    use super::{Before, retag, retag_writes, sample_dive};
+    use super::{Before, refile_writes, retag, retag_writes, sample_dive};
     use divelens_core::Dive;
     use divelens_core::profile::PhotoPoint;
     use divelens_core::tags::{
-        CollectionGroup, CollectionsRequest, DiveTags, LocationTags, PhotoTags, TagRequest, Units,
+        CollectionGroup, CollectionsRequest, DepthUnit, DiveTags, LocationTags, PhotoTags,
+        TagRequest, TempUnit, Units,
     };
 
     const CLEARED: [&str; 4] = [
@@ -777,13 +847,25 @@ mod retagging {
         "plugin ClockOffset=nil",
     ];
 
-    fn cleared(altitude: bool) -> Vec<String> {
+    const MARKER_CLEARED: &str = "plugin WrittenAltitude=nil";
+
+    /// The other dive's per-photo values cleared, then its GPS altitude
+    /// when `altitude`, then the altitude marker when `marker`.
+    fn cleared(altitude: bool, marker: bool) -> Vec<String> {
         let mut lines: Vec<String> = CLEARED.iter().map(|s| s.to_string()).collect();
         if altitude {
             lines.push("raw gpsAltitude=nil".into());
         }
+        if marker {
+            lines.push(MARKER_CLEARED.into());
+        }
         lines
     }
+
+    const FEET: Units = Units {
+        depth: DepthUnit::Feet,
+        temp: TempUnit::Fahrenheit,
+    };
 
     /// The dive after the sample one, the same day.
     fn next_dive() -> Dive {
@@ -798,6 +880,19 @@ mod retagging {
     /// A photo filed by "Create Collections" in `dive`, at `depth_m` (none:
     /// at the surface), its depth copied to the altitude.
     fn filed(dive: &Dive, source: &str, depth_m: Option<f64>, units: Units) -> CollectionsRequest {
+        filing(dive, source, depth_m, units, true)
+    }
+
+    /// "Create Collections" filing photo "1" in `dive` at `depth_m` (none:
+    /// at the surface, or in a dive without a profile), its depth copied to
+    /// the altitude when `copy`.
+    fn filing(
+        dive: &Dive,
+        source: &str,
+        depth_m: Option<f64>,
+        units: Units,
+        copy: bool,
+    ) -> CollectionsRequest {
         let point = depth_m.map(|depth_m| PhotoPoint {
             elapsed_s: 600,
             depth_m,
@@ -814,7 +909,9 @@ mod retagging {
                 photos: vec![PhotoTags::new("1".into(), point, 240, units)],
             }],
         };
-        request.copy_depth_to_altitude();
+        if copy {
+            request.copy_depth_to_altitude();
+        }
         request
     }
 
@@ -830,36 +927,39 @@ mod retagging {
     fn another_dive_clears_the_photos_own_values() {
         let a = sample_dive();
         let photo = filed(&a, "MacDive", Some(18.44), Units::default());
+        // The altitude Dive Lens wrote (its marker says so): cleared, with
+        // the marker.
         assert_eq!(
             retag(Before::Filed(&photo), None, &tag(&next_dive(), "MacDive")),
-            cleared(true)
+            cleared(true, true)
         );
-        // The camera's altitude is not Dive Lens's: kept.
+        // Changed since (the user, another tool): the altitude stays, the
+        // marker, no longer true, goes.
         assert_eq!(
             retag(
                 Before::Filed(&photo),
                 Some(12.0),
                 &tag(&next_dive(), "MacDive")
             ),
-            cleared(false)
+            cleared(false, true)
         );
         // Only the source differs: another dive (the same log in another
         // application may have other start times).
         assert_eq!(
             retag(Before::Filed(&photo), None, &tag(&a, "Subsurface")),
-            cleared(true)
+            cleared(true, true)
         );
         // Only the number differs, or one side has none.
         let mut renumbered = a.clone();
         renumbered.number = Some(702);
         assert_eq!(
             retag(Before::Filed(&photo), None, &tag(&renumbered, "MacDive")),
-            cleared(true)
+            cleared(true, true)
         );
         renumbered.number = None;
         assert_eq!(
             retag(Before::Filed(&photo), None, &tag(&renumbered, "MacDive")),
-            cleared(true)
+            cleared(true, true)
         );
         // Only the values the photo has are cleared. Tagged earlier by "Tag
         // Selection": none, so nothing to clear, and the altitude stays even
@@ -883,12 +983,106 @@ mod retagging {
             ),
             ["plugin ClockOffset=nil"]
         );
-        // Known miss, kept on purpose: 18.45 m is written "18.4 m" but its
-        // altitude is -18.5, so the altitude stays.
+        // 18.45 m is written "18.4 m" but its altitude is -18.5: the marker
+        // tells it is Dive Lens's, so it is cleared.
         let half = filed(&a, "MacDive", Some(18.45), Units::default());
         assert_eq!(
             retag(Before::Filed(&half), None, &tag(&next_dive(), "MacDive")),
-            cleared(false)
+            cleared(true, true)
+        );
+        // In feet too: "60 ft" is 18.29 m, the altitude written -18.4.
+        let feet = filed(&a, "MacDive", Some(18.44), FEET);
+        assert_eq!(
+            retag(Before::Filed(&feet), None, &tag(&next_dive(), "MacDive")),
+            cleared(true, true)
+        );
+        // And as Lightroom may store the altitude (a float).
+        assert_eq!(
+            retag(
+                Before::Filed(&feet),
+                Some(f64::from(-18.4f32)),
+                &tag(&next_dive(), "MacDive")
+            ),
+            cleared(true, true)
+        );
+    }
+
+    #[test]
+    fn without_a_marker_the_altitude_derived_from_the_depth_is_cleared() {
+        // Filed by a version without the altitude marker: the old rule, the
+        // altitude derived from the depth written, to the decimetre.
+        let a = sample_dive();
+        let next = tag(&next_dive(), "MacDive");
+        let photo = filed(&a, "MacDive", Some(18.44), Units::default());
+        assert_eq!(
+            retag(Before::FiledEarlier(&photo), None, &next),
+            cleared(true, false)
+        );
+        // The camera's altitude: kept.
+        assert_eq!(
+            retag(Before::FiledEarlier(&photo), Some(12.0), &next),
+            cleared(false, false)
+        );
+        // Known misses, kept on purpose: 18.45 m is written "18.4 m" but its
+        // altitude is -18.5; "60 ft" gives back -18.3, not -18.4.
+        let half = filed(&a, "MacDive", Some(18.45), Units::default());
+        assert_eq!(
+            retag(Before::FiledEarlier(&half), None, &next),
+            cleared(false, false)
+        );
+        let feet = filed(&a, "MacDive", Some(18.44), FEET);
+        assert_eq!(
+            retag(Before::FiledEarlier(&feet), None, &next),
+            cleared(false, false)
+        );
+    }
+
+    #[test]
+    fn the_altitude_marker_decides_whose_the_altitude_is() {
+        super::run(
+            &super::lua(),
+            r#"
+            local Tagging = require "Tagging"
+            local function clears(photo)
+                local out = {}
+                for _, c in ipairs(Tagging.altitudeClears(photo)) do
+                    assert(c.value == nil, c.field)
+                    out[#out + 1] = c.kind .. " " .. c.field
+                end
+                return table.concat(out, ";")
+            end
+            local function check(photo, want, why)
+                local got = clears(photo)
+                assert(got == want, why .. ": " .. got)
+            end
+            local BOTH, MARKER = "raw gpsAltitude;plugin WrittenAltitude", "plugin WrittenAltitude"
+
+            -- With a marker, it alone decides, whatever the depth.
+            check({ gpsAltitude = -18.4, WrittenAltitude = "-18.4", PhotoDepth = "60 ft" }, BOTH, "own")
+            check({ gpsAltitude = -18.399999618530273, WrittenAltitude = "-18.4" }, BOTH, "as a float")
+            check({ gpsAltitude = -18.404, WrittenAltitude = "-18.4" }, BOTH, "to the centimetre")
+            check({ gpsAltitude = 0, WrittenAltitude = "0" }, BOTH, "at the surface")
+            check({ gpsAltitude = -18.41, WrittenAltitude = "-18.4" }, MARKER, "a centimetre off")
+            check({ gpsAltitude = -18.3, WrittenAltitude = "-18.4", PhotoDepth = "18.3 m" }, MARKER,
+                "changed to what the depth gives")
+            check({ gpsAltitude = 18.4, WrittenAltitude = "-18.4" }, MARKER, "sign changed")
+            check({ WrittenAltitude = "-18.4", PhotoDepth = "18.4 m" }, MARKER, "altitude removed")
+            check({ gpsAltitude = -18.4, WrittenAltitude = "deep", PhotoDepth = "18.4 m" }, MARKER,
+                "not a number")
+            -- Without a marker (an empty one is none): the old rule.
+            check({ gpsAltitude = -18.4, PhotoDepth = "18.4 m" }, "raw gpsAltitude", "derived")
+            check({ gpsAltitude = -18.4, WrittenAltitude = "", PhotoDepth = "18.4 m" }, "raw gpsAltitude",
+                "empty marker")
+            check({ gpsAltitude = -18.4, PhotoDepth = "60 ft" }, "", "feet, rounded")
+            check({ gpsAltitude = -3 }, "", "camera, no depth")
+            check({}, "", "nothing")
+
+            -- The marker's text: the altitude written, read back exactly.
+            for _, a in ipairs { -18.4, -10, 0, -0.1, -123.4, -18.45 } do
+                assert(tonumber(Tagging.markerText(a)) == a, a)
+            end
+            assert(Tagging.markerText(-18.4) == "-18.4" and Tagging.markerText(-10) == "-10")
+            "#,
         );
     }
 
@@ -909,10 +1103,10 @@ mod retagging {
             ["raw gps=12.5,-45.25", "raw gpsAltitude=nil"]
         );
         // First write: the request without its GPS, then the other dive's
-        // per-photo values cleared.
+        // per-photo values and the altitude marker cleared.
         let first = part(&lines, "1 ");
         assert!(first.contains(&"raw country=Atlantis".to_string()));
-        assert_eq!(first[first.len() - CLEARED.len()..], CLEARED);
+        assert_eq!(first[first.len() - 5..], cleared(false, true));
         // Dive data only: the altitude alone in the second write.
         let dive_only = TagRequest {
             dive: Some(DiveTags::new(&next_dive(), Units::default(), "MacDive")),
@@ -921,14 +1115,19 @@ mod retagging {
         };
         let lines = retag_writes(Before::Filed(&photo), None, &dive_only);
         assert_eq!(part(&lines, "2 "), ["raw gpsAltitude=nil"]);
-        assert_eq!(part(&lines, "1 ")[9..], CLEARED);
-        // The camera's altitude stays: only the GPS in the second write.
+        assert_eq!(part(&lines, "1 ")[9..], cleared(false, true));
+        // An altitude changed since stays: only the GPS in the second
+        // write, the marker cleared in the first.
         let lines = retag_writes(
             Before::Filed(&photo),
             Some(12.0),
             &tag(&next_dive(), "MacDive"),
         );
         assert_eq!(part(&lines, "2 "), ["raw gps=12.5,-45.25"]);
+        assert_eq!(
+            part(&lines, "1 ").last().map(String::as_str),
+            Some(MARKER_CLEARED)
+        );
         // Same dive: nothing cleared, the GPS still on its own.
         let lines = retag_writes(Before::Filed(&photo), None, &tag(&a, "MacDive"));
         assert_eq!(part(&lines, "2 "), ["raw gps=12.5,-45.25"]);
@@ -1070,6 +1269,15 @@ mod retagging {
         "plugin ClockOffset=+04:01",
     ];
 
+    /// OWN, with the altitude marker of the altitude copied from its depth.
+    const OWN_ALT: [&str; 5] = [
+        "plugin PhotoDepth=10.0 m",
+        "plugin PhotoTemp=25.0°C",
+        "plugin PhotoElapsed=02:40",
+        "plugin ClockOffset=+04:01",
+        "plugin WrittenAltitude=-10",
+    ];
+
     /// The first write's lines after the 9 dive fields, country and
     /// location, and the second write's lines.
     fn tail_and_second(lines: &[String]) -> (Vec<String>, Vec<String>) {
@@ -1106,18 +1314,39 @@ mod retagging {
             assert_eq!(tail, first, "first write, {inside} {altitude}");
             assert_eq!(got, second, "second write, {inside} {altitude}");
         };
+        let marker_then_own: Vec<&str> = [MARKER_CLEARED].into_iter().chain(OWN).collect();
+        let cleared_and_marker: Vec<&str> = CLEARED.into_iter().chain([MARKER_CLEARED]).collect();
         // Another dive, photo in the dive: its new values replace the old
         // ones (nothing cleared first). The altitude: the new depth with the
-        // option, else the old one cleared (Dive Lens derived it).
-        check(&b, true, true, &OWN, &[gps, "raw gpsAltitude=-10"]);
-        check(&b, true, false, &OWN, &[gps, "raw gpsAltitude=nil"]);
+        // option, and its marker; else the old one cleared (Dive Lens wrote
+        // it), with its marker.
+        check(&b, true, true, &OWN_ALT, &[gps, "raw gpsAltitude=-10"]);
+        check(
+            &b,
+            true,
+            false,
+            &marker_then_own,
+            &[gps, "raw gpsAltitude=nil"],
+        );
         // Another dive, photo outside: the old dive's values cleared, as
         // without per-photo values; no clock offset written.
-        check(&b, false, true, &CLEARED, &[gps, "raw gpsAltitude=nil"]);
-        check(&b, false, false, &CLEARED, &[gps, "raw gpsAltitude=nil"]);
+        check(
+            &b,
+            false,
+            true,
+            &cleared_and_marker,
+            &[gps, "raw gpsAltitude=nil"],
+        );
+        check(
+            &b,
+            false,
+            false,
+            &cleared_and_marker,
+            &[gps, "raw gpsAltitude=nil"],
+        );
         // Same dive, photo in the dive: rewritten with the offset shown.
-        check(&a, true, true, &OWN, &[gps, "raw gpsAltitude=-10"]);
-        // Without the option, the altitude it has stays.
+        check(&a, true, true, &OWN_ALT, &[gps, "raw gpsAltitude=-10"]);
+        // Without the option, the altitude it has stays, and its marker.
         check(&a, true, false, &OWN, &[gps]);
         // Same dive, photo outside: its values stay as they are.
         check(&a, false, true, &[], &[gps]);
@@ -1170,7 +1399,7 @@ mod retagging {
             &dive_only,
         );
         let first: Vec<&String> = lines.iter().filter(|l| l.starts_with("1 ")).collect();
-        assert_eq!(first.len(), 9 + OWN.len());
+        assert_eq!(first.len(), 9 + OWN_ALT.len());
         assert_eq!(
             lines
                 .iter()
@@ -1178,6 +1407,79 @@ mod retagging {
                 .collect::<Vec<_>>(),
             ["2 raw gpsAltitude=-10"]
         );
+    }
+
+    /// The altitude and marker lines of both writes ("1 …" then "2 …").
+    fn altitude_lines(lines: &[String]) -> Vec<String> {
+        lines
+            .iter()
+            .filter(|l| l.contains("Altitude"))
+            .cloned()
+            .collect()
+    }
+
+    #[test]
+    fn create_collections_clears_the_altitude_it_wrote_from_a_depth_cleared() {
+        let a = sample_dive();
+        let b = next_dive();
+        // Filed in dive A at 18.44 m, its depth copied to the altitude.
+        let photo = filed(&a, "MacDive", Some(18.44), Units::default());
+        let gone = ["1 plugin WrittenAltitude=nil", "2 raw gpsAltitude=nil"];
+        let refiled = |before: Before, altitude: Option<f64>, request: &CollectionsRequest| {
+            let lines = refile_writes(before, altitude, request);
+            // Its per-photo values always rewritten, never in the GPS write.
+            assert!(lines.iter().any(|l| l.starts_with("1 plugin PhotoDepth=")));
+            assert!(lines.iter().any(|l| l == "2 raw gps=12.5,-45.25"));
+            altitude_lines(&lines)
+        };
+
+        // Filed again without a depth (in the surface margin, of another
+        // dive or the same one, or in a dive without a profile): the
+        // altitude Dive Lens wrote goes with the depth, option on or off.
+        for copy in [true, false] {
+            let margin_b = filing(&b, "MacDive", None, Units::default(), copy);
+            assert_eq!(refiled(Before::Filed(&photo), None, &margin_b), gone);
+            let margin_a = filing(&a, "MacDive", None, Units::default(), copy);
+            assert_eq!(refiled(Before::Filed(&photo), None, &margin_a), gone);
+        }
+        let mut no_profile = b.clone();
+        no_profile.has_profile = false;
+        let flat = filing(&no_profile, "MacDive", None, Units::default(), true);
+        assert_eq!(refiled(Before::Filed(&photo), None, &flat), gone);
+        // In feet too (the marker decides, not the rounded depth).
+        let feet = filed(&a, "MacDive", Some(18.44), FEET);
+        assert_eq!(refiled(Before::Filed(&feet), None, &flat), gone);
+
+        // Not Dive Lens's: kept. A camera's altitude on a photo never
+        // tagged; one changed since Dive Lens wrote it (its marker cleared).
+        let margin = filing(&b, "MacDive", None, Units::default(), true);
+        assert!(refiled(Before::Nothing, Some(-3.0), &margin).is_empty());
+        assert_eq!(
+            refiled(Before::Filed(&photo), Some(12.0), &margin),
+            ["1 plugin WrittenAltitude=nil"]
+        );
+
+        // Filed again with a depth: the new one with the option, with its
+        // marker; without it, the old one is cleared for another dive, as in
+        // Tag Selection, and kept for the same dive.
+        let new_alt = ["1 plugin WrittenAltitude=-10", "2 raw gpsAltitude=-10"];
+        let into_b = |copy| filing(&b, "MacDive", Some(10.0), Units::default(), copy);
+        let into_a = |copy| filing(&a, "MacDive", Some(10.0), Units::default(), copy);
+        assert_eq!(refiled(Before::Filed(&photo), None, &into_b(true)), new_alt);
+        assert_eq!(refiled(Before::Filed(&photo), None, &into_a(true)), new_alt);
+        assert_eq!(refiled(Before::Filed(&photo), None, &into_b(false)), gone);
+        assert!(refiled(Before::Filed(&photo), None, &into_a(false)).is_empty());
+        // The camera's altitude, replaced with the option (as before).
+        assert_eq!(refiled(Before::Nothing, Some(-3.0), &into_b(true)), new_alt);
+
+        // Filed by a version without the marker: the old rule, the altitude
+        // derived from the old depth, to the decimetre ("60 ft" misses).
+        assert_eq!(
+            refiled(Before::FiledEarlier(&photo), None, &margin),
+            ["2 raw gpsAltitude=nil"]
+        );
+        assert!(refiled(Before::FiledEarlier(&feet), None, &margin).is_empty());
+        assert!(refiled(Before::FiledEarlier(&photo), Some(12.0), &margin).is_empty());
     }
 }
 
