@@ -41,6 +41,11 @@ return {
                         title = LOC "$$$/DiveLens/PluginManager/Text=All Dive Lens settings are in the app." .. " " .. status,
                         fill_horizontal = 1,
                     },
+                },
+                -- The buttons on a row of their own: Lightroom does not wrap
+                -- the text, which would be cut off beside two buttons.
+                f:row {
+                    f:spacer { fill_horizontal = 1 },
                     f:push_button {
                         title = LOC "$$$/DiveLens/PluginManager/Open=Open Dive Lens",
                         action = function() Launch.open("collections") end,
