@@ -243,14 +243,18 @@ jobs:
           packaging/macos/build-pkg.sh package/DiveLens.lrplugin "$VERSION" "$pkg" "$IDENTITY"
           pkgutil --check-signature "$pkg"
 
-          result=$(xcrun notarytool submit "$pkg" \
-            --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" \
-            --wait --timeout 30m --output-format json) || true
-          echo "$result"
-          if [ "$(jq -r .status <<< "$result")" != Accepted ]; then
-            xcrun notarytool log "$(jq -r .id <<< "$result")" \
-              --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" || true
-            echo "::error::Apple did not notarize the installer."
+          # Submit, then wait: Apple's first submissions of a new kind can take
+          # well over half an hour. The status is read once the wait ends,
+          # whatever ended it.
+          auth=(--key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER")
+          submission=$(xcrun notarytool submit "$pkg" "${auth[@]}" --output-format json | plutil -extract id raw -o - -)
+          echo "Notarization submission: $submission"
+          xcrun notarytool wait "$submission" "${auth[@]}" --timeout 2h || true
+          status=$(xcrun notarytool info "$submission" "${auth[@]}" --output-format json | plutil -extract status raw -o - -)
+          echo "Notarization status: $status"
+          if [ "$status" != Accepted ]; then
+            xcrun notarytool log "$submission" "${auth[@]}" || true
+            echo "::error::Apple did not notarize the installer (status: $status)."
             exit 1
           fi
           xcrun stapler staple "$pkg"
