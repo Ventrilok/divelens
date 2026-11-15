@@ -12,7 +12,7 @@ Dive Lens is free and open source (GPL v3).
 
 You need Lightroom Classic and MacDive or Subsurface on the same computer. On Windows, only Subsurface is available.
 
-**Coming from the previous Dive Lens plug-in (0.9 and earlier)?** Before using the installer, remove it: in Lightroom, **File › Plug-in Manager…**, choose Dive Lens, **Remove**, then **Done**. Your photos keep their dive data, and the app takes over your previous settings (log location and dive order) on its first launch. Dive Lens is now free: there is no licence key any more.
+**Coming from the previous Dive Lens plug-in (0.9 and earlier)?** Before using the installer, remove it: in Lightroom, **File › Plug-in Manager…**, choose Dive Lens, **Remove**, then **Done**. If **Remove** is greyed out, the old plug-in is already where the installer will replace it: there is nothing to do. Your photos keep their dive data, and the app takes over your previous settings (log location and dive order) on its first launch. Dive Lens is now free: there is no licence key any more.
 
 ### With the installer
 

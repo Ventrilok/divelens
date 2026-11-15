@@ -12,7 +12,7 @@ Dive Lens est gratuit et open source (GPL v3).
 
 Il vous faut Lightroom Classic et MacDive ou Subsurface sur le même ordinateur. Sur Windows, seul Subsurface est proposé.
 
-**Vous utilisiez l'ancien module Dive Lens (0.9 et avant) ?** Avant d'utiliser l'installateur, retirez-le : dans Lightroom, **Fichier › Gestionnaire de modules externes…**, choisissez Dive Lens, **Supprimer**, puis **Terminé**. Vos photos gardent leurs infos de plongée, et l'application reprend vos réglages (emplacement du carnet et ordre des plongées) à son premier lancement. Dive Lens est désormais gratuit : plus de clé de licence.
+**Vous utilisiez l'ancien module Dive Lens (0.9 et avant) ?** Avant d'utiliser l'installateur, retirez-le : dans Lightroom, **Fichier › Gestionnaire de modules externes…**, choisissez Dive Lens, **Supprimer**, puis **Terminé**. Si le bouton **Supprimer** est grisé, l'ancien module est déjà là où l'installateur le remplacera : il n'y a rien à faire. Vos photos gardent leurs infos de plongée, et l'application reprend vos réglages (emplacement du carnet et ordre des plongées) à son premier lancement. Dive Lens est désormais gratuit : plus de clé de licence.
 
 ### Avec l'installateur
 
