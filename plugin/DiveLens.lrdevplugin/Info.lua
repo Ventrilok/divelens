@@ -46,5 +46,5 @@ return {
     -- `display` is what the Plug-in Manager shows: the full version, with a
     -- pre-release label if any (2.1.0-beta.1). The numbers hold MAJOR.MINOR.PATCH
     -- only; without `display` Lightroom formats them itself (0.1.0.0).
-    VERSION = { major = 0, minor = 1, revision = 0, display = "0.1.0" },
+    VERSION = { major = 2, minor = 0, revision = 0, display = "2.0.0" },
 }
