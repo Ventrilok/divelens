@@ -1,7 +1,8 @@
 //! MacDive reader (SQLite database, macOS).
 //!
-//! - Dates are Core Data timestamps: seconds since 2001-01-01, holding the
-//!   dive computer's wall-clock time.
+//! - Start: an instant, seconds since 2001-01-01 00:00 UTC, with the time
+//!   zone MacDive shows the dive in; the dive computer's wall clock is the
+//!   instant in that zone (see `zone`).
 //! - Profile: decoded from the dive computer's raw download (`ZRAWDATA`) with
 //!   libdivecomputer, using the computer name MacDive records (`ZCOMPUTER`).
 //!   MacDive's own encoded copy (`ZSAMPLES`) is proprietary and not used, so
@@ -25,6 +26,7 @@ use crate::sqlite;
 use crate::{Error, Result};
 
 mod app;
+mod zone;
 
 pub use app::APP;
 
@@ -57,11 +59,11 @@ impl MacDive {
     }
 }
 
-fn wall_clock(core_data_s: f64) -> NaiveDateTime {
+/// Wall-clock start of a dive: MacDive's instant (`ZRAWDATE`) in the time
+/// zone archived beside it (`ZTIMEZONE`).
+fn wall_clock(core_data_s: f64, zone: Option<&[u8]>) -> NaiveDateTime {
     let secs = core_data_s.round() as i64 + CORE_DATA_EPOCH;
-    DateTime::from_timestamp(secs, 0)
-        .unwrap_or_default()
-        .naive_utc()
+    zone::wall_clock(DateTime::from_timestamp(secs, 0).unwrap_or_default(), zone)
 }
 
 fn non_empty(s: Option<String>) -> Option<String> {
@@ -99,7 +101,9 @@ fn dive_from_row(r: &Row, computers: &Catalog) -> rusqlite::Result<Dive> {
         .unwrap_or(0.0)
         .max(0.0)
         .round() as u32;
-    let start = wall_clock(start_raw);
+    // Anything but a blob (none seen) is no zone.
+    let zone = r.get_ref("zone")?.as_blob_or_null().ok().flatten();
+    let start = wall_clock(start_raw, zone);
     let rating = r
         .get::<_, Option<f64>>("rating")?
         .map(|v| v.round() as i64)
@@ -142,6 +146,7 @@ impl DiveSource for MacDive {
             "SELECT COALESCE(D.ZUUID, 'pk:' || D.Z_PK) AS id,
                     D.ZDIVENUMBER AS number,
                     D.ZRAWDATE AS start,
+                    D.ZTIMEZONE AS zone,
                     D.ZTOTALDURATION AS duration,
                     D.ZMAXDEPTH AS max_depth,
                     D.ZTEMPHIGH AS temp_high,

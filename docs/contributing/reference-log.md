@@ -150,7 +150,12 @@ Bay has two parts; Lemuria / Sunken City / Temple has a country of its own).
 
 **MacDive** (SQLite database):
 
-- dates are seconds since 2001-01-01 00:00, holding the wall clock;
+- a dive's start is an instant, seconds since 2001-01-01 00:00 UTC, with the
+  time zone MacDive shows the dive in archived beside it: the wall clock is
+  the instant in that zone. The copy gives its dives zones in winter and in
+  summer time, behind and ahead of UTC (dive 104, in Auckland, is stored on
+  the day before), with a half-hour offset, GMT, and no zone at all (the
+  dive without number, read as GMT);
 - profiles come from the dive computer's raw download, decoded by
   libdivecomputer. The copy stores them as Sporasub SP2 downloads, the
   simplest format libdivecomputer decodes to 1 cm and 0.1 °C: the device

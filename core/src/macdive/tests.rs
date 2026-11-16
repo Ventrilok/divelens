@@ -13,9 +13,10 @@ CREATE TABLE ZDIVESITE ( Z_PK INTEGER PRIMARY KEY, Z_ENT INTEGER, Z_OPT INTEGER,
 ";
 
 // The reference log (`crate::conformance::reference`) as MacDive stores it.
-// Dates are seconds since 2001-01-01 00:00 of the wall clock: 771586200 is
-// 2025-06-14 09:30:00. Profiles come from raw downloads, added by
-// `reference_log`.
+// Dates are written here as seconds since 2001-01-01 00:00 of the wall clock
+// (771586200 is 2025-06-14 09:30:00); `database` then stores each one as
+// MacDive does, as an instant with its time zone (`ZONES`). Profiles come
+// from raw downloads, added by `database`.
 const REFERENCE: &str = r#"
 INSERT INTO ZDIVESITE (Z_PK, ZUUID, ZNAME, ZLOCATION, ZCOUNTRY, ZGPSLAT, ZGPSLON) VALUES
   (1, NULL, 'Coral Garden', 'North Reef', 'Atlantis', 12.5, -45.25),
@@ -62,6 +63,27 @@ INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZMAXDEPTH
 INSERT INTO ZDIVE (Z_PK, ZUUID, ZDIVENUMBER, ZRAWDATE, ZTOTALDURATION, ZCOMPUTER, ZRAWDATA)
   VALUES (12, 'UUID-BAD', 110, 771960000, 600.0, 'Mares Genius', x'00112233');
 "#;
+
+/// The time zone MacDive keeps with each dive (by row), with its offset from
+/// UTC on the dive's date, worked out by hand. MacDive stores the start as an
+/// instant: the wall clock minus that offset.
+const ZONES: &[(i64, &str, i64)] = &[
+    // 2024-12-31 23:40, winter time.
+    (1, "Europe/Zurich", 3600),
+    // Summer time.
+    (2, "Europe/Zurich", 2 * 3600),
+    (3, "GMT", 0),
+    (4, "America/Kralendijk", -4 * 3600),
+    // 2025-06-15 11:00 in Auckland: stored on 2025-06-14, at 23:00 UTC.
+    (5, "Pacific/Auckland", 12 * 3600),
+    // Row 6 has no zone: the instant is read as GMT.
+    (7, "Asia/Kolkata", 5 * 3600 + 1800),
+    (8, "Asia/Kolkata", 5 * 3600 + 1800),
+    (9, "Europe/Rome", 2 * 3600),
+    (10, "GMT", 0),
+    // MacDive's own manual dive (`EXTRA`), on dive 100's date.
+    (11, "Europe/Zurich", 3600),
+];
 
 /// A Sporasub SP2 download whose profile goes through `points` (time s,
 /// depth m, temperature °C): the simplest format libdivecomputer decodes
@@ -112,6 +134,13 @@ fn database(dir: &Path, sql: &str) -> PathBuf {
         assert_eq!(changed, 1, "dive {:?}", d.number);
     }
     conn.execute_batch(sql).unwrap();
+    for &(row, zone, offset_s) in ZONES {
+        conn.execute(
+            "UPDATE ZDIVE SET ZRAWDATE = ZRAWDATE - ?1, ZTIMEZONE = ?2 WHERE Z_PK = ?3",
+            (offset_s, super::zone::archive(zone), row),
+        )
+        .unwrap();
+    }
     drop(conn);
     path
 }
@@ -335,6 +364,27 @@ fn keeps_zero_and_negative_temperatures_and_drops_gps_zero() {
     assert_eq!(d.site.location, None, "blank location");
     assert!(!d.has_profile, "unknown computer");
     assert!(md.profile("UUID-104").unwrap().is_empty());
+}
+
+#[test]
+fn reads_each_dive_in_its_own_time_zone() {
+    let (_dir, md) = fixture();
+    let dives = md.dives().unwrap();
+    let start = |id| by_id(&dives, id).start;
+    assert_eq!(
+        start("UUID-100"),
+        at(2024, 12, 31, 23, 40, 0),
+        "winter time"
+    );
+    assert_eq!(start("UUID-101"), at(2025, 6, 14, 9, 30, 0), "summer time");
+    assert_eq!(start("UUID-102"), at(2025, 6, 14, 14, 0, 0), "GMT");
+    assert_eq!(start("UUID-103"), at(2025, 6, 15, 8, 0, 0), "behind UTC");
+    assert_eq!(start("UUID-104"), at(2025, 6, 15, 11, 0, 0), "a day ahead");
+    assert_eq!(start("pk:6"), at(2025, 6, 16, 7, 0, 0), "no zone");
+    assert_eq!(start("UUID-108"), at(2025, 6, 18, 9, 0, 0));
+    let d = by_id(&dives, "UUID-106");
+    assert_eq!(d.start, at(2025, 6, 17, 10, 0, 0), "half-hour offset");
+    assert_eq!(d.end, at(2025, 6, 17, 10, 25, 0));
 }
 
 #[test]
