@@ -228,9 +228,10 @@ The app bundle identifier `com.querton.divelens.desktop` never changes either, f
 Use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choose):
 
 - **Bug report**: something does not work as expected.
+- **Feature request**: an idea for Dive Lens.
 - **Support a new dive application**: you would like Dive Lens to read another dive log. If you want to write that reader yourself, open this issue first so the approach can be discussed, then see [Adding a dive application](#adding-a-dive-application).
 
-Both remind you of the privacy rule above:
+Each reminds you of the privacy rule above:
 
 - For a bug, describe the problem in the issue. If the Dive Lens log files are needed, you will be asked for them: send them only by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number, never in an issue. In the issue itself, paste at most the relevant lines, with site names, places, people's names and file paths removed.
 - For a new dive application, a fictional log, or your real log once anonymised, helps testing. Send it by e-mail to the same address, with the issue number, never attached to the issue. It is used to test the new reader. The repository itself only ever holds fictional or properly anonymised test data, never a real log as it is (see [Test data](#test-data-fictional-or-anonymised)).
