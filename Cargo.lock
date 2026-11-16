@@ -867,7 +867,7 @@ dependencies = [
 
 [[package]]
 name = "divelens"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "chrono",
  "divelens-core",
@@ -888,7 +888,7 @@ dependencies = [
 
 [[package]]
 name = "divelens-core"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -2880,7 +2880,7 @@ dependencies = [
 
 [[package]]
 name = "libdivecomputer-sys"
-version = "2.1.0"
+version = "2.1.1"
 dependencies = [
  "cc",
 ]
