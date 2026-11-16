@@ -2,8 +2,9 @@
 DiveLens plugin manifest.
 
 The plugin is invisible: it declares the DiveLens metadata fields, keeps a
-local link with the DiveLens app, and offers two Library menu items that open
-the app on the matching screen. All user interface lives in the app.
+local link with the DiveLens app, and offers two Library menu items and a
+Help menu item that open the app on the matching screen. All user interface
+lives in the app.
 
 The version is a copy of app/package.json's: change it with
 `npm run set-version <version>` from app/, never by hand (the app's tests
@@ -40,6 +41,16 @@ return {
             title = LOC "$$$/DiveLens/Menu/TagSelection=Tag Selection…",
             file = "MenuTagSelection.lua",
             enabledWhen = "photosSelected",
+        },
+    },
+
+    -- Help › Plug-in Extras: Lightroom puts plug-in items there, never in the
+    -- Help menu itself. The submenu mixes every plug-in's items, hence the
+    -- name in the title.
+    LrHelpMenuItems = {
+        {
+            title = LOC "$$$/DiveLens/Menu/Settings=Dive Lens Settings…",
+            file = "MenuSettings.lua",
         },
     },
 

@@ -60,6 +60,9 @@ Dive Lens has no window inside Lightroom. Everything happens in the Dive Lens ap
 
 - **Library › Plug-in Extras › Create Collections…**
 - **Library › Plug-in Extras › Tag Selection…** (only when photos are selected)
+- **Help › Plug-in Extras › Dive Lens Settings…**, which opens the app on **Settings** (section 5)
+
+The Dive Lens entry in **File › Plug-in Manager…** also has **Open Dive Lens** and **Open Settings** buttons, and links to the Dive Lens website and to its source code on GitHub.
 
 Lightroom must stay open while you use the app. The app's sidebar shows whether Lightroom is connected and how many photos are selected. If it says **Lightroom not connected**, nothing can be written: check that Lightroom is open and the plug-in is enabled in the Plug-in Manager.
 
@@ -165,6 +168,7 @@ Every change is saved at once.
 - **Copy depth to GPS altitude** (off by default): also writes each photo's depth as a negative altitude, in metres.
   - The Dive Lens depth field only exists in Lightroom: it is lost on export.
   - The GPS altitude travels with exported photos and shows in other software.
+  - Dive Lens always writes the GPS altitude in metres, the field's standard, whatever the units chosen here. With depths in feet, the same photo shows 60 ft in the Dive Lens depth field, while its GPS altitude is in metres (18.3 m below sea level): this is expected.
   - The copy replaces a GPS altitude already on the photo; **Edit › Undo** in Lightroom brings it back. Photos without a depth keep theirs.
 
 **Collections**
