@@ -14,6 +14,10 @@ rusqlite = { version = "0.42.0", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 gix = { version = "0.90", default-features = false, features = ["sha1"] }
 quick-xml = "0.42"
+# Time zones of MacDive dives, built in: the same on every system.
+chrono-tz = "0.10.4"
+# MacDive archives each dive's time zone as a binary property list.
+plist = { version = "1.10.3", default-features = false }
 
 [dev-dependencies]
 serde_json = "1.0.154"
