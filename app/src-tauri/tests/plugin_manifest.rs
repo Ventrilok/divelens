@@ -113,6 +113,12 @@ fn plugin_modules_load_without_lightroom() {
             end
             return m
         end
+        check("Send", "toApp")
+        check("Selection", "push sendThumbnails describe describePhotos sendPhotos")
+        local write = check("CatalogWrite", "formatDate write writeGpsLater advance photosBefore logSecondWrite")
+        assert(type(write.WRITE_TIMEOUT) == "number" and type(write.PROGRESS_EVERY) == "number")
+        check("ApplyTags", "run")
+        check("ApplyCollections", "find run listSets")
         check("Link", "start stop isStopped isConnected show showWhenConnected appSettingsFolder")
         "#,
     );
