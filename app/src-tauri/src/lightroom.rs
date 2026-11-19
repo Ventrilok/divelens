@@ -1,4 +1,6 @@
-//! Link with the DiveLens Lightroom plugin (plugin side: `plugin/DiveLens.lrdevplugin/Link.lua`).
+//! Link with the DiveLens Lightroom plugin (plugin side: `Link.lua` for the link itself, with
+//! `Send.lua`, `Selection.lua`, `ApplyTags.lua` and `ApplyCollections.lua`, all in
+//! `plugin/DiveLens.lrdevplugin/`).
 //!
 //! The plugin listens on two local sockets, one per direction, and publishes
 //! their ports and a one-time token in a link file in the app's settings
