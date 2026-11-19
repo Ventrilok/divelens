@@ -306,21 +306,13 @@ impl Settings {
     }
 
     fn read(dir: &Path) -> Self {
-        std::fs::read_to_string(dir.join(FILE_NAME))
-            .ok()
-            .and_then(|s| serde_json::from_str::<Self>(&s).ok())
-            .map(|mut s| {
-                s.version = CURRENT_VERSION;
-                s
-            })
-            .unwrap_or_default()
+        let mut settings: Self = crate::files::read_json(&dir.join(FILE_NAME));
+        settings.version = CURRENT_VERSION;
+        settings
     }
 
     fn write(&self, dir: &Path) -> std::io::Result<()> {
-        std::fs::create_dir_all(dir)?;
-        let tmp = dir.join(format!("{FILE_NAME}.tmp"));
-        std::fs::write(&tmp, serde_json::to_string_pretty(self)?)?;
-        std::fs::rename(tmp, dir.join(FILE_NAME))
+        crate::files::write_json(dir, FILE_NAME, self)
     }
 
     /// Changes the settings on disk and returns the result. `change` sees

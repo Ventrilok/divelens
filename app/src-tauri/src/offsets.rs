@@ -32,20 +32,13 @@ impl Offsets {
     /// Loads the offsets of `app` (its own file); a missing or unreadable
     /// file gives none.
     pub fn load(dir: &Path, app: &DiveApp) -> Self {
-        std::fs::read_to_string(dir.join(app.offsets_file))
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+        crate::files::read_json(&dir.join(app.offsets_file))
     }
 
     pub fn save(&self, dir: &Path, app: &DiveApp) -> std::io::Result<()> {
-        std::fs::create_dir_all(dir)?;
-        let name = app.offsets_file;
-        let tmp = dir.join(format!("{name}.tmp"));
         let mut file = self.clone();
         file.version = CURRENT_VERSION;
-        std::fs::write(&tmp, serde_json::to_string_pretty(&file)?)?;
-        std::fs::rename(tmp, dir.join(name))
+        crate::files::write_json(dir, app.offsets_file, &file)
     }
 
     pub fn get(&self, key: &str) -> Option<i32> {

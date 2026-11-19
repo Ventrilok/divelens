@@ -200,17 +200,11 @@ pub struct State {
 
 impl State {
     pub fn load(dir: &Path) -> Self {
-        std::fs::read_to_string(dir.join(STATE_FILE))
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
+        crate::files::read_json(&dir.join(STATE_FILE))
     }
 
     pub fn save(&self, dir: &Path) -> std::io::Result<()> {
-        std::fs::create_dir_all(dir)?;
-        let tmp = dir.join(format!("{STATE_FILE}.tmp"));
-        std::fs::write(&tmp, serde_json::to_string_pretty(self)?)?;
-        std::fs::rename(tmp, dir.join(STATE_FILE))
+        crate::files::write_json(dir, STATE_FILE, self)
     }
 }
 

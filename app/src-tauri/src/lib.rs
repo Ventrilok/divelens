@@ -1,6 +1,7 @@
 mod applog;
 mod collections;
 mod dive_log;
+mod files;
 mod lightroom;
 mod offsets;
 mod selection;
@@ -25,6 +26,7 @@ use tauri_plugin_updater::UpdaterExt;
 
 use collections::{Choices, Period, Preview, Searches, Session};
 use dive_log::{LogChanged, LogId, SourceInfo, WriteInProgress, Writes, guarded_change};
+use files::config_dir;
 use lightroom::{
     ApplyOutcome, CollectionSet, Command, End, Event, LinkFile, Status, Timing, WrittenCollection,
 };
@@ -217,10 +219,6 @@ struct DiveLog {
 struct LoadError {
     source: SourceInfo,
     error: Error,
-}
-
-fn config_dir(app: &AppHandle) -> PathBuf {
-    app.path().app_config_dir().expect("no config folder")
 }
 
 /// Login name, which names Subsurface's standard file.
