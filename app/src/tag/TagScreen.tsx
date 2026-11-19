@@ -8,7 +8,7 @@
 // each camera gets a clock offset as in Create Collections, and Apply
 // writes only if the selection is still the one described.
 
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   findSelectionPhotos,
   onApplyProgress,
@@ -29,7 +29,9 @@ import { DiveList } from "../dives/DiveList";
 import { FilterBar } from "../dives/FilterBar";
 import { NO_PICK, pickAround, SitePicker, type SitePick } from "./SitePicker";
 import { formatGps, formatPhotoSpan } from "../ui/format";
-import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters, type Sort } from "../dives/filters";
+import { EmptyList } from "../dives/EmptyList";
+import { useDiveBrowser } from "../dives/useDiveBrowser";
+import type { Sort } from "../dives/filters";
 import { formatInt, t, tn } from "../i18n";
 import { gpsInput } from "./sites";
 import { canApplyTag, selectionChanged, tagBlocker, tagSummary } from "./rules";
@@ -138,17 +140,9 @@ export function TagScreen({
   const [placeKind, setPlaceKind] = useState<"diveSite" | "site">("diveSite");
   const [pick, setPick] = useState<SitePick>(NO_PICK);
   const [chosenId, setChosenId] = useState<string | null>(null);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [run, setRun] = useState<Run>({ state: "idle" });
 
-  const deferredFilters = useDeferredValue(filters);
-  const index = useMemo(() => searchIndex(dives), [dives]);
-  const shown = useMemo(() => sortDives(applyFilters(dives, deferredFilters, index), sort), [dives, deferredFilters, index, sort]);
-
-  useEffect(() => {
-    if (!shown.some((d) => d.id === focusedId)) setFocusedId(shown[0]?.id ?? null);
-  }, [shown, focusedId]);
+  const { filters, setFilters, shown, focusedId, setFocusedId, focused } = useDiveBrowser(dives, sort);
 
   useEffect(() => {
     const stop = onApplyProgress((done, total) =>
@@ -282,7 +276,6 @@ export function TagScreen({
       .catch(() => {});
   };
 
-  const focused = dives.find((d) => d.id === focusedId) ?? null;
   const diveSiteUsable = chosen !== null && chosen.site.id !== null;
   const usesDiveSite = withPlace && placeKind === "diveSite" && diveSiteUsable;
   const pickedSite = sites.find((s) => s.id === pick.siteId) ?? null;
@@ -419,14 +412,7 @@ export function TagScreen({
                     source={sourceName(log.source.kind)}
                   />
                 ) : (
-                  <div className="card list-card list-empty">
-                    <p className="muted">{t("filter.none")}</p>
-                    {hasFilters(filters) && (
-                      <button type="button" className="btn btn-s" onClick={() => setFilters(NO_FILTERS)}>
-                        {t("filter.clearAll")}
-                      </button>
-                    )}
-                  </div>
+                  <EmptyList filters={filters} onChange={setFilters} />
                 )}
                 <DiveDetail log={log.source} dive={focused} units={units} capabilities={capabilities} />
               </div>
