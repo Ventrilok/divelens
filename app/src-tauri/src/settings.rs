@@ -18,7 +18,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::dive_log::{LogId, SourceInfo, WriteInProgress, Writes, guarded_change, source_info_of};
 use crate::files::config_dir;
-use crate::{applog, check_update, send_log_level};
+use crate::update::check_update;
+use crate::{applog, send_log_level};
 
 /// Where the app writes its log (`None`: no home folder).
 pub(crate) struct LogFile(pub(crate) Option<PathBuf>);
