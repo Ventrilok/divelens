@@ -32,11 +32,13 @@ The installed version is enough (the reference, or a trial installer from a manu
 | A1 | 2025-06-14 09:40:00 | 101 | 18.0 m |
 | A2 | 2025-06-14 09:50:00 | 101 | 15.0 m |
 | A3 | 2025-06-14 10:00:00 | 101 | 10.0 m |
-| B1 | 2025-06-14 14:10:00 | 102 | 12.0 m |
+| B1 | 2025-06-14 14:10:00 | 102 | 12.0 m (first dive computer, Mares Genius; the second computer of dive 102 is not used for photo depth) |
 | B2 | 2025-06-14 14:20:00 | 102 | (no value to check) |
 | X1 | 2025-06-14 12:00:00 | none (between the two dives) | none |
 
 The fictional dive log holds two dives that day. Dive 101: 09:30 to 10:12:30, site Atlantis / North Reef / Coral Garden, GPS 12.5, -45.25. Dive 102: 14:00 to 14:35, site Glacier Wall, GPS -64.125, -60.5.
+
+Dive Lens fields are read in Lightroom's Metadata panel (Dive Lens section); the location fields in its IPTC / Location fields.
 
 Expected for dive 101: `MaxDepth` 18.4 m, country "Atlantis", city "North Reef", location "Coral Garden", GPS 12°30'N 45°15'W.
 
@@ -46,16 +48,16 @@ Each check starts from the state left by the previous one unless it says otherwi
 
 | # | Start | Action | Expected |
 |---|---|---|---|
-| 1 | Clean. Select A1, A2, A3. | Tag the selection with dive 101, **Apply**. | Dive Lens fields filled. Dive values as above. Each photo has its own depth: A1 18.0 m, A2 15.0 m, A3 10.0 m. GPS and altitude written. |
+| 1 | Clean. Select A1, A2, A3. | **Library › Plug-in Extras › Tag Selection…**, choose dive 101, **Apply**. | Dive Lens fields filled. Dive values as above. Each photo has its own depth: A1 18.0 m, A2 15.0 m, A3 10.0 m. GPS and altitude written. |
 | 2 | After 1. | **Edit › Undo** once. | Everything is gone, GPS and altitude included. |
-| 3 | After 1 (redo it if needed). Select A1. | Tag it with dive 102, **Apply**. | The dive 101 values are gone from A1; it shows dive 102 values. |
-| 4 | After 3. Select A1. | Tag it again with dive 102, **Apply**. | Nothing else changes. |
-| 5 | Select no photo. | Try to apply. | A clear message; nothing written. |
+| 3 | Start from the state after check 1 (run it again first if you undid it). Select A1. | **Library › Plug-in Extras › Tag Selection…**, choose dive 102, **Apply**. | The dive fields show dive 102 (number 102, Glacier Wall, GPS -64.125, -60.5 as Lightroom displays it). A1's own values from dive 101 (photo depth, photo temperature, elapsed time, clock offset) are empty. No photo depth is written, since A1 (09:40) is outside dive 102 (14:00-14:35). A refusal is not expected. |
+| 4 | After 3. Select A1. | **Tag Selection…**, choose dive 102 again, **Apply**. | Nothing else changes. |
+| 5 | Select no photo. | Open **Tag Selection…** and note what the app shows (Apply may be disabled, with a message saying to select photos). | Nothing is written. |
 | 6 | Select A1, open the app on that selection. | Change the selection in Lightroom (select B1), then click **Apply** in the app. | Never the values of the old selection on other photos: either a refusal with nothing written, or the app describes the new selection again and writes on the new one. |
 | 7 | Clean. Select A1, A2, A3, B1, B2. | **Library › Plug-in Extras › Create Collections…** for dives 101 and 102. | Collections in the "Dive Lens" set, photos in the right collection, values written. |
 | 8 | After 7. | **Edit › Undo** once. | Note exactly what one Undo takes back. If a collection set was just created, it forms its own Undo step (separate write in the current code). |
-| 9 | After 7 (redo it if needed). | Run **Create Collections…** again. | Nothing duplicated. |
-| 10 | Clean. Settings: units in feet, altitude option on. Tag A1, A2, A3 with dive 101. | **Apply**. | Depths shown in ft, altitude correct. Set the settings back afterwards. |
+| 9 | After 7 (run check 7 again first if you undid it). | Run **Create Collections…** again. | Nothing duplicated. |
+| 10 | Clean. Settings: units in feet, altitude option on. Select A1, A2, A3. | **Tag Selection…**, dive 101, **Apply**. | Depths shown in ft: A1 photo depth about 59 ft (18.0 m), max depth about 60 ft (18.4 m); GPS altitude about -18 m (Lightroom shows it in its own unit). The exact texts are those recorded in the reference run. Set the settings back afterwards. |
 | 11 | Windows only. | Play checks 2 and 8. | One Undo is enough. |
 
 If the reference shows on Windows that one Undo does not take back both writes, stop and report it: it is not fixed by a refactoring.
