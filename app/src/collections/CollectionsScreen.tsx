@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { applyCollections, collectionSets, collectionsPreview, findCollectionPhotos, onApplyProgress, suggestOffsets } from "../api";
 import { clampMargin, clampOffset, initialOffsets, MARGIN_STEP_MIN, MAX_MARGIN_MIN } from "../apply/cameras";
 import { placeLabel, setExists } from "./collectionPlace";
+import { barText, canApplyCollections, collectionsBlocker, writesNote, type Search } from "./rules";
 import { logRef, nextSearchNumber } from "../diveLog";
 import { CameraCard } from "../apply/CameraCard";
 import { Icon } from "../ui/Icon";
@@ -23,15 +24,8 @@ import type {
   Dive,
   DiveLog,
   LightroomStatus,
-  Period,
   Settings,
 } from "../types";
-
-type Search =
-  | { state: "idle" }
-  | { state: "searching" }
-  | { state: "ready"; period: Period }
-  | { state: "failed"; message: string };
 
 /** Where step 2 stands, for the app around it. */
 export type Phase = "adjust" | "writing" | "summary";
@@ -365,14 +359,8 @@ export function CollectionsScreen({
   const total = preview?.total ?? 0;
   const withPhotos = preview?.dives.filter((d) => d.photos > 0).length ?? 0;
 
-  let blocker: string | null = null;
-  if (!lr.connected) blocker = t("coll.disconnected");
-  else if (search.state === "searching") blocker = t("coll.searching");
-  else if (search.state === "failed") blocker = search.message;
-  else if (parentMissing) blocker = t("coll.parentMissing", { path: parent.join(" › ") });
-  else if (preview && total === 0) blocker = t("coll.err.nothingToWrite");
+  const blocker = collectionsBlocker({ connected: lr.connected, search, parentMissing, parent, preview });
 
-  const units = `${log.units.depth === "ft" ? "ft" : "m"}, ${log.units.temp === "f" ? "°F" : "°C"}`;
   const place = placeLabel(settings.collections, t("settings.root"));
 
   return (
@@ -570,9 +558,9 @@ export function CollectionsScreen({
           </div>
         ) : (
           <div className="selection-text">
-            <span className="small">{blocker ?? t("coll.writes", { place })}</span>
+            <span className="small">{barText(blocker, place)}</span>
             <span className="muted small">
-              {t("coll.writesNote", { units, altitude: t(settings.depthToAltitude ? "coll.on" : "coll.off") })} ·{" "}
+              {writesNote(log.units, settings.depthToAltitude)} ·{" "}
               {t("coll.undoShort")}
             </span>
           </div>
@@ -590,7 +578,7 @@ export function CollectionsScreen({
           <button
             type="button"
             className="btn btn-p"
-            disabled={blocker !== null || !preview || writing}
+            disabled={!canApplyCollections(blocker, preview, writing)}
             onClick={apply}
           >
             {tn("tag.apply", total)}

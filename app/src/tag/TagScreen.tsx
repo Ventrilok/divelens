@@ -32,6 +32,7 @@ import { formatGps, formatPhotoSpan } from "../ui/format";
 import { applyFilters, hasFilters, NO_FILTERS, searchIndex, sortDives, type Filters, type Sort } from "../dives/filters";
 import { formatInt, t, tn } from "../i18n";
 import { gpsInput } from "./sites";
+import { canApplyTag, selectionChanged, tagBlocker, tagSummary } from "./rules";
 import type {
   ApplyOutcome,
   CollectionsError,
@@ -86,12 +87,6 @@ function describeFailure(e: CollectionsError): string | null {
     default:
       return t("tag.perPhoto.failed", { detail: e.error });
   }
-}
-
-/** Nothing was written because the selection is no longer the one described: it is described again. */
-function selectionChanged(e: ApplyOutcome | TagError): boolean {
-  if ("outcome" in e) return e.outcome === "failed" && (e.reason === "selectionChanged" || e.reason === "staleSelection");
-  return e.error === "noPhotos";
 }
 
 function failure(e: ApplyOutcome | TagError): string {
@@ -302,27 +297,25 @@ export function TagScreen({
   };
 
   const placeName = usesDiveSite ? chosen?.site.name : withPlace && placeKind === "site" ? pickedSite?.name : null;
-  const diveLabel = chosen ? String(chosen.number ?? chosen.site.name ?? "—") : "";
 
   // What blocks Apply, in the order the user meets it.
-  let blocker: string | null = null;
-  if (!lr.connected) blocker = t("tag.disconnected");
-  else if (lr.selected === 0) blocker = t("tag.selectInLr");
-  else if (!withDive && !withPlace) blocker = t("tag.chooseSomething");
-  else if (withDive && !chosen) blocker = t("tag.chooseDive");
-  else if (needsValues && readFailure) blocker = readFailure;
-  else if (profileLoading) blocker = t("detail.profileLoading");
-  else if (needsValues && (!current || !freshCounts)) blocker = t("tag.perPhoto.reading");
-  else if (withPlace && !usesDiveSite && !pickedSite) blocker = t("tag.chooseSite");
-  else if (gpsError) blocker = t("tag.badGps");
+  const blocker = tagBlocker({
+    connected: lr.connected,
+    selected: lr.selected,
+    withDive,
+    withPlace,
+    chosen: chosen !== null,
+    needsValues,
+    readFailure,
+    profileLoading,
+    current: current !== null,
+    freshCounts: !!freshCounts,
+    usesDiveSite,
+    pickedSite: pickedSite !== null,
+    gpsError,
+  });
 
-  const summary = !blocker
-    ? chosen && placeName
-      ? t("tag.sumDiveAndPlace", { n: diveLabel, site: placeName })
-      : chosen
-        ? t("tag.sumDive", { n: diveLabel })
-        : t("tag.sumPlace", { site: placeName ?? "" })
-    : blocker;
+  const summary = tagSummary(blocker, chosen, placeName);
 
   const apply = () => {
     const choice: TagChoice = {
@@ -587,7 +580,7 @@ export function TagScreen({
           <button type="button" className="btn btn-s" onClick={onCancel} disabled={writing}>
             {t("tag.cancel")}
           </button>
-          <button type="button" className="btn btn-p" disabled={blocker !== null || writing} onClick={apply}>
+          <button type="button" className="btn btn-p" disabled={!canApplyTag(blocker, writing)} onClick={apply}>
             {tn("tag.apply", lr.selected)}
           </button>
         </div>
