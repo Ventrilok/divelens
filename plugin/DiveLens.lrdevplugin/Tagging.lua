@@ -104,10 +104,14 @@ local DIVE_IDENTITY = { "Source", "StartDate", "DiveId" }
 Tagging.MARKER = "WrittenAltitude"
 
 --- DiveLens fields "Tag Selection" and "Create Collections" read on each
---- photo before writing a dive (see retagChanges, photoWrites).
-Tagging.RETAG_FIELDS = {
-    "Source", "StartDate", "DiveId", "PhotoDepth", "PhotoTemp", "PhotoElapsed", "ClockOffset", Tagging.MARKER,
-}
+--- photo before writing a dive (see retagChanges, photoWrites): the dive
+--- identity, then the photo's own values, then the altitude marker.
+Tagging.RETAG_FIELDS = {}
+for _, list in ipairs { DIVE_IDENTITY, PER_PHOTO, { Tagging.MARKER } } do
+    for _, field in ipairs(list) do
+        table.insert(Tagging.RETAG_FIELDS, field)
+    end
+end
 
 local FT_PER_M = 3.28084 -- as core/src/tags.rs
 
