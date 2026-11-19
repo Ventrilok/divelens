@@ -1,6 +1,6 @@
 //! "Create Collections" (spec F5): the photos found in Lightroom for the
 //! chosen dives, their cameras, live counts and the request to write.
-//! Nothing here talks to Lightroom; the collections commands do.
+//! Nothing here talks to Lightroom; the collections commands (`collections.rs`) do.
 
 use std::collections::{BTreeSet, HashMap};
 
@@ -43,7 +43,7 @@ pub struct Session {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Period {
-    /// Number of the search (see [`Searches`]): the live counts, "Suggest"
+    /// Number of the search (see [`Searches`](crate::apply::searches::Searches)): the live counts, "Suggest"
     /// and "Apply" name it.
     pub search: u64,
     /// First and last day searched, `YYYY-MM-DD`.

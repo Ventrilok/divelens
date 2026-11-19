@@ -13,13 +13,13 @@ use divelens_core::tags::TagRequest;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
-use crate::Lightroom;
 use crate::apply::errors::CollectionsError;
 use crate::apply::offsets::Offsets;
 use crate::apply::searches::{Searches, keep_search};
 use crate::apply::send;
 use crate::dive_log::{LogChanged, LogId, SourceInfo, Writes, open, source_info};
 use crate::files::config_dir;
+use crate::lightroom::events::Lightroom;
 use crate::lightroom::{ApplyOutcome, Command};
 use crate::settings::{Settings, units_in_use};
 use selection::{DiveSpan, Selection, SelectionPhotos, TagPreview};

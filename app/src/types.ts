@@ -153,7 +153,7 @@ export interface SelectionPreview {
   thumbnails: (string | null)[];
 }
 
-/** What Tag Selection writes (app/src-tauri/src/lib.rs, TagChoice). */
+/** What Tag Selection writes (app/src-tauri/src/tag.rs, TagChoice). */
 export interface TagChoice {
   diveId: string | null;
   location: { kind: "diveSite" } | { kind: "site"; siteId: string; lat: number | null; lon: number | null } | null;
@@ -163,7 +163,7 @@ export interface TagChoice {
   offsets: Record<string, number>;
 }
 
-/** The photos selected in Lightroom, described for Tag Selection's per-photo values (app/src-tauri/src/selection.rs). */
+/** The photos selected in Lightroom, described for Tag Selection's per-photo values (app/src-tauri/src/tag/selection.rs). */
 export interface SelectionPhotos {
   /** Number of the description: the counts, Suggest and Apply name it (a newer one replaces it). */
   search: number;
@@ -218,7 +218,7 @@ export type TagError =
     }
   | { error: "source"; detail: ReaderError };
 
-// --- Create Collections (app/src-tauri/src/collections.rs) ------------------
+// --- Create Collections (app/src-tauri/src/collections.rs, collections/plan.rs) ------------------
 
 export interface Camera {
   key: string;
@@ -285,7 +285,7 @@ export type CollectionsError =
   | { error: "source"; detail: ReaderError }
   | { error: "lightroom"; reason: string; detail: string | null };
 
-// --- Settings (app/src-tauri/src/settings.rs) -------------------------------
+// --- Settings (app/src-tauri/src/settings.rs, settings/file.rs) -------------------------------
 
 export type Sort = "recent" | "oldest" | "depth";
 

@@ -13,8 +13,13 @@
 //! cut by a lost link, gets no reply: its channel is dropped, which the caller
 //! sees as "link lost". Requests are never retried.
 //!
-//! Nothing here depends on Tauri: [`run_session`] reports to a callback, the
-//! Tauri side turns that into UI events.
+//! The protocol and session in this file do not depend on Tauri:
+//! [`run_session`] reports to a callback. The Tauri side lives in the
+//! submodules: [`events`] turns that callback into UI events, [`commands`]
+//! holds what the screens invoke.
+
+pub(crate) mod commands;
+pub(crate) mod events;
 
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, ErrorKind, Write};

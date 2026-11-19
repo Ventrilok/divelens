@@ -10,8 +10,8 @@ use std::sync::mpsc;
 
 use tauri::{AppHandle, Manager};
 
-use crate::Lightroom;
 use crate::lightroom::Command;
+use crate::lightroom::events::Lightroom;
 use errors::CollectionsError;
 
 /// Hands a request to the plugin link (never waits); its answer comes on the
