@@ -2,7 +2,7 @@
 //! Lightroom and their cameras, one clock offset each as in Create
 //! Collections, the live counts and "Suggest" for the chosen dive, and the
 //! values written on the photos taken during it. Nothing here talks to
-//! Lightroom; `lib.rs` does.
+//! Lightroom; the Tag Selection commands do.
 //!
 //! A photo is in the dive when its capture time corrected by its camera's
 //! offset falls between the dive's start and end, exactly as in Create

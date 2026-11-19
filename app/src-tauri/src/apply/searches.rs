@@ -148,7 +148,7 @@ pub struct CameraCount {
 /// then never replace the newer one the screen shows.
 ///
 /// Tag Selection keeps the photos of the selection the same way, in a
-/// `Searches` of its own (`S` is then [`crate::selection::Selection`]).
+/// `Searches` of its own (`S` is then [`crate::tag::selection::Selection`]).
 pub struct Searches<S> {
     started: u64,
     kept: Option<(u64, S)>,
@@ -224,7 +224,7 @@ pub(crate) fn keep_search<S>(
 mod tests {
     use super::*;
     use crate::collections::plan::Session;
-    use crate::selection::Selection;
+    use crate::tag::selection::Selection;
     use divelens_core::subsurface;
 
     #[test]
