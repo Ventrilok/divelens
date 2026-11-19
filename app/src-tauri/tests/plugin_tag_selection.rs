@@ -336,3 +336,30 @@ fn tag_selection_plans_per_photo_values_and_checks_the_selection() {
         "#,
     );
 }
+
+#[test]
+fn dive_values_reach_the_plugin_by_name_with_real_values() {
+    use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units};
+    let mut dive = sample_dive();
+    dive.temp_low_c = Some(24.5);
+    dive.rating = Some(4);
+    dive.site.location = Some("North Reef".into());
+    let lines = plan(&TagRequest {
+        dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
+        location: Some(LocationTags::new(&dive.site, None, None)),
+        ..TagRequest::default()
+    })
+    .unwrap();
+    assert!(
+        lines.contains(&"plugin TempLow=24.5°C".to_string()),
+        "{lines:?}"
+    );
+    assert!(
+        lines.contains(&"plugin Rating=★★★★".to_string()),
+        "{lines:?}"
+    );
+    assert!(
+        lines.contains(&"raw city=North Reef".to_string()),
+        "{lines:?}"
+    );
+}
