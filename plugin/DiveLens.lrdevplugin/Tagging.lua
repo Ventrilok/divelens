@@ -1,8 +1,9 @@
 --[[
 Turns a "tag the selection" request from the app into the list of changes to
 make on each photo. Pure Lua (no Lightroom import) so it is tested outside
-Lightroom. Link.lua makes the two catalog writes, the GPS and altitude in
-the second (splitGps); what goes in each, photo by photo (tagWrites,
+Lightroom. ApplyTags.lua and ApplyCollections.lua make the two catalog
+writes, through CatalogWrite.lua, the GPS and altitude in the second
+(splitGps); what goes in each, photo by photo (tagWrites,
 collectionWrites), and what the app is told afterwards (applyReply), is
 decided here.
 
@@ -261,8 +262,9 @@ end
 --- Progress of an "Apply"'s first write, told in photos, `total` in all.
 --- Call `advance()` after each photo: every `every` photos it returns the
 --- number done, nil otherwise, and never `total` (the app's answer tells the
---- end). The second write tells nothing: it must not pause (see Link.lua,
---- writeGpsLater), so the count stays where the first write left it.
+--- end). The second write tells nothing: it must not pause (see
+--- CatalogWrite.writeGpsLater), so the count stays where the first write
+--- left it.
 function Tagging.progress(total, every)
     local done = 0
     local p = {}
@@ -285,7 +287,7 @@ end
 
 --- True when a change of the second write clears the GPS altitude: the one
 --- write there Lightroom may refuse, which then leaves the altitude
---- (Link.lua, writeGps).
+--- (CatalogWrite.lua, writeGps).
 function Tagging.isAltitudeClear(change)
     return change.field == "gpsAltitude" and change.value == nil
 end
@@ -455,7 +457,7 @@ end
 --- Why "Tag Selection" writes nothing on `photos`, those selected now, or
 --- nil. With per-photo values (`perPhoto`, from planPhotos), the selection
 --- must be exactly the one described to the app (`described` = { id, set
---- }, kept by Link.lua's describeSelection): "staleSelection" when the
+--- }, kept by Selection.describe): "staleSelection" when the
 --- values are for another description, or none was made;
 --- "selectionChanged" when the photos are not those described. `idOf`
 --- gives a photo's id.

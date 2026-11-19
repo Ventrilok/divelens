@@ -27,7 +27,7 @@ local ApplyTags = {}
 -- write; its altitude, when cleared, in the second, and its altitude
 -- marker in the first, with the other Dive Lens fields. With per-photo
 -- values (Tagging.planPhotos), the selection must be exactly the one
--- described to the app (describeSelection): otherwise nothing is written.
+-- described to the app (Selection.describe): otherwise nothing is written.
 -- The photos taken during the dive get their values, and the other dive's
 -- are not cleared on them first (Tagging.notOverwritten). Always answers
 -- the app.

@@ -57,7 +57,7 @@ end
 -- The selected `photos` as described to the app (describePhotos), and as a
 -- set (Tagging.photoSet). Lightroom's metadata is read once per selection:
 -- kept with the photos it describes, and reused while the selection is
--- exactly those photos (for the live selection and describeSelection).
+-- exactly those photos (for the live selection and Selection.describe).
 local function describedSelection(s, photos)
     local kept = s.selectionDescribed
     if kept and Tagging.sameSelection(kept.set, photos, Tagging.photoId) then return kept.list, kept.set end
