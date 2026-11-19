@@ -10,10 +10,14 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use divelens_core::apps::{self, DiveApp, Os};
+use divelens_core::apps::{self, DiveApp, Kept, Opened, Os, Places};
+use divelens_core::profile::Sample;
+use divelens_core::{Capabilities, Dive, Error, Site};
 use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Manager};
 
-use crate::settings::Settings;
+use crate::files::config_dir;
+use crate::settings::{ChangeError, Settings, UiUnits, change_settings, source_units};
 
 /// The dive log some settings point at.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -173,6 +177,158 @@ impl Drop for Writing<'_> {
             (self.0.notify)(false);
         }
     }
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DiveLog {
+    source: SourceInfo,
+    /// How the log is stored, as its reader tells: what Settings says once
+    /// it is read (a key of the application's texts).
+    format: &'static str,
+    capabilities: Capabilities,
+    dives: Vec<Dive>,
+    /// Every named site of the log (Tag Selection › other site).
+    sites: Vec<Site>,
+    /// Units of the dive application's preferences (the settings may force
+    /// others).
+    source_units: UiUnits,
+}
+
+/// Error sent to the UI: the reader error plus the source it concerns.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct LoadError {
+    source: SourceInfo,
+    error: Error,
+}
+
+/// Login name, which names Subsurface's standard file.
+pub(crate) fn login_name() -> String {
+    ["LOGNAME", "USER", "USERNAME"]
+        .iter()
+        .find_map(|v| std::env::var(v).ok().filter(|n| !n.is_empty()))
+        .unwrap_or_else(|| "username".into())
+}
+
+/// Standard location of an application's log on this computer.
+pub(crate) fn standard_path(app: &AppHandle, dive_app: &DiveApp) -> PathBuf {
+    let home = app.path().home_dir().ok();
+    // ~/Library/Application Support on macOS, %APPDATA% on Windows.
+    let data = app.path().data_dir().ok();
+    let user = login_name();
+    let places = Places {
+        os: Os::current(),
+        home: home.as_deref(),
+        data: data.as_deref(),
+        user: &user,
+    };
+    (dive_app.standard_location)(&places).unwrap_or_default()
+}
+
+/// The configured dive log, as every action checks it.
+pub(crate) fn source_info(app: &AppHandle) -> SourceInfo {
+    configured(&config_dir(app), Os::current(), |dive_app| {
+        standard_path(app, dive_app)
+    })
+}
+
+/// The dive log `settings` point at: the application in use on this
+/// computer and its location.
+pub(crate) fn source_info_of(app: &AppHandle, settings: &Settings) -> SourceInfo {
+    SourceInfo::of(settings, Os::current(), |dive_app| {
+        standard_path(app, dive_app)
+    })
+}
+
+/// Opens the dive log `info` names with its application's reader. A log
+/// its reader reads whole is kept between requests while it does not change
+/// on disk (the last one only).
+pub(crate) fn open(app: &AppHandle, info: &SourceInfo) -> Result<Opened, Error> {
+    (info.app.open)(&info.path, &app.state::<Kept>())
+}
+
+/// Loads every dive of the configured dive log (off the UI thread: a dive log
+/// stored in iCloud may take a while to download).
+#[tauri::command]
+pub(crate) async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let source = source_info(&app);
+        let result = open(&app, &source).and_then(|o| {
+            let log = &o.log;
+            Ok((o.format, log.capabilities(), log.dives()?, log.sites()?))
+        });
+        match &result {
+            Ok((_, _, dives, sites)) => log::info!(
+                "dive log {}: {} dives, {} sites",
+                source.path.display(),
+                dives.len(),
+                sites.len()
+            ),
+            Err(e) => log::warn!("dive log {} not read: {e:?}", source.path.display()),
+        }
+        match result {
+            Ok((format, capabilities, dives, sites)) => Ok(DiveLog {
+                source_units: source_units(&app, &source).into(),
+                source,
+                format,
+                capabilities,
+                dives,
+                sites,
+            }),
+            Err(error) => Err(LoadError { source, error }),
+        }
+    })
+    .await
+    .expect("dive loading task failed")
+}
+
+/// Why a dive profile was not read.
+#[derive(Debug, Serialize)]
+#[serde(tag = "error", rename_all = "camelCase")]
+pub(crate) enum ProfileError {
+    /// The screen shows another dive log than the configured one.
+    LogChanged,
+    Source {
+        detail: Error,
+    },
+}
+
+impl From<LogChanged> for ProfileError {
+    fn from(_: LogChanged) -> Self {
+        Self::LogChanged
+    }
+}
+
+/// Profile of one dive of `log`, the dive log the screen shows; empty when
+/// the dive has none.
+#[tauri::command]
+pub(crate) async fn dive_profile(
+    app: AppHandle,
+    log: LogId,
+    id: String,
+) -> Result<Vec<Sample>, ProfileError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let info = source_info(&app);
+        log.check(&info)?;
+        open(&app, &info)
+            .and_then(|o| o.log.profile(&id))
+            .map_err(|detail| ProfileError::Source { detail })
+    })
+    .await
+    .expect("profile task failed")
+}
+
+/// Points DiveLens at another dive-log file, chosen by the user.
+#[tauri::command]
+pub(crate) fn set_source_path(
+    app: AppHandle,
+    path: Option<PathBuf>,
+) -> Result<Settings, ChangeError> {
+    change_settings(&app, |s| {
+        let dive_app = s.source.app(Os::current());
+        s.source.set_location(dive_app, path);
+    })
 }
 
 #[cfg(test)]
