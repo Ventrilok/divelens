@@ -106,7 +106,7 @@ describe("tagSummary", () => {
 
   it("falls back to the dive alone when the dive's site has no name", () => {
     // Known quirk, kept as is: the place is written but the summary does not say so.
-    expect(tagSummary(null, dive("s", null), undefined)).toBe(t("tag.sumDive", { n: "12" }));
+    expect(tagSummary(null, dive("s", null), null)).toBe(t("tag.sumDive", { n: "12" }));
   });
 
   it("labels a dive without a number by its site name, then a dash", () => {
