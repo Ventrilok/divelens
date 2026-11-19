@@ -97,7 +97,7 @@ From `app/`:
 
 The front-end tests run in a UTC+14 time zone on purpose. Dive times are wall-clock times, as the dive computer recorded them, and must never shift with the time zone of the computer running Dive Lens; running far from most people's zone catches any accidental shift.
 
-The plug-in's pure-Lua parts (JSON, message framing, manifest, metadata fields) are tested under Lua 5.1 by `cargo test -p divelens`. The parts that need Lightroom itself are checked by hand in Lightroom.
+The plug-in's pure-Lua parts (JSON, message framing, manifest, metadata fields, and the write rules: what each photo gets in the two catalog writes and the reply to the app) are tested under Lua 5.1 by `cargo test -p divelens`. The parts that need Lightroom itself are checked by hand in Lightroom.
 
 ## Trying the plug-in in Lightroom
 
