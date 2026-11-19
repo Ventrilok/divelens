@@ -307,6 +307,7 @@ impl Settings {
 
     fn read(dir: &Path) -> Self {
         let mut settings: Self = crate::files::read_json(&dir.join(FILE_NAME));
+        // A file written by an older version is read as the current layout; the default already carries the current version.
         settings.version = CURRENT_VERSION;
         settings
     }
