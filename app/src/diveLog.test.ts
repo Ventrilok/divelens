@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { importErrorText } from "./backup";
+import { importErrorText } from "./settings/backup";
 import {
   changeErrorText,
   isLogChanged,
