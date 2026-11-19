@@ -1,14 +1,15 @@
 //! "Tag Selection" (spec F8): the commands the screen calls. The photos
-//! selected in Lightroom and their per-photo values are in `selection`.
+//! selected in Lightroom and their per-photo values are in `selection`; what
+//! a choice writes, and which refusal wins, in `rules`.
 
+mod rules;
 pub(crate) mod selection;
 
 use std::sync::Mutex;
 use std::sync::mpsc;
 
 use divelens_core::Error;
-use divelens_core::collections::Span;
-use divelens_core::tags::{DiveTags, LocationTags, TagRequest, valid_gps};
+use divelens_core::tags::TagRequest;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
@@ -21,7 +22,7 @@ use crate::dive_log::{LogChanged, LogId, SourceInfo, Writes, open, source_info};
 use crate::files::config_dir;
 use crate::lightroom::{ApplyOutcome, Command};
 use crate::settings::{Settings, units_in_use};
-use selection::{DiveSpan, PerPhoto, Selection, SelectionPhotos, TagPreview};
+use selection::{DiveSpan, Selection, SelectionPhotos, TagPreview};
 
 /// Where the location written by Tag Selection comes from.
 #[derive(Deserialize)]
@@ -103,85 +104,39 @@ fn tag_request(
         .log;
     let units = units_in_use(app, info);
     let dive = match &choice.dive_id {
-        Some(id) => Some(
-            source
+        Some(id) => {
+            let dives = source
                 .dives()
-                .map_err(|detail| TagError::Source { detail })?
-                .into_iter()
-                .find(|d| &d.id == id)
-                .ok_or(TagError::UnknownDive)?,
-        ),
+                .map_err(|detail| TagError::Source { detail })?;
+            Some(rules::find_dive(dives, id)?)
+        }
         None => None,
     };
-    let location = match &choice.location {
-        None => None,
-        Some(LocationChoice::DiveSite) => {
-            let dive = dive.as_ref().ok_or(TagError::NothingChosen)?;
-            Some(LocationTags::new(&dive.site, None, None))
-        }
-        Some(LocationChoice::Site { site_id, lat, lon }) => {
-            match (lat, lon) {
-                (Some(a), Some(b)) if !valid_gps(*a, *b) => return Err(TagError::BadGps),
-                (Some(_), None) | (None, Some(_)) => return Err(TagError::BadGps),
-                _ => {}
-            }
-            let site = source
-                .sites()
-                .map_err(|detail| TagError::Source { detail })?
-                .into_iter()
-                .find(|s| s.id.as_deref() == Some(site_id.as_str()))
-                .ok_or(TagError::UnknownSite)?;
-            Some(LocationTags::new(&site, *lat, *lon))
-        }
-    };
-    if dive.is_none() && location.is_none() {
-        return Err(TagError::NothingChosen);
-    }
-    let mut request = TagRequest {
-        dive: dive
-            .as_ref()
-            .map(|d| DiveTags::new(d, units, info.app.name)),
-        location,
-        ..TagRequest::default()
-    };
+    let location = rules::location(choice.location.as_ref(), dive.as_ref(), || source.sites())?;
+    let mut request = rules::base_request(dive.as_ref(), location, units, info.app.name)?;
     let mut applied = std::collections::BTreeMap::new();
     // Per-photo values (spec F8): when the dive has a profile, on the photos
     // of the selection shown taken during the dive, with the offsets shown.
     // A profile that cannot be read leaves the dive data alone.
     if let Some(dive) = dive.filter(|d| d.has_profile) {
-        let described = match choice.search {
-            None => None,
-            Some(n) => {
-                let state = app.state::<TagState>();
-                let selections = state.selections.lock().expect("selections");
-                let selection = selections.get(n).ok_or(TagError::NoPhotos)?;
-                Some((
-                    selection.described,
-                    selection.in_dive(Span::from(&dive), &choice.offsets),
-                ))
-            }
-        };
+        let described = rules::described(
+            &app.state::<TagState>().selections,
+            choice.search,
+            &dive,
+            &choice.offsets,
+        )?;
         // The profile of the configured log, read now; only when needed.
-        match selection::per_photo(&dive, described, units, || source.profile(&dive.id)) {
-            Ok(PerPhoto::Values {
-                described,
-                photos,
-                applied: offsets,
-            }) => {
-                request.selection = Some(described);
-                request.photos = photos;
-                if Settings::load(&config_dir(app)).depth_to_altitude {
-                    request.copy_depth_to_altitude();
-                }
-                applied = offsets;
-            }
-            Ok(PerPhoto::Unreadable(e)) => log::warn!(
+        let outcome = selection::per_photo(&dive, described, units, || source.profile(&dive.id));
+        let (offsets, unreadable) = rules::apply_per_photo(&mut request, outcome, || {
+            Settings::load(&config_dir(app)).depth_to_altitude
+        })?;
+        if let Some(e) = unreadable {
+            log::warn!(
                 "profile of dive {} not read, dive data without per-photo values: {e:?}",
                 dive.id
-            ),
-            Err(selection::Refusal::Describe) => return Err(TagError::NoPhotos),
-            Err(selection::Refusal::Profile(detail)) => return Err(TagError::Source { detail }),
+            );
         }
+        applied = offsets;
     }
     Ok((request, applied))
 }
@@ -222,8 +177,7 @@ pub(crate) async fn tag_selection(
             return Err(TagError::NotConnected);
         }
         let outcome = outcome.recv().map_err(|_| TagError::LinkLost)?;
-        let written = matches!(outcome, ApplyOutcome::Applied { .. }) || outcome.half_written();
-        if written && !applied.is_empty() {
+        if rules::remember_offsets(&outcome, &applied) {
             let dir = config_dir(&app);
             let mut offsets = Offsets::load(&dir, info.app);
             selection::remember(&applied, &mut offsets);
