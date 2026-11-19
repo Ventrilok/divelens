@@ -18,9 +18,9 @@ use divelens_core::tags::{PhotoTags, Units};
 use divelens_core::{Dive, Error};
 use serde::{Deserialize, Serialize};
 
-use crate::collections::{Camera, CameraCount, Shots};
+use crate::apply::offsets::{Offsets, format_time, parse_time};
+use crate::apply::searches::{Camera, CameraCount, Shots};
 use crate::lightroom::FoundPhoto;
-use crate::offsets::{Offsets, format_time, parse_time};
 
 /// The photos selected in Lightroom, as the plugin described them, kept
 /// between the live counts and "Apply".
