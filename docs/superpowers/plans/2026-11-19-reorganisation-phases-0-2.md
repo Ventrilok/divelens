@@ -20,7 +20,7 @@
 - Rien ne bouge dans `core/` ni `libdivecomputer-sys/`. Le sous-module `third_party/libdivecomputer` ne bouge pas.
 - Le numéro de version ne change pas.
 - Une branche par pull request (`docs/…`, `test/…`, `refactor/…`), Conventional Commits, CI verte macOS + Windows, fusion par squash. Push, ouverture de PR et fusion : seulement avec l'accord explicite du propriétaire.
-- Le dépôt local porte des fichiers à ne jamais indexer : `CLAUDE.md` (modifications du propriétaire) et `docs/Re Dive Lens  BlueDive integration.pdf` (correspondance privée). Toujours `git add <chemins>` explicites, jamais `git add -A` ni `git add .`.
+- Le dépôt local du propriétaire porte des fichiers à ne jamais indexer : `CLAUDE.md` (modifications en cours) et des documents privés non suivis. Toujours `git add <chemins>` explicites, jamais `git add -A` ni `git add .`.
 - `CLAUDE.md` n'est modifié qu'avec l'accord du propriétaire : les chemins devenus faux y sont signalés dans la PR, pas corrigés.
 - Avant chaque commit, les vérifications du guide des contributeurs pour la partie touchée : toujours `cargo fmt --all --check` ; plug-in, moteur ou interface : dans `app/`, `npm test` puis `npm run build`, puis `cargo clippy -p divelens --all-targets -- -D warnings` et `cargo test -p divelens`.
 - Données de test fictives uniquement. Aucun catalogue Lightroom (`.lrcat`) dans le dépôt.
