@@ -168,47 +168,17 @@ local function describePhotos(photos)
     return list
 end
 
-local function photoId(photo)
-    return tostring(photo.localIdentifier)
-end
-
 -- The selected `photos` as described to the app (describePhotos), and as a
 -- set (Tagging.photoSet). Lightroom's metadata is read once per selection:
 -- kept with the photos it describes, and reused while the selection is
 -- exactly those photos (for the live selection and describeSelection).
 local function describedSelection(s, photos)
     local kept = s.selectionDescribed
-    if kept and Tagging.sameSelection(kept.set, photos, photoId) then return kept.list, kept.set end
+    if kept and Tagging.sameSelection(kept.set, photos, Tagging.photoId) then return kept.list, kept.set end
     local list = #photos > 0 and describePhotos(photos) or {}
-    local set = Tagging.photoSet(photos, photoId)
+    local set = Tagging.photoSet(photos, Tagging.photoId)
     s.selectionDescribed = { set = set, list = list }
     return list, set
-end
-
--- Earliest and latest capture times of the selection, wall-clock
--- "YYYY-MM-DDTHH:MM:SS" (or nil), overall and per camera (the app applies
--- each camera's remembered clock offset). `list`: the photos described.
-local function timeRange(list)
-    if #list == 0 then return nil end
-    local first, last
-    local cameras, order = {}, {}
-    for _, p in ipairs(list) do
-        local t = p.time
-        if t then
-            if not first or t < first then first = t end
-            if not last or t > last then last = t end
-            local key = (p.model or "") .. "|" .. (p.serial or "")
-            local c = cameras[key]
-            if not c then
-                c = { model = p.model, serial = p.serial, from = t, to = t }
-                cameras[key] = c
-                order[#order + 1] = c
-            end
-            if t < c.from then c.from = t end
-            if t > c.to then c.to = t end
-        end
-    end
-    return first, last, order
 end
 
 -- Asks Lightroom for the first thumbnails. Callbacks only queue the result;
@@ -244,7 +214,7 @@ local function pushSelection(s, force)
     if not force and signature == s.selectionSignature then return end
     s.selectionVersion = s.selectionVersion + 1
     s.thumbnailOutbox = {}
-    local from, to, cameras = timeRange((describedSelection(s, photos)))
+    local from, to, cameras = Tagging.timeRange((describedSelection(s, photos)))
     if send(s, {
         type = "selection", count = #photos, version = s.selectionVersion, from = from, to = to,
         cameras = (cameras and #cameras > 0) and cameras or Json.emptyArray,
@@ -293,7 +263,7 @@ end
 local function writeGps(photo, changes)
     local cleared, refused = false, false
     for _, change in ipairs(changes) do
-        if change.field == "gpsAltitude" and change.value == nil then
+        if Tagging.isAltitudeClear(change) then
             local ok, err = LrTasks.pcall(writeChange, photo, change)
             if ok then
                 cleared = true
@@ -329,7 +299,8 @@ end
 -- between or during the two writes.
 -- Returns { written = true, cleared = n, refused = n } (altitudes cleared,
 -- and altitudes Lightroom refused to clear), or { written = false, error =
--- message, or nil when Lightroom kept the catalog busy }.
+-- message, or nil when Lightroom kept the catalog busy }
+-- (Tagging.secondWriteResult).
 local function writeGpsLater(catalog, undoName, later)
     local cleared, refused = 0, 0
     if #later == 0 then return { written = true, cleared = 0, refused = 0 } end
@@ -342,9 +313,7 @@ local function writeGpsLater(catalog, undoName, later)
             end
         end, { timeout = WRITE_TIMEOUT })
     end)
-    if not ok then return { written = false, error = tostring(status) } end
-    if status ~= "executed" then return { written = false } end
-    return { written = true, cleared = cleared, refused = refused }
+    return Tagging.secondWriteResult(ok, status, cleared, refused)
 end
 
 local function logSecondWrite(later, second)
@@ -400,11 +369,8 @@ local function applyTags(s, message)
     -- Never the whole filmstrip: getTargetPhotos returns it when nothing is selected.
     if not catalog:getTargetPhoto() then return fail("noSelection") end
     local photos = catalog:getTargetPhotos()
-    if perPhoto then
-        local described = s.described
-        if not (described and described.id == perPhoto.selection) then return fail("staleSelection") end
-        if not Tagging.sameSelection(described.set, photos, photoId) then return fail("selectionChanged") end
-    end
+    local refusal = Tagging.selectionRefusal(perPhoto, s.described, photos, Tagging.photoId)
+    if refusal then return fail(refusal) end
     local total = #photos
     local undoName = LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)"
     local progress = Tagging.progress(total, PROGRESS_EVERY)
@@ -412,13 +378,10 @@ local function applyTags(s, message)
     local ok, status = LrTasks.pcall(function()
         return catalog:withWriteAccessDo(undoName, function()
             local before = Tagging.writesDive(changes) and photosBefore(catalog, photos) or {}
-            for _, photo in ipairs(photos) do
-                local own = perPhoto and perPhoto.photos[photoId(photo)]
-                if own then withValues = withValues + 1 end
-                local now, afterwards, replaced = Tagging.photoWrites(changes, before[photo], own)
-                if replaced then cleared = cleared + 1 end
-                write(photo, now)
-                if #afterwards > 0 then later[#later + 1] = { photo = photo, changes = afterwards } end
+            local planned = Tagging.tagWrites(changes, photos, before, perPhoto, Tagging.photoId)
+            cleared, withValues, later = planned.cleared, planned.withValues, planned.later
+            for _, w in ipairs(planned.writes) do
+                write(w.photo, w.changes)
                 advance(s, id, total, progress)
             end
         end, { timeout = WRITE_TIMEOUT })
@@ -426,18 +389,18 @@ local function applyTags(s, message)
     -- Straight on to the second write: nothing sent or yielded in between.
     local second = ok and status == "executed" and writeGpsLater(catalog, undoName, later)
     s.lastHeard = LrDate.currentTime() -- the app's pings waited during the writes
-    if not ok then return fail("error", tostring(status)) end
-    if status ~= "executed" then return fail("busy") end
-    if not second.written then
+    local reply = Tagging.applyReply(id, { ok = ok, status = status, second = second },
+        { type = "applied", id = id, count = total })
+    if reply.reason == "error" or reply.reason == "busy" then return fail(reply.reason, reply.detail) end
+    if reply.reason == "gpsNotWritten" then
         -- The first write stays: dive data and location text, without GPS.
         Log.warn("tagged %d photos but not the GPS and altitude of %d: %s", total, #later, second.error or "Lightroom busy")
-        send(s, { type = "applyFailed", id = id, reason = "gpsNotWritten", detail = second.error })
-        return
+    else
+        logSecondWrite(later, second)
+        Log.info("tagged %d photos, per-photo values on %d; another dive's values cleared or replaced on %d (GPS altitude cleared on %d)",
+            total, withValues, cleared, second.cleared)
     end
-    logSecondWrite(later, second)
-    Log.info("tagged %d photos, per-photo values on %d; another dive's values cleared or replaced on %d (GPS altitude cleared on %d)",
-        total, withValues, cleared, second.cleared)
-    send(s, { type = "applied", id = id, count = total })
+    send(s, reply)
 end
 
 -- Sends `list` (described photos) to the app as "photos" messages of at
@@ -500,12 +463,6 @@ local function findPhotos(s, message)
     sendPhotos(s, id, list)
 end
 
-local function findChild(list, name)
-    for _, item in ipairs(list) do
-        if item:getName() == name then return item end
-    end
-end
-
 -- Writes a "Create Collections" request: each dive's collection where the
 -- app's settings say (by default in a "Dive Lens" set at the root, created
 -- if needed), its data and location on its photos, and each photo's own
@@ -535,16 +492,16 @@ local function applyCollections(s, message)
     -- The group set is created on its own the first time: a set created
     -- inside a write cannot be used before that write ends.
     if place.group then
-        local set = findChild(holder:getChildCollectionSets(), place.group)
+        local set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
         if not set then
             local ok, status = LrTasks.pcall(function()
                 return catalog:withWriteAccessDo(place.group, function()
                     catalog:createCollectionSet(place.group, container, true)
                 end, { timeout = WRITE_TIMEOUT })
             end)
-            if not ok then return fail("error", tostring(status)) end
-            if status ~= "executed" then return fail("busy") end
-            set = findChild(holder:getChildCollectionSets(), place.group)
+            local reason, detail = Tagging.writeFailure(ok, status)
+            if reason then return fail(reason, detail) end
+            set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
             if not set then return fail("error", "collection set not created") end
         end
         holder, container = set, set
@@ -553,55 +510,43 @@ local function applyCollections(s, message)
     for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
 
     -- The photos found, in the catalog.
-    local total, found = 0, {}
-    for _, g in ipairs(groups) do
-        total = total + #g.photos
-        for _, p in ipairs(g.photos) do
-            p.photo = s.search.photos[p.id]
-            if p.photo then found[#found + 1] = p.photo end
-        end
-    end
+    local total, found = Tagging.resolvePhotos(groups, s.search.photos)
     local undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)"
     local progress = Tagging.progress(total, PROGRESS_EVERY)
     local results, later = {}, {}
     local ok, status = LrTasks.pcall(function()
         return catalog:withWriteAccessDo(undoName, function()
             local before = photosBefore(catalog, found)
+            local planned = Tagging.collectionWrites(groups, before, existing)
+            results, later = planned.results, planned.later
             for gi, g in ipairs(groups) do
-                local photos = {}
-                for _, p in ipairs(g.photos) do
-                    if p.photo then
-                        -- Its changes for the first write, and its GPS
-                        -- position and altitude for the second.
-                        local now, gps = Tagging.photoWrites(g.common, before[p.photo], p.changes)
-                        write(p.photo, now)
-                        if #gps > 0 then later[#later + 1] = { photo = p.photo, changes = gps } end
-                        photos[#photos + 1] = p.photo
-                    end
+                local group = planned.groups[gi]
+                -- One step per photo requested: written when found.
+                for _, step in ipairs(group.steps) do
+                    if step.photo then write(step.photo, step.changes) end
                     advance(s, id, total, progress)
                 end
-                if #photos > 0 then
+                if #group.photos > 0 then
                     local collection = catalog:createCollection(g.collection, container, true)
-                    collection:addPhotos(photos)
+                    collection:addPhotos(group.photos)
                 end
-                results[gi] = { collection = g.collection, count = #photos, created = not existing[g.collection] }
             end
         end, { timeout = WRITE_TIMEOUT })
     end)
     -- Straight on to the second write: nothing sent or yielded in between.
     local second = ok and status == "executed" and writeGpsLater(catalog, undoName, later)
     s.lastHeard = LrDate.currentTime()
-    if not ok then return fail("error", tostring(status)) end
-    if status ~= "executed" then return fail("busy") end
-    if not second.written then
+    local reply = Tagging.applyReply(id, { ok = ok, status = status, second = second },
+        { type = "collectionsApplied", id = id, groups = results })
+    if reply.reason == "error" or reply.reason == "busy" then return fail(reply.reason, reply.detail) end
+    if reply.reason == "gpsNotWritten" then
         -- The first write stays: collections, dive data and location text.
         Log.warn("collections written but not the GPS and altitude of %d photos: %s", #later, second.error or "Lightroom busy")
-        send(s, { type = "applyFailed", id = id, reason = "gpsNotWritten", detail = second.error })
-        return
+    else
+        logSecondWrite(later, second)
+        Log.info("collections written: %d groups, %d photos (GPS altitude cleared on %d)", #results, total, second.cleared)
     end
-    logSecondWrite(later, second)
-    Log.info("collections written: %d groups, %d photos (GPS altitude cleared on %d)", #results, total, second.cleared)
-    send(s, { type = "collectionsApplied", id = id, groups = results })
+    send(s, reply)
 end
 
 -- The catalog's collection sets, for the app's settings.

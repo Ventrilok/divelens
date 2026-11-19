@@ -363,3 +363,214 @@ fn dive_values_reach_the_plugin_by_name_with_real_values() {
         "{lines:?}"
     );
 }
+
+/// What `lua` returns, a JSON text (Json.encode), as a value to compare.
+fn json_of(lua: &mlua::Lua, code: &str) -> serde_json::Value {
+    let text: String = match lua.load(code).eval() {
+        Ok(text) => text,
+        Err(e) => panic!("{e}"),
+    };
+    serde_json::from_str(&text).unwrap()
+}
+
+#[test]
+fn apply_reply_says_why_nothing_or_part_was_written() {
+    use serde_json::json;
+    let lua = lua();
+    let reply = |outcome: &str| {
+        json_of(
+            &lua,
+            &format!(
+                r#"
+                local Json = require "Json"
+                local Tagging = require "Tagging"
+                local done = {{ type = "applied", id = 7, count = 3 }}
+                return Json.encode(Tagging.applyReply(7, {outcome}, done))
+                "#
+            ),
+        )
+    };
+    // The first write failed, or Lightroom kept the catalog busy: nothing
+    // written.
+    assert_eq!(
+        reply(r#"{ ok = false, status = "boom", second = false }"#),
+        json!({ "type": "applyFailed", "id": 7, "reason": "error", "detail": "boom" })
+    );
+    assert_eq!(
+        reply(r#"{ ok = true, status = "aborted", second = false }"#),
+        json!({ "type": "applyFailed", "id": 7, "reason": "busy" })
+    );
+    // The first write stays, without the GPS and altitude.
+    assert_eq!(
+        reply(
+            r#"{ ok = true, status = "executed", second = { written = false, error = "locked" } }"#
+        ),
+        json!({ "type": "applyFailed", "id": 7, "reason": "gpsNotWritten", "detail": "locked" })
+    );
+    assert_eq!(
+        reply(r#"{ ok = true, status = "executed", second = { written = false } }"#),
+        json!({ "type": "applyFailed", "id": 7, "reason": "gpsNotWritten" })
+    );
+    // Both written: the answer the app waits for, as it is.
+    assert_eq!(
+        reply(
+            r#"{ ok = true, status = "executed", second = { written = true, cleared = 0, refused = 0 } }"#
+        ),
+        json!({ "type": "applied", "id": 7, "count": 3 })
+    );
+    run(
+        &lua,
+        r#"
+        local Tagging = require "Tagging"
+        local done = { type = "collectionsApplied", id = 8, groups = {} }
+        local outcome = { ok = true, status = "executed", second = { written = true } }
+        assert(rawequal(Tagging.applyReply(8, outcome, done), done))
+        "#,
+    );
+}
+
+#[test]
+fn second_write_result_keeps_lightroom_refusals() {
+    use serde_json::json;
+    let lua = lua();
+    assert_eq!(
+        json_of(
+            &lua,
+            r#"
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            return Json.encode {
+                failed = Tagging.secondWriteResult(false, "catalog locked", 0, 0),
+                busy = Tagging.secondWriteResult(true, "aborted", 0, 0),
+                written = Tagging.secondWriteResult(true, "executed", 2, 1),
+                clears = {
+                    Tagging.isAltitudeClear({ kind = "raw", field = "gpsAltitude" }),
+                    Tagging.isAltitudeClear({ kind = "raw", field = "gpsAltitude", value = -18 }),
+                    Tagging.isAltitudeClear({ kind = "raw", field = "gps" }),
+                },
+            }
+            "#,
+        ),
+        json!({
+            "failed": { "written": false, "error": "catalog locked" },
+            // Lightroom kept the catalog busy: no error to tell.
+            "busy": { "written": false },
+            // Two altitudes cleared, one Lightroom refused to clear.
+            "written": { "written": true, "cleared": 2, "refused": 1 },
+            "clears": [true, false, false],
+        })
+    );
+}
+
+#[test]
+fn selection_refusal_checks_the_described_selection() {
+    use serde_json::json;
+    let lua = lua();
+    assert_eq!(
+        json_of(
+            &lua,
+            r#"
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            local function photo(n) return { localIdentifier = n } end
+            local id = Tagging.photoId
+            local described = { id = 12, set = Tagging.photoSet({ photo(41), photo(42) }, id) }
+            local perPhoto = { selection = 12, photos = {} }
+            local function refusal(...) return Tagging.selectionRefusal(...) or Json.null end
+            return Json.encode {
+                noValues = refusal(nil, nil, { photo(41) }, id),
+                notDescribed = refusal(perPhoto, nil, { photo(41), photo(42) }, id),
+                otherDescription = refusal({ selection = 11, photos = {} }, described, { photo(41), photo(42) }, id),
+                otherPhotos = refusal(perPhoto, described, { photo(41), photo(43) }, id),
+                samePhotos = refusal(perPhoto, described, { photo(42), photo(41) }, id),
+            }
+            "#,
+        ),
+        json!({
+            // No per-photo values: written on whatever is selected.
+            "noValues": null,
+            "notDescribed": "staleSelection",
+            "otherDescription": "staleSelection",
+            "otherPhotos": "selectionChanged",
+            "samePhotos": null,
+        })
+    );
+}
+
+#[test]
+fn tag_writes_keeps_photo_order_and_counts() {
+    use divelens_core::profile::PhotoPoint;
+    use divelens_core::tags::{DiveTags, LocationTags, PhotoTags, TagRequest, Units};
+    use serde_json::json;
+    let dive = sample_dive();
+    let point = PhotoPoint {
+        elapsed_s: 160,
+        depth_m: 10.0,
+        temp_c: None,
+    };
+    let request = TagRequest {
+        dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
+        location: Some(LocationTags::new(&dive.site, None, None)),
+        selection: Some(12),
+        photos: vec![PhotoTags::new(
+            "p1".into(),
+            Some(point),
+            -30,
+            Units::default(),
+        )],
+    };
+    let lua = lua();
+    lua.globals()
+        .set("input", serde_json::to_string(&request).unwrap())
+        .unwrap();
+    assert_eq!(
+        json_of(
+            &lua,
+            r#"
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            local request = Json.decode(input)
+            local changes = assert(Tagging.plan(request, function(iso) return iso end))
+            local perPhoto = assert(Tagging.planPhotos(request))
+            local p1, p2 = { id = "p1" }, { id = "p2" }
+            local function idOf(p) return p.id end
+            -- Each photo's writes as its id and number of changes.
+            local function summary(plan)
+                local writes, later = {}, {}
+                for i, w in ipairs(plan.writes) do writes[i] = { photo = w.photo.id, changes = #w.changes } end
+                for i, l in ipairs(plan.later) do later[i] = { photo = l.photo.id, changes = #l.changes } end
+                return { writes = writes, later = later, cleared = plan.cleared, withValues = plan.withValues }
+            end
+            local other = { Source = "MacDive", StartDate = "another start", DiveId = "699", PhotoDepth = "3.0 m" }
+            return Json.encode {
+                fresh = summary(Tagging.tagWrites(changes, { p1, p2 }, {}, perPhoto, idOf)),
+                reversed = summary(Tagging.tagWrites(changes, { p2, p1 }, {}, perPhoto, idOf)),
+                retagged = summary(Tagging.tagWrites(changes, { p1, p2 }, { [p2] = other }, perPhoto, idOf)),
+            }
+            "#,
+        ),
+        json!({
+            // 11 dive and location fields for both, and the first photo's 4
+            // own values; the GPS of both in the second write.
+            "fresh": {
+                "writes": [{ "photo": "p1", "changes": 15 }, { "photo": "p2", "changes": 11 }],
+                "later": [{ "photo": "p1", "changes": 1 }, { "photo": "p2", "changes": 1 }],
+                "cleared": 0,
+                "withValues": 1,
+            },
+            "reversed": {
+                "writes": [{ "photo": "p2", "changes": 11 }, { "photo": "p1", "changes": 15 }],
+                "later": [{ "photo": "p2", "changes": 1 }, { "photo": "p1", "changes": 1 }],
+                "cleared": 0,
+                "withValues": 1,
+            },
+            // The second photo carried another dive: its depth is cleared.
+            "retagged": {
+                "writes": [{ "photo": "p1", "changes": 15 }, { "photo": "p2", "changes": 12 }],
+                "later": [{ "photo": "p1", "changes": 1 }, { "photo": "p2", "changes": 1 }],
+                "cleared": 1,
+                "withValues": 1,
+            },
+        })
+    );
+}
