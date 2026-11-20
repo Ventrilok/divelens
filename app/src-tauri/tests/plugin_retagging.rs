@@ -17,9 +17,9 @@ enum Before<'a> {
     FiledEarlier(&'a divelens_core::tags::CollectionsRequest),
 }
 
-/// Lua making the global `current`, what Link.lua reads on photo "1"
-/// before writing (photosBefore), from the globals `set_before` sets. It
-/// also defines the global `date`, the date format of these tests.
+/// Lua making the global `current`, what CatalogWrite.photosBefore reads on
+/// photo "1" before writing, from the globals `set_before` sets. It also
+/// defines the global `date`, the date format of these tests.
 const BEFORE_LUA: &str = r#"
 local Json = require "Json"
 local Tagging = require "Tagging"
@@ -111,7 +111,7 @@ fn retag_lua(
         local perPhoto, bad = Tagging.planPhotos(request)
         assert(not bad, bad)
         local own = perPhoto and perPhoto.photos["1"]
-        -- What Link.lua writes, as it makes it.
+        -- What ApplyTags writes, as it makes it.
         if split then return checked(Tagging.photoWrites(changes, current, own)) end
         assert(not own, "what the other dive leaves, without per-photo values only")
         local extra = Tagging.retagChanges(current, changes)
@@ -147,7 +147,7 @@ fn refile_writes(
         local groups = assert(Tagging.planCollections(Json.decode(input), date))
         local p = groups[1].photos[1]
         assert(p.id == "1")
-        -- What Link.lua writes, as it makes it.
+        -- What ApplyCollections writes, as it makes it.
         return checked(Tagging.photoWrites(groups[1].common, current, p.changes))
         "#,
     )

@@ -61,13 +61,14 @@ pub fn sample_dive() -> divelens_core::Dive {
     }
 }
 
-/// Lua defining `writes(...)`: the two catalog writes Link.lua makes from
-/// lists of planned changes (Tagging.splitGps), as "1 kind field=value" and
-/// "2 kind field=value" lines. It checks what must always hold: the GPS and
-/// the altitude only in the second write, never in a write with a location
-/// text field, and every change kept, once, in its order. `checked(first,
-/// second)` makes the same lines and the first two checks, for writes
-/// Tagging made itself (Tagging.photoWrites).
+/// Lua defining `writes(...)`: the two catalog writes the ApplyTags and
+/// ApplyCollections envelopes make from lists of planned changes
+/// (Tagging.splitGps), as "1 kind field=value" and "2 kind field=value"
+/// lines. It checks what must always hold: the GPS and the altitude only in
+/// the second write, never in a write with a location text field, and every
+/// change kept, once, in its order. `checked(first, second)` makes the same
+/// lines and the first two checks, for writes Tagging made itself
+/// (Tagging.photoWrites).
 pub const WRITES_LUA: &str = r#"
 local Tagging = require "Tagging"
 local TEXT = { country = true, city = true, location = true }

@@ -4,17 +4,17 @@ Local link with the DiveLens app.
 Lightroom plugins can only listen on a local socket, one direction per socket
 (LrSocket), so the plugin opens two and the app connects to both:
   - "receive": messages from the app to the plugin;
-  - "send":    messages from the plugin to the app.
+  - "send":    messages from the plugin to the app (Send.lua).
 Ports are chosen by the system and published, with a one-time token, in a
 small "link file" in the app's settings folder. The app reads it, connects,
 and says hello with the token; nothing is answered before that.
 
-Each message is one JSON object on one line. The plugin pushes the current
-photo selection whenever it changes, and describes it photo by photo when
-the app asks (Tag Selection's per-photo values). Its hello carries the previous plugin's
-settings (same plug-in identifier, so the same preferences) for the app to
-take over once. Messages are handled in the link's own
-task, never inside socket callbacks, so they may use the catalog.
+Each message is one JSON object on one line. The plugin's hello carries the
+previous plugin's settings (same plug-in identifier, so the same
+preferences) for the app to take over once. Messages are handled in the
+link's own task, never inside socket callbacks, so they may use the
+catalog: the selection (Selection.lua), Tag Selection (ApplyTags.lua) and
+Create Collections (ApplyCollections.lua).
 
 When the app goes away, both sockets are opened again for the next app
 launch. The link stays up as long as Lightroom runs.
@@ -30,13 +30,15 @@ local LrMD5 = import "LrMD5"
 local LrPathUtils = import "LrPathUtils"
 local LrPrefs = import "LrPrefs"
 local LrSocket = import "LrSocket"
-local LrStringUtils = import "LrStringUtils"
 local LrTasks = import "LrTasks"
 
+local ApplyCollections = require "ApplyCollections"
+local ApplyTags = require "ApplyTags"
 local Framing = require "Framing"
 local Json = require "Json"
 local Log = require "Log"
-local Tagging = require "Tagging"
+local Selection = require "Selection"
+local Send = require "Send"
 
 local PROTOCOL = 6
 local APP_ID = "com.querton.divelens.desktop" -- the app's bundle identifier
@@ -45,9 +47,6 @@ local TICK = 0.1           -- seconds between two passes of the link task
 local SELECTION_EVERY = 5  -- selection checked every 5 ticks while the app is connected
 local PENDING_SCREEN_FOR = 30 -- seconds a menu choice waits for a just-launched app
 local SILENCE = 8          -- seconds without news before the app is considered gone
-local THUMBNAILS = 6       -- thumbnails of the selection shown by the app
-local THUMBNAIL_SIZE = 160 -- pixels, minimum; Lightroom may return larger
-local THUMBNAILS_PER_TICK = 2
 
 local Link = {}
 
@@ -121,438 +120,9 @@ local function makeToken()
     return LrMD5.digest(seed)
 end
 
--- Sending ---------------------------------------------------------------------
-
-local function send(s, message)
-    if not (s.sender and s.senderConnected) then return false end
-    local ok, err = LrTasks.pcall(function() s.sender:send(Json.encode(message) .. "\n") end)
-    if not ok then
-        Log.warn("send failed: %s", err)
-        return false
-    end
-    return true
-end
-
 local function catalogName()
     local path = LrApplication.activeCatalog():getPath()
     return LrPathUtils.removeExtension(LrPathUtils.leafName(path))
-end
-
--- The selection: photos (none when nothing is selected: getTargetPhotos alone
--- would return the whole filmstrip) and a cheap signature to notice changes.
-local function selection()
-    local catalog = LrApplication.activeCatalog()
-    local active = catalog:getTargetPhoto()
-    if not active then return {}, "" end
-    local photos = catalog:getTargetPhotos()
-    local signature = table.concat({
-        #photos, tostring(active.localIdentifier),
-        tostring(photos[1].localIdentifier), tostring(photos[#photos].localIdentifier),
-    }, ":")
-    return photos, signature
-end
-
--- Photos as the app knows them: id, wall-clock original capture time (the
--- adjusted one when there is none), camera model and serial number.
-local function describePhotos(photos)
-    local catalog = LrApplication.activeCatalog()
-    local raw = catalog:batchGetRawMetadata(photos, { "dateTimeOriginalISO8601", "dateTimeISO8601" })
-    local formatted = catalog:batchGetFormattedMetadata(photos, { "cameraMake", "cameraModel", "cameraSerialNumber" })
-    local list = {}
-    for i, photo in ipairs(photos) do
-        local r, f = raw[photo] or {}, formatted[photo] or {}
-        list[i] = Tagging.describePhoto(photo.localIdentifier,
-            r.dateTimeOriginalISO8601 or r.dateTimeISO8601,
-            f.cameraMake, f.cameraModel, f.cameraSerialNumber)
-    end
-    return list
-end
-
--- The selected `photos` as described to the app (describePhotos), and as a
--- set (Tagging.photoSet). Lightroom's metadata is read once per selection:
--- kept with the photos it describes, and reused while the selection is
--- exactly those photos (for the live selection and describeSelection).
-local function describedSelection(s, photos)
-    local kept = s.selectionDescribed
-    if kept and Tagging.sameSelection(kept.set, photos, Tagging.photoId) then return kept.list, kept.set end
-    local list = #photos > 0 and describePhotos(photos) or {}
-    local set = Tagging.photoSet(photos, Tagging.photoId)
-    s.selectionDescribed = { set = set, list = list }
-    return list, set
-end
-
--- Asks Lightroom for the first thumbnails. Callbacks only queue the result;
--- the link task sends it. Older requests are released (no longer wanted).
-local function requestThumbnails(s, photos, version)
-    s.thumbnailRequests = {}
-    for i = 1, math.min(THUMBNAILS, #photos) do
-        s.thumbnailRequests[i] = photos[i]:requestJpegThumbnail(THUMBNAIL_SIZE, THUMBNAIL_SIZE, function(jpeg)
-            if jpeg and version == s.selectionVersion then
-                s.thumbnailOutbox[#s.thumbnailOutbox + 1] = { version = version, index = i, jpeg = jpeg }
-            end
-        end)
-    end
-end
-
-local function sendThumbnails(s)
-    for _ = 1, THUMBNAILS_PER_TICK do
-        local item = table.remove(s.thumbnailOutbox, 1)
-        if not item then return end
-        if item.version == s.selectionVersion then
-            send(s, {
-                type = "thumbnail",
-                version = item.version,
-                index = item.index,
-                jpeg = LrStringUtils.encodeBase64(item.jpeg),
-            })
-        end
-    end
-end
-
-local function pushSelection(s, force)
-    local photos, signature = selection()
-    if not force and signature == s.selectionSignature then return end
-    s.selectionVersion = s.selectionVersion + 1
-    s.thumbnailOutbox = {}
-    local from, to, cameras = Tagging.timeRange((describedSelection(s, photos)))
-    if send(s, {
-        type = "selection", count = #photos, version = s.selectionVersion, from = from, to = to,
-        cameras = (cameras and #cameras > 0) and cameras or Json.emptyArray,
-    }) then
-        s.selectionSignature = signature
-        requestThumbnails(s, photos, s.selectionVersion)
-    end
-end
-
--- Writing ---------------------------------------------------------------------
-
-local WRITE_TIMEOUT = 10 -- seconds to wait for Lightroom's write access
-local PROGRESS_EVERY = 50 -- photos between two progress messages
-
--- Lightroom's own date format for StartDate and EndDate, exactly as the
--- previous plugin wrote them (the time zone does not matter: the same one
--- is used both ways, so the wall-clock time is kept).
-local function formatDate(iso)
-    local y, mo, d, h, mi, sec = Tagging.dateParts(iso)
-    if not y then return nil end
-    local t = LrDate.timeFromComponents(y, mo, d, h, mi, sec)
-    return LrDate.formatShortDate(t) .. " " .. LrDate.formatMediumTime(t)
-end
-
--- Writes one planned change on a photo, inside a catalog write.
-local function writeChange(photo, change)
-    if change.kind == "plugin" then
-        photo:setPropertyForPlugin(_PLUGIN, change.field, change.value)
-    else
-        photo:setRawMetadata(change.field, change.value)
-    end
-end
-
-local function write(photo, changes)
-    for _, change in ipairs(changes) do writeChange(photo, change) end
-end
-
--- Writes a photo's GPS position and altitude (the second list of
--- Tagging.splitGps), inside the second catalog write. Returns whether its
--- GPS altitude was cleared (Dive Lens's own, from a depth cleared or
--- another dive's, Tagging.altitudeClears), and whether Lightroom refused to
--- clear it. When in doubt, the altitude is left: one Lightroom refuses to
--- clear stays, and the rest of the write goes on. Its marker, cleared in
--- the first write, is then missing: the next write falls back to the rule
--- for photos without a marker, which keeps it unless it matches the depth.
-local function writeGps(photo, changes)
-    local cleared, refused = false, false
-    for _, change in ipairs(changes) do
-        if Tagging.isAltitudeClear(change) then
-            local ok, err = LrTasks.pcall(writeChange, photo, change)
-            if ok then
-                cleared = true
-            else
-                refused = true
-                Log.warn("GPS altitude kept on photo %s: %s", tostring(photo.localIdentifier), tostring(err))
-            end
-        else
-            writeChange(photo, change)
-        end
-    end
-    return cleared, refused
-end
-
--- Tells the app how far the first write is, when `progress`
--- (Tagging.progress) has something new to tell after one more photo.
-local function advance(s, id, total, progress)
-    local done = progress.advance()
-    if done then
-        send(s, { type = "progress", id = id, done = done, total = total })
-        LrTasks.yield()
-    end
-end
-
--- The second catalog write of an "Apply": the GPS positions and altitudes,
--- `later` = { { photo = photo, changes = GPS changes }, ... }, under the
--- same Undo name as the first. Lightroom's Undo does not revert them when
--- they are written with a location text field (spec section 3). On macOS,
--- writes made in a row "without any intervening user interaction" form one
--- Undo step, so one Undo reverts both: the caller starts it right after the
--- first, sending and yielding nothing in between, and it never yields or
--- sends either (no progress), so Lightroom gets no chance to handle a click
--- between or during the two writes.
--- Returns { written = true, cleared = n, refused = n } (altitudes cleared,
--- and altitudes Lightroom refused to clear), or { written = false, error =
--- message, or nil when Lightroom kept the catalog busy }
--- (Tagging.secondWriteResult).
-local function writeGpsLater(catalog, undoName, later)
-    local cleared, refused = 0, 0
-    if #later == 0 then return { written = true, cleared = 0, refused = 0 } end
-    local ok, status = LrTasks.pcall(function()
-        return catalog:withWriteAccessDo(undoName, function()
-            for _, item in ipairs(later) do
-                local c, r = writeGps(item.photo, item.changes)
-                if c then cleared = cleared + 1 end
-                if r then refused = refused + 1 end
-            end
-        end, { timeout = WRITE_TIMEOUT })
-    end)
-    return Tagging.secondWriteResult(ok, status, cleared, refused)
-end
-
-local function logSecondWrite(later, second)
-    if #later == 0 then
-        Log.info("no GPS or altitude to write: no second write")
-    elseif second.refused == 0 then
-        Log.info("GPS and altitude written on %d photos, in a second write", #later)
-    else
-        Log.info("second write on %d photos: GPS and altitude written on %d, altitude left on %d (Lightroom refused to clear it)",
-            #later, #later - second.refused, second.refused)
-    end
-end
-
--- What the photos carry before a dive is written on them, for
--- Tagging.photoWrites: { [photo] = { RETAG_FIELDS..., gpsAltitude } },
--- the altitude marker among the RETAG_FIELDS.
-local function photosBefore(catalog, photos)
-    if #photos == 0 then return {} end
-    local fields = catalog:batchGetPropertyForPlugin(photos, _PLUGIN, Tagging.RETAG_FIELDS)
-    local raw = catalog:batchGetRawMetadata(photos, { "gpsAltitude" })
-    local before = {}
-    for _, photo in ipairs(photos) do
-        local f = fields[photo] or {}
-        local current = { gpsAltitude = (raw[photo] or {}).gpsAltitude }
-        for _, field in ipairs(Tagging.RETAG_FIELDS) do current[field] = f[field] end
-        before[photo] = current
-    end
-    return before
-end
-
--- Tags the photos selected in Lightroom now (not when the app last looked),
--- in two catalog writes under one Undo name, the GPS and altitude in the
--- second (Tagging.splitGps, writeGpsLater), so one Undo reverts it all. A
--- photo that carried another dive also loses that dive's own values
--- (Tagging.retagChanges), read from the photo inside the first write; its
--- altitude, when cleared, in the second, and its altitude marker in the
--- first, with the other Dive Lens fields. With per-photo values
--- (Tagging.planPhotos), the selection must be exactly the one described to
--- the app (describeSelection): otherwise nothing is written. The photos
--- taken during the dive get their values, and the other dive's are not
--- cleared on them first (Tagging.notOverwritten). Always answers the app.
-local function applyTags(s, message)
-    local id = message.id
-    local function fail(reason, detail)
-        Log.warn("tagging refused: %s %s", reason, detail or "")
-        send(s, { type = "applyFailed", id = id, reason = reason, detail = detail })
-    end
-    local changes, why = Tagging.plan(message, formatDate)
-    if not changes then return fail("badRequest", why) end
-    local perPhoto, bad = Tagging.planPhotos(message)
-    if bad then return fail("badRequest", bad) end
-    local catalog = LrApplication.activeCatalog()
-    -- Never the whole filmstrip: getTargetPhotos returns it when nothing is selected.
-    if not catalog:getTargetPhoto() then return fail("noSelection") end
-    local photos = catalog:getTargetPhotos()
-    local refusal = Tagging.selectionRefusal(perPhoto, s.described, photos, Tagging.photoId)
-    if refusal then return fail(refusal) end
-    local total = #photos
-    local undoName = LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)"
-    local progress = Tagging.progress(total, PROGRESS_EVERY)
-    local cleared, withValues, later = 0, 0, {}
-    local ok, status = LrTasks.pcall(function()
-        return catalog:withWriteAccessDo(undoName, function()
-            local before = Tagging.writesDive(changes) and photosBefore(catalog, photos) or {}
-            local planned = Tagging.tagWrites(changes, photos, before, perPhoto, Tagging.photoId)
-            cleared, withValues, later = planned.cleared, planned.withValues, planned.later
-            for _, w in ipairs(planned.writes) do
-                write(w.photo, w.changes)
-                advance(s, id, total, progress)
-            end
-        end, { timeout = WRITE_TIMEOUT })
-    end)
-    -- Straight on to the second write: nothing sent or yielded in between.
-    local second = ok and status == "executed" and writeGpsLater(catalog, undoName, later)
-    s.lastHeard = LrDate.currentTime() -- the app's pings waited during the writes
-    local reply = Tagging.applyReply(id, { ok = ok, status = status, second = second },
-        { type = "applied", id = id, count = total })
-    if reply.reason == "error" or reply.reason == "busy" then return fail(reply.reason, reply.detail) end
-    if reply.reason == "gpsNotWritten" then
-        -- The first write stays: dive data and location text, without GPS.
-        Log.warn("tagged %d photos but not the GPS and altitude of %d: %s", total, #later, second.error or "Lightroom busy")
-    else
-        logSecondWrite(later, second)
-        Log.info("tagged %d photos, per-photo values on %d; another dive's values cleared or replaced on %d (GPS altitude cleared on %d)",
-            total, withValues, cleared, second.cleared)
-    end
-    send(s, reply)
-end
-
--- Sends `list` (described photos) to the app as "photos" messages of at
--- most PHOTOS_PER_MESSAGE, the last one marked done.
-local PHOTOS_PER_MESSAGE = 200
-
-local function sendPhotos(s, id, list)
-    local i = 1
-    repeat
-        local chunk = {}
-        for j = i, math.min(i + PHOTOS_PER_MESSAGE - 1, #list) do chunk[#chunk + 1] = list[j] end
-        i = i + PHOTOS_PER_MESSAGE
-        local done = i > #list
-        send(s, { type = "photos", id = id, photos = #chunk > 0 and chunk or Json.emptyArray, done = done })
-        if not done then LrTasks.yield() end
-    until done
-    s.lastHeard = LrDate.currentTime()
-end
-
--- The photos selected now, described to the app for Tag Selection's
--- per-photo values, and kept: an "apply" naming this description writes
--- only if the selection is still exactly these photos (applyTags).
-local function describeSelection(s, message)
-    local photos = selection()
-    local list, set = describedSelection(s, photos)
-    s.described = { id = message.id, set = set }
-    Log.debug("selection described: %d photos", #list)
-    sendPhotos(s, message.id, list)
-end
-
--- Create Collections ----------------------------------------------------------
-
--- Every photo captured between two days (inclusive, "YYYY-MM-DD"), whole
--- catalog. Lightroom searches by day only and on the adjusted capture time;
--- the app keeps what fits on the original time. The photos are kept for the
--- following "apply", which names them by id.
-local function findPhotos(s, message)
-    local id = message.id
-    if type(message.from) ~= "string" or type(message.to) ~= "string" then
-        return send(s, { type = "applyFailed", id = id, reason = "badRequest" })
-    end
-    local catalog = LrApplication.activeCatalog()
-    local photos = catalog:findPhotos {
-        sort = "captureTime",
-        ascending = true,
-        searchDesc = {
-            { criteria = "captureTime", operation = "in", value = message.from, value2 = message.to },
-            combine = "intersect",
-        },
-    }
-    local byId = {}
-    for _, photo in ipairs(photos) do byId[tostring(photo.localIdentifier)] = photo end
-    s.search = { id = id, photos = byId }
-    local list = describePhotos(photos)
-    local undated = 0
-    for _, p in ipairs(list) do
-        if not p.time then undated = undated + 1 end
-    end
-    Log.info("found %d photos from %s to %s (%d without capture time)", #list, message.from, message.to, undated)
-    sendPhotos(s, id, list)
-end
-
--- Writes a "Create Collections" request: each dive's collection where the
--- app's settings say (by default in a "Dive Lens" set at the root, created
--- if needed), its data and location on its photos, and each photo's own
--- values. Two catalog writes under one Undo name, the GPS and altitude in
--- the second (Tagging.splitGps, writeGpsLater), so one Undo reverts it all.
--- What each photo carries is read inside the first write, as Tag Selection
--- does: an altitude Dive Lens wrote from a depth now cleared, or from
--- another dive's, is cleared in the second write (Tagging.photoWrites).
--- Always answers the app.
-local function applyCollections(s, message)
-    local id = message.id
-    local function fail(reason, detail)
-        Log.warn("collections refused: %s %s", reason, detail or "")
-        send(s, { type = "applyFailed", id = id, reason = reason, detail = detail })
-    end
-    local groups, place = Tagging.planCollections(message, formatDate)
-    if not groups then return fail("badRequest", place) end
-    if not (s.search and s.search.id == message.search) then return fail("staleSearch") end
-    local catalog = LrApplication.activeCatalog()
-
-    -- "holder" lists what is already there; "container" is what Lightroom's
-    -- create functions take (nil for the catalog's root).
-    local holder = Tagging.findSet(catalog, place.parent)
-    if not holder then return fail("parentNotFound", table.concat(place.parent, " › ")) end
-    local container = #place.parent > 0 and holder or nil
-
-    -- The group set is created on its own the first time: a set created
-    -- inside a write cannot be used before that write ends.
-    if place.group then
-        local set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
-        if not set then
-            local ok, status = LrTasks.pcall(function()
-                return catalog:withWriteAccessDo(place.group, function()
-                    catalog:createCollectionSet(place.group, container, true)
-                end, { timeout = WRITE_TIMEOUT })
-            end)
-            local reason, detail = Tagging.writeFailure(ok, status)
-            if reason then return fail(reason, detail) end
-            set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
-            if not set then return fail("error", "collection set not created") end
-        end
-        holder, container = set, set
-    end
-    local existing = {}
-    for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
-
-    -- The photos found, in the catalog.
-    local total, found = Tagging.resolvePhotos(groups, s.search.photos)
-    local undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)"
-    local progress = Tagging.progress(total, PROGRESS_EVERY)
-    local results, later = {}, {}
-    local ok, status = LrTasks.pcall(function()
-        return catalog:withWriteAccessDo(undoName, function()
-            local before = photosBefore(catalog, found)
-            local planned = Tagging.collectionWrites(groups, before, existing)
-            results, later = planned.results, planned.later
-            for gi, g in ipairs(groups) do
-                local group = planned.groups[gi]
-                -- One step per photo requested: written when found.
-                for _, step in ipairs(group.steps) do
-                    if step.photo then write(step.photo, step.changes) end
-                    advance(s, id, total, progress)
-                end
-                if #group.photos > 0 then
-                    local collection = catalog:createCollection(g.collection, container, true)
-                    collection:addPhotos(group.photos)
-                end
-            end
-        end, { timeout = WRITE_TIMEOUT })
-    end)
-    -- Straight on to the second write: nothing sent or yielded in between.
-    local second = ok and status == "executed" and writeGpsLater(catalog, undoName, later)
-    s.lastHeard = LrDate.currentTime()
-    local reply = Tagging.applyReply(id, { ok = ok, status = status, second = second },
-        { type = "collectionsApplied", id = id, groups = results })
-    if reply.reason == "error" or reply.reason == "busy" then return fail(reply.reason, reply.detail) end
-    if reply.reason == "gpsNotWritten" then
-        -- The first write stays: collections, dive data and location text.
-        Log.warn("collections written but not the GPS and altitude of %d photos: %s", #later, second.error or "Lightroom busy")
-    else
-        logSecondWrite(later, second)
-        Log.info("collections written: %d groups, %d photos (GPS altitude cleared on %d)", #results, total, second.cleared)
-    end
-    send(s, reply)
-end
-
--- The catalog's collection sets, for the app's settings.
-local function listSets(s, message)
-    local sets = Tagging.describeSets(LrApplication.activeCatalog(), Json.emptyArray)
-    send(s, { type = "sets", id = message.id, sets = sets })
 end
 
 -- Settings of the previous plugin, which had the same identifier (so the
@@ -581,12 +151,12 @@ local function handle(s, text)
     if message.type == "hello" then
         if message.token ~= s.token then
             Log.warn("app hello refused: wrong token")
-            send(s, { type = "error", reason = "token" })
+            Send.toApp(s, { type = "error", reason = "token" })
             return
         end
         s.authed = true
         Log.info("app %s connected", tostring(message.app))
-        send(s, {
+        Send.toApp(s, {
             type = "hello",
             protocol = PROTOCOL,
             plugin = pluginVersion(),
@@ -594,34 +164,35 @@ local function handle(s, text)
             catalog = catalogName(),
             legacy = legacySettings(),
         })
-        pushSelection(s, true)
+        Selection.push(s, true)
         local pending = s.pendingScreen
         s.pendingScreen = nil
         if pending and LrDate.currentTime() - pending.at < PENDING_SCREEN_FOR then
-            send(s, { type = "show", screen = pending.screen })
+            Send.toApp(s, { type = "show", screen = pending.screen })
         end
         return
     end
     if not s.authed then return end
     if message.type == "ping" then
-        send(s, { type = "pong" })
+        Send.toApp(s, { type = "pong" })
     elseif message.type == "logLevel" then
         if Log.setLevel(message.level) then Log.info("log level: %s", tostring(message.level)) end
     elseif message.type == "apply" then
-        applyTags(s, message)
+        ApplyTags.run(s, message)
     elseif message.type == "findPhotos" or message.type == "applyCollections" or message.type == "listSets"
         or message.type == "describeSelection" then
         -- The app waits for an answer: an error still gets one.
         local handlers = {
-            findPhotos = findPhotos, applyCollections = applyCollections, listSets = listSets,
-            describeSelection = describeSelection,
+            findPhotos = ApplyCollections.find, applyCollections = ApplyCollections.run,
+            listSets = ApplyCollections.listSets,
+            describeSelection = Selection.describe,
         }
         local handler = handlers[message.type]
         local ok, err = LrTasks.pcall(handler, s, message)
         if not ok then
             Log.error("%s failed: %s", message.type, err)
             s.lastHeard = LrDate.currentTime()
-            send(s, { type = "applyFailed", id = message.id, reason = "error", detail = tostring(err) })
+            Send.toApp(s, { type = "applyFailed", id = message.id, reason = "error", detail = tostring(err) })
         end
     else
         Log.debug("ignored message type %s", tostring(message.type))
@@ -761,14 +332,14 @@ local function run(s)
             end
             tick = tick + 1
             if s.authed and tick % SELECTION_EVERY == 0 then
-                local ok, err = LrTasks.pcall(pushSelection, s, false)
+                local ok, err = LrTasks.pcall(Selection.push, s, false)
                 if not ok then Log.error("selection failed: %s", err) end
             end
-            if s.authed then sendThumbnails(s) end
+            if s.authed then Selection.sendThumbnails(s) end
             checkSilence(s)
             LrTasks.sleep(TICK)
         end
-        send(s, { type = "bye" })
+        Send.toApp(s, { type = "bye" })
         closeSockets(s)
         removeLinkFile(s)
         Log.info("link closed")
@@ -825,7 +396,7 @@ end
 function Link.show(screen)
     local s = current()
     if not (s and s.running and s.authed) then return false end
-    return send(s, { type = "show", screen = screen })
+    return Send.toApp(s, { type = "show", screen = screen })
 end
 
 --- Remembers a screen to show as soon as an app connects (the app was just
