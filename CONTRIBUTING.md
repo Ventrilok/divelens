@@ -188,7 +188,7 @@ Three other numbers are **compatibility versions**, not the version of Dive Lens
 
 - **Link protocol**: `PROTOCOL` in `app/src-tauri/src/lightroom.rs` and in `plugin/DiveLens.lrdevplugin/Link.lua`. Raise both together when a message between the app and the plug-in changes in a way the other side would misread: an app and a plug-in with different numbers refuse to connect.
 - **Metadata schema**: `schemaVersion` in `plugin/DiveLens.lrdevplugin/Metadata.lua`. Raise it when Dive Lens fields are added or their definitions change, as the Lightroom SDK asks. Each field's own `version` changes only when its definition changes incompatibly, which the compatibility contract rules out for the existing fields.
-- **Settings file**: `CURRENT_VERSION` in `app/src-tauri/src/settings.rs`, written into the settings file and into exported settings. Raise it when the layout of the file changes, keeping older files readable (the same goes for the clock-offset files, `CURRENT_VERSION` in `app/src-tauri/src/offsets.rs`).
+- **Settings file**: `CURRENT_VERSION` in `app/src-tauri/src/settings/file.rs`, written into the settings file and into exported settings. Raise it when the layout of the file changes, keeping older files readable (the same goes for the clock-offset files, `CURRENT_VERSION` in `app/src-tauri/src/offsets.rs`).
 
 ## Test data: fictional or anonymised
 

@@ -1,364 +1,34 @@
 mod applog;
 mod collections;
 mod dive_log;
+mod files;
 mod lightroom;
 mod offsets;
 mod selection;
 mod settings;
-mod units;
 mod update;
 
-use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::mpsc::{self, Sender};
 use std::time::Duration;
 
-use divelens_core::apps::{self, DiveApp, Kept, Opened, Os, Places};
+use divelens_core::apps::Kept;
 use divelens_core::collections::Span;
 use divelens_core::macdive;
-use divelens_core::profile::Sample;
-use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
-use divelens_core::{Capabilities, Dive, Error, Site};
+use divelens_core::tags::{DiveTags, LocationTags, TagRequest, valid_gps};
+use divelens_core::{Dive, Error};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_updater::UpdaterExt;
 
 use collections::{Choices, Period, Preview, Searches, Session};
-use dive_log::{LogChanged, LogId, SourceInfo, WriteInProgress, Writes, guarded_change};
+use dive_log::{LogChanged, LogId, SourceInfo, Writes, open, source_info, standard_path};
+use files::config_dir;
 use lightroom::{
     ApplyOutcome, CollectionSet, Command, End, Event, LinkFile, Status, Timing, WrittenCollection,
 };
 use offsets::Offsets;
 use selection::{DiveSpan, PerPhoto, Selection, SelectionPhotos, TagPreview};
-use settings::{ImportError, Settings};
-
-/// Where the app writes its log (`None`: no home folder).
-struct LogFile(Option<PathBuf>);
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct AppInfo {
-    version: String,
-    os: &'static str,
-    log_path: Option<PathBuf>,
-}
-
-/// The dive applications of this system, in the order Settings lists
-/// them, with what the screens show of each.
-#[tauri::command]
-fn dive_apps() -> Vec<&'static DiveApp> {
-    apps::available(Os::current()).collect()
-}
-
-/// Version (app/package.json, through tauri.conf.json), system and log file,
-/// for Settings.
-#[tauri::command]
-fn app_info(app: AppHandle, log: State<LogFile>) -> AppInfo {
-    AppInfo {
-        version: app.package_info().version.to_string(),
-        os: std::env::consts::OS,
-        log_path: log.0.clone(),
-    }
-}
-
-/// Current settings.
-#[tauri::command]
-fn get_settings(app: AppHandle) -> Settings {
-    Settings::load(&config_dir(&app))
-}
-
-/// Changes the settings named in `patch` and returns them all; every window
-/// hears of it through `settings-changed`.
-#[tauri::command]
-fn update_settings(app: AppHandle, patch: serde_json::Value) -> Result<Settings, ChangeError> {
-    change_settings(&app, |s| s.patch(&patch))
-}
-
-/// Writes the current settings to the file the user chose (spec F11).
-#[tauri::command]
-fn export_settings(app: AppHandle, path: PathBuf) -> Result<(), String> {
-    Settings::load(&config_dir(&app))
-        .export(&path)
-        .map_err(|e| {
-            log::error!("settings not exported to {}: {e}", path.display());
-            e.to_string()
-        })?;
-    log::info!("settings exported to {}", path.display());
-    Ok(())
-}
-
-/// A settings file's dive log: the application it means on this computer,
-/// where the log is, and whether it is there.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ImportCheck {
-    source: SourceInfo,
-    found: bool,
-}
-
-fn import_check(app: &AppHandle, settings: &Settings) -> ImportCheck {
-    let source = source_info_of(app, settings);
-    ImportCheck {
-        found: source.path.exists(),
-        source,
-    }
-}
-
-/// Reads a settings file before importing it, so the user can confirm
-/// knowing whether its dive log is on this computer.
-#[tauri::command]
-fn check_settings_file(app: AppHandle, path: PathBuf) -> Result<ImportCheck, ImportError> {
-    let settings = Settings::read_export(&path).inspect_err(|e| {
-        log::warn!("settings file {} not usable: {e:?}", path.display());
-    })?;
-    Ok(import_check(&app, &settings))
-}
-
-/// Replaces every setting with those of the file, once the user confirmed.
-/// A dive log missing on this computer is kept and reported: the user then
-/// chooses where it is (never a silent switch to another log).
-#[tauri::command]
-fn import_settings(app: AppHandle, path: PathBuf) -> Result<ImportCheck, ImportError> {
-    let imported = Settings::read_export(&path)?;
-    let after = change_settings(&app, |s| s.replace_with(imported)).map_err(|e| match e {
-        ChangeError::NotSaved(detail) => ImportError::NotSaved(detail),
-        ChangeError::WriteInProgress => ImportError::WriteInProgress,
-    })?;
-    log::info!("settings imported from {}", path.display());
-    Ok(import_check(&app, &after))
-}
-
-/// Why a change of settings was not made.
-#[derive(Debug, Serialize)]
-#[serde(tag = "kind", content = "detail", rename_all = "camelCase")]
-enum ChangeError {
-    /// The settings file could not be written.
-    NotSaved(String),
-    /// It would switch the dive log while Lightroom is being written to.
-    WriteInProgress,
-}
-
-/// Every change of settings goes through here, whichever way it comes (the
-/// Settings screen, the dive-log error screen, an import, the previous
-/// plugin's settings): none switches the dive log during a write.
-fn change_settings(
-    app: &AppHandle,
-    change: impl FnOnce(&mut Settings),
-) -> Result<Settings, ChangeError> {
-    let log_of = |s: &Settings| source_info_of(app, s).id();
-    let (before, after) =
-        change_unless_writing(&app.state::<Writes>(), &config_dir(app), log_of, change)?;
-    if after != before {
-        log::info!(
-            "settings changed: {}",
-            serde_json::to_string(&after).unwrap_or_default()
-        );
-        if after.log_level != before.log_level {
-            applog::set_level(after.log_level);
-            send_log_level(app, after.log_level);
-        }
-        let _ = app.emit("settings-changed", after.clone());
-        if after.check_updates && !before.check_updates {
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move { check_update(app, true).await });
-        }
-    }
-    Ok(after)
-}
-
-/// Saves `change` to the settings in `dir`, unless it switches the dive log
-/// (`log_of` tells which log some settings point at) while a write is under
-/// way: then nothing is saved. Returns the settings before and after.
-fn change_unless_writing(
-    writes: &Writes,
-    dir: &Path,
-    log_of: impl Fn(&Settings) -> LogId,
-    change: impl FnOnce(&mut Settings),
-) -> Result<(Settings, Settings), ChangeError> {
-    let mut before = Settings::default();
-    let mut refused = None;
-    let after = writes
-        .exclusive(|writing| {
-            Settings::update(dir, |s| {
-                before = s.clone();
-                refused = guarded_change(writing, s, change, log_of).err();
-            })
-        })
-        .map_err(|e| {
-            log::error!("settings not saved: {e}");
-            ChangeError::NotSaved(e.to_string())
-        })?;
-    if let Some(WriteInProgress) = refused {
-        log::warn!("dive log not changed: Lightroom is being written to");
-        return Err(ChangeError::WriteInProgress);
-    }
-    Ok((before, after))
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct DiveLog {
-    source: SourceInfo,
-    /// How the log is stored, as its reader tells: what Settings says once
-    /// it is read (a key of the application's texts).
-    format: &'static str,
-    capabilities: Capabilities,
-    dives: Vec<Dive>,
-    /// Every named site of the log (Tag Selection › other site).
-    sites: Vec<Site>,
-    /// Units of the dive application's preferences (the settings may force
-    /// others).
-    source_units: units::UiUnits,
-}
-
-/// Error sent to the UI: the reader error plus the source it concerns.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct LoadError {
-    source: SourceInfo,
-    error: Error,
-}
-
-fn config_dir(app: &AppHandle) -> PathBuf {
-    app.path().app_config_dir().expect("no config folder")
-}
-
-/// Login name, which names Subsurface's standard file.
-fn login_name() -> String {
-    ["LOGNAME", "USER", "USERNAME"]
-        .iter()
-        .find_map(|v| std::env::var(v).ok().filter(|n| !n.is_empty()))
-        .unwrap_or_else(|| "username".into())
-}
-
-/// Standard location of an application's log on this computer.
-fn standard_path(app: &AppHandle, dive_app: &DiveApp) -> PathBuf {
-    let home = app.path().home_dir().ok();
-    // ~/Library/Application Support on macOS, %APPDATA% on Windows.
-    let data = app.path().data_dir().ok();
-    let user = login_name();
-    let places = Places {
-        os: Os::current(),
-        home: home.as_deref(),
-        data: data.as_deref(),
-        user: &user,
-    };
-    (dive_app.standard_location)(&places).unwrap_or_default()
-}
-
-/// The configured dive log, as every action checks it.
-fn source_info(app: &AppHandle) -> SourceInfo {
-    dive_log::configured(&config_dir(app), Os::current(), |dive_app| {
-        standard_path(app, dive_app)
-    })
-}
-
-/// The dive log `settings` point at: the application in use on this
-/// computer and its location.
-fn source_info_of(app: &AppHandle, settings: &Settings) -> SourceInfo {
-    SourceInfo::of(settings, Os::current(), |dive_app| {
-        standard_path(app, dive_app)
-    })
-}
-
-/// Units of the dive application the log belongs to, from its preferences.
-fn source_units(app: &AppHandle, info: &SourceInfo) -> Units {
-    let Ok(home) = app.path().home_dir() else {
-        return Units::default();
-    };
-    units::read(&info.app.preferences, &home)
-}
-
-/// Units in use (spec F2): the dive application's, unless forced in the
-/// settings.
-fn units_in_use(app: &AppHandle, info: &SourceInfo) -> Units {
-    Settings::load(&config_dir(app))
-        .units
-        .resolve(source_units(app, info))
-}
-
-/// Opens the dive log `info` names with its application's reader. A log
-/// its reader reads whole is kept between requests while it does not change
-/// on disk (the last one only).
-fn open(app: &AppHandle, info: &SourceInfo) -> Result<Opened, Error> {
-    (info.app.open)(&info.path, &app.state::<Kept>())
-}
-
-/// Loads every dive of the configured dive log (off the UI thread: a dive log
-/// stored in iCloud may take a while to download).
-#[tauri::command]
-async fn load_dives(app: AppHandle) -> Result<DiveLog, LoadError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let source = source_info(&app);
-        let result = open(&app, &source).and_then(|o| {
-            let log = &o.log;
-            Ok((o.format, log.capabilities(), log.dives()?, log.sites()?))
-        });
-        match &result {
-            Ok((_, _, dives, sites)) => log::info!(
-                "dive log {}: {} dives, {} sites",
-                source.path.display(),
-                dives.len(),
-                sites.len()
-            ),
-            Err(e) => log::warn!("dive log {} not read: {e:?}", source.path.display()),
-        }
-        match result {
-            Ok((format, capabilities, dives, sites)) => Ok(DiveLog {
-                source_units: source_units(&app, &source).into(),
-                source,
-                format,
-                capabilities,
-                dives,
-                sites,
-            }),
-            Err(error) => Err(LoadError { source, error }),
-        }
-    })
-    .await
-    .expect("dive loading task failed")
-}
-
-/// Why a dive profile was not read.
-#[derive(Debug, Serialize)]
-#[serde(tag = "error", rename_all = "camelCase")]
-enum ProfileError {
-    /// The screen shows another dive log than the configured one.
-    LogChanged,
-    Source {
-        detail: Error,
-    },
-}
-
-impl From<LogChanged> for ProfileError {
-    fn from(_: LogChanged) -> Self {
-        Self::LogChanged
-    }
-}
-
-/// Profile of one dive of `log`, the dive log the screen shows; empty when
-/// the dive has none.
-#[tauri::command]
-async fn dive_profile(app: AppHandle, log: LogId, id: String) -> Result<Vec<Sample>, ProfileError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let info = source_info(&app);
-        log.check(&info)?;
-        open(&app, &info)
-            .and_then(|o| o.log.profile(&id))
-            .map_err(|detail| ProfileError::Source { detail })
-    })
-    .await
-    .expect("profile task failed")
-}
-
-/// Points DiveLens at another dive-log file, chosen by the user.
-#[tauri::command]
-fn set_source_path(app: AppHandle, path: Option<PathBuf>) -> Result<Settings, ChangeError> {
-    change_settings(&app, |s| {
-        let dive_app = s.source.app(Os::current());
-        s.source.set_location(dive_app, path);
-    })
-}
+use settings::{LogFile, Settings, change_settings, units_in_use};
 
 /// Tells the plugin what to write in its log (dropped when not connected:
 /// the level is sent again on connection).
@@ -1021,256 +691,6 @@ async fn collection_sets(app: AppHandle) -> Result<Vec<CollectionSet>, Collectio
     .expect("collection sets task failed")
 }
 
-/// Updates (spec F13): what this copy is, where the update stands, and the
-/// update the last check found, ready to download.
-struct Updates {
-    copy: update::Copy,
-    phase: Mutex<update::Phase>,
-    found: Mutex<Option<tauri_plugin_updater::Update>>,
-}
-
-fn update_status_of(app: &AppHandle) -> update::Status {
-    let updates = app.state::<Updates>();
-    let state = update::State::load(&config_dir(app));
-    update::Status {
-        phase: updates.phase.lock().expect("update phase").clone(),
-        installable: updates.copy.installable(),
-        last_check: state.last_check,
-        dismissed: state.dismissed,
-        notes_url: updates
-            .found
-            .lock()
-            .expect("update")
-            .as_ref()
-            .map(|u| update::notes_url(&u.version)),
-        releases_url: update::RELEASES_URL,
-    }
-}
-
-fn set_phase(app: &AppHandle, phase: update::Phase) {
-    *app.state::<Updates>().phase.lock().expect("update phase") = phase;
-    let _ = app.emit("update-status", update_status_of(app));
-}
-
-/// Where the update stands; changes arrive as `update-status` events.
-#[tauri::command]
-fn update_status(app: AppHandle) -> update::Status {
-    update_status_of(&app)
-}
-
-/// Asks GitHub for the latest stable version (`latest.json`, or the address
-/// in `DIVELENS_UPDATE_URL`), as offered to this system.
-async fn find_update(
-    app: &AppHandle,
-) -> Result<Option<tauri_plugin_updater::Update>, tauri_plugin_updater::Error> {
-    let mut builder = app
-        .updater_builder()
-        .target(update::target())
-        .version_comparator(|current, remote| update::is_offered(&current, &remote.version));
-    if let Ok(url) = std::env::var(update::URL_VARIABLE) {
-        log::info!("update: looking at {url}");
-        builder = builder.endpoints(vec![url.parse()?])?;
-    }
-    builder.build()?.check().await
-}
-
-/// Looks for a new version. `automatic` (at launch, or when the setting is
-/// turned on): only when checks are on, this copy is an installed one, and
-/// the last check is a day old; a failure then shows nothing.
-#[tauri::command]
-async fn check_update(app: AppHandle, automatic: bool) {
-    let dir = config_dir(&app);
-    if automatic {
-        let installed = app.state::<Updates>().copy.folder().is_some();
-        let due = update::due(update::State::load(&dir).last_check, update::now());
-        if !Settings::load(&dir).check_updates || !installed || !due {
-            return;
-        }
-    }
-    {
-        let updates = app.state::<Updates>();
-        let mut phase = updates.phase.lock().expect("update phase");
-        if matches!(
-            *phase,
-            update::Phase::Checking
-                | update::Phase::Downloading { .. }
-                | update::Phase::Installing { .. }
-        ) {
-            return;
-        }
-        *phase = update::Phase::Checking;
-    }
-    let _ = app.emit("update-status", update_status_of(&app));
-    match find_update(&app).await {
-        Ok(found) => {
-            let mut state = update::State::load(&dir);
-            state.last_check = Some(update::now());
-            if let Err(e) = state.save(&dir) {
-                log::warn!("update: last check not saved: {e}");
-            }
-            let phase = match &found {
-                Some(u) => {
-                    log::info!("update: Dive Lens {} available", u.version);
-                    update::Phase::Available {
-                        version: u.version.clone(),
-                    }
-                }
-                None => {
-                    log::info!("update: up to date");
-                    update::Phase::UpToDate
-                }
-            };
-            *app.state::<Updates>().found.lock().expect("update") = found;
-            set_phase(&app, phase);
-        }
-        Err(e) => {
-            log::warn!("update: check failed: {e}");
-            set_phase(
-                &app,
-                if automatic {
-                    update::Phase::Idle
-                } else {
-                    update::Phase::Failed {
-                        reason: update::failure_of(&e),
-                        version: None,
-                    }
-                },
-            );
-        }
-    }
-}
-
-/// The diver closed the notice of `version`: it comes back for a newer one.
-#[tauri::command]
-fn dismiss_update(app: AppHandle, version: String) {
-    let dir = config_dir(&app);
-    let mut state = update::State::load(&dir);
-    state.dismissed = Some(version);
-    if let Err(e) = state.save(&dir) {
-        log::warn!("update: closed notice not saved: {e}");
-    }
-    let _ = app.emit("update-status", update_status_of(&app));
-}
-
-/// Downloads the update found, checks its signature, replaces the plug-in
-/// folder and starts the new version; this app then quits. Never while
-/// Lightroom is being written to, and no write starts meanwhile.
-#[tauri::command]
-async fn install_update(app: AppHandle) {
-    let updates = app.state::<Updates>();
-    let found = updates.found.lock().expect("update").clone();
-    let Some(found) = found else {
-        return;
-    };
-    let version = found.version.clone();
-    let fail = |reason, detail: String| {
-        log::error!("update: Dive Lens {version} not installed: {detail}");
-        set_phase(
-            &app,
-            update::Phase::Failed {
-                reason,
-                version: Some(version.clone()),
-            },
-        );
-    };
-    let Some(folder) = updates.copy.folder().map(Path::to_path_buf) else {
-        return fail(
-            update::Failure::NotInstallable,
-            format!("{:?}", updates.copy),
-        );
-    };
-    if let Err(e) = update::check_installable(&folder) {
-        return fail(e.reason, e.detail);
-    }
-    if app.state::<Writes>().in_progress() {
-        return fail(
-            update::Failure::Writing,
-            "Lightroom is being written to".into(),
-        );
-    }
-    {
-        let mut phase = updates.phase.lock().expect("update phase");
-        if matches!(
-            *phase,
-            update::Phase::Downloading { .. } | update::Phase::Installing { .. }
-        ) {
-            return;
-        }
-        *phase = update::Phase::Downloading {
-            version: version.clone(),
-            percent: None,
-        };
-    }
-    let _ = app.emit("update-status", update_status_of(&app));
-    log::info!(
-        "update: downloading Dive Lens {version} from {}",
-        found.download_url
-    );
-    let mut done: u64 = 0;
-    let mut shown = None;
-    let bytes = found
-        .download(
-            |chunk, total| {
-                done += chunk as u64;
-                let percent = total
-                    .filter(|t| *t > 0)
-                    .map(|t| (done * 100 / t).min(100) as u8);
-                if percent != shown {
-                    shown = percent;
-                    set_phase(
-                        &app,
-                        update::Phase::Downloading {
-                            version: version.clone(),
-                            percent,
-                        },
-                    );
-                }
-            },
-            || {},
-        )
-        .await;
-    let bytes = match bytes {
-        Ok(bytes) => bytes,
-        Err(e) => return fail(update::failure_of(&e), e.to_string()),
-    };
-    set_phase(
-        &app,
-        update::Phase::Installing {
-            version: version.clone(),
-        },
-    );
-    let handle = app.clone();
-    let installed = tauri::async_runtime::spawn_blocking(move || {
-        let writes = handle.state::<Writes>();
-        writes.exclusive(|writing| {
-            if writing {
-                return Err(update::InstallError {
-                    reason: update::Failure::Writing,
-                    detail: "Lightroom is being written to".into(),
-                });
-            }
-            let new_app = update::install(&folder, &bytes, &found.version)?;
-            log::info!(
-                "update: Dive Lens {} installed in {}",
-                found.version,
-                folder.display()
-            );
-            if let Err(e) = update::relaunch(&new_app) {
-                log::error!("update: new version not started: {e}");
-            }
-            handle.exit(0);
-            // Holds off any write to Lightroom until this app has quit.
-            std::thread::sleep(Duration::from_secs(30));
-            Ok(())
-        })
-    })
-    .await
-    .expect("update task failed");
-    if let Err(e) = installed {
-        fail(e.reason, e.detail);
-    }
-}
-
 /// Screen asked for on the command line (`--screen tag`), when Lightroom
 /// launched the app from one of its menus.
 #[tauri::command]
@@ -1442,16 +862,16 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
-            dive_apps,
-            app_info,
-            get_settings,
-            update_settings,
-            export_settings,
-            check_settings_file,
-            import_settings,
-            load_dives,
-            dive_profile,
-            set_source_path,
+            settings::dive_apps,
+            settings::app_info,
+            settings::get_settings,
+            settings::update_settings,
+            settings::export_settings,
+            settings::check_settings_file,
+            settings::import_settings,
+            dive_log::load_dives,
+            dive_log::dive_profile,
+            dive_log::set_source_path,
             lightroom_status,
             lightroom_writing,
             initial_screen,
@@ -1465,10 +885,10 @@ pub fn run() {
             suggest_offsets,
             apply_collections,
             collection_sets,
-            update_status,
-            check_update,
-            dismiss_update,
-            install_update
+            update::update_status,
+            update::check_update,
+            update::dismiss_update,
+            update::install_update
         ])
         .setup(|app| {
             let settings = Settings::load(&config_dir(app.handle()));
@@ -1502,13 +922,13 @@ pub fn run() {
             {
                 update::clean_up(folder);
             }
-            app.manage(Updates {
+            app.manage(update::Updates {
                 copy,
                 phase: Mutex::new(update::Phase::default()),
                 found: Mutex::new(None),
             });
             let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move { check_update(handle, true).await });
+            tauri::async_runtime::spawn(async move { update::check_update(handle, true).await });
             // Writes are told to the UI from a thread of their own, in order:
             // never from under the lock that settings changes wait on.
             let (writing, told) = mpsc::channel::<bool>();
@@ -1536,13 +956,8 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::screen_arg;
-    use super::{
-        ChangeError, CollectionsError, DiveApp, Offsets, Os, Searches, Selection, Session,
-        Settings, Writes, change_unless_writing, dive_log, keep_search,
-    };
-    use crate::settings::DepthChoice;
+    use super::{CollectionsError, Offsets, Searches, Selection, Session, dive_log, keep_search};
     use divelens_core::subsurface;
-    use std::path::{Path, PathBuf};
     use std::sync::Mutex;
 
     #[test]
@@ -1603,71 +1018,6 @@ mod tests {
         assert!(keep_search(&selections, 3, &a.id(), &a, described()).is_ok());
         assert!(selections.lock().unwrap().get(2).is_none());
         assert_eq!(selections.lock().unwrap().get(3).unwrap().described, 3);
-    }
-
-    fn temp_dir(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("divelens-lib-{name}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
-    }
-
-    /// The system the tests run as: both applications are available.
-    const OS: Os = Os::MacOs;
-
-    fn standard(app: &DiveApp) -> PathBuf {
-        match app.id {
-            "macDive" => "/Users/diver/MacDive.sqlite".into(),
-            _ => "/Users/diver/diver.xml".into(),
-        }
-    }
-
-    fn log_of(s: &Settings) -> dive_log::LogId {
-        dive_log::SourceInfo::of(s, OS, standard).id()
-    }
-
-    fn on_file(s: &mut Settings, path: &Path) {
-        s.source.kind = subsurface::APP.id.into();
-        s.source
-            .set_location(&subsurface::APP, Some(path.to_path_buf()));
-    }
-
-    #[test]
-    fn settings_cannot_switch_the_dive_log_during_a_write() {
-        let dir = temp_dir("gate");
-        let (a, b) = (dir.join("a.xml"), dir.join("b.xml"));
-        let writes = Writes::new(|_| {});
-        change_unless_writing(&writes, &dir, log_of, |s| on_file(s, &a)).unwrap();
-        let shown = dive_log::configured(&dir, OS, standard).id();
-        let (writing, _) = writes
-            .begin(&shown, || dive_log::configured(&dir, OS, standard))
-            .unwrap();
-
-        let refused = change_unless_writing(&writes, &dir, log_of, |s| on_file(s, &b));
-        assert!(matches!(refused, Err(ChangeError::WriteInProgress)));
-        let location = |dir: &Path| {
-            Settings::load(dir)
-                .source
-                .location(&subsurface::APP)
-                .cloned()
-        };
-        assert_eq!(location(&dir), Some(a.clone()));
-        // An import naming another log is refused whole: units untouched.
-        let mut imported = Settings::default();
-        on_file(&mut imported, &b);
-        imported.units.depth = DepthChoice::Feet;
-        let refused = change_unless_writing(&writes, &dir, log_of, |s| s.replace_with(imported));
-        assert!(matches!(refused, Err(ChangeError::WriteInProgress)));
-        assert_eq!(Settings::load(&dir).units.depth, DepthChoice::Source);
-        // Other settings may change meanwhile.
-        change_unless_writing(&writes, &dir, log_of, |s| s.units.depth = DepthChoice::Feet)
-            .unwrap();
-        assert_eq!(Settings::load(&dir).units.depth, DepthChoice::Feet);
-
-        drop(writing);
-        change_unless_writing(&writes, &dir, log_of, |s| on_file(s, &b)).unwrap();
-        assert_eq!(location(&dir), Some(b));
-        std::fs::remove_dir_all(dir).unwrap();
     }
 
     fn args(list: &[&str]) -> Vec<String> {
