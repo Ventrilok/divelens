@@ -16,18 +16,18 @@ import {
   updateSettings,
   updateStatus,
 } from "./api";
-import { unitsInUse } from "./collectionPlace";
+import { unitsInUse } from "./collections/collectionPlace";
 import { latestOnly, logChangedNotice, logWatch, sameLogSetting } from "./diveLog";
-import { profiles } from "./profiles";
-import { isReadyScreen, Sidebar, type Screen } from "./components/Sidebar";
+import { profiles } from "./dives/profiles";
+import { isReadyScreen, Sidebar, type Screen } from "./ui/Sidebar";
 import { lang, setLanguage, t, type Key } from "./i18n";
-import { CollectionsScreen, type Phase } from "./screens/CollectionsScreen";
-import { DivesScreen } from "./screens/DivesScreen";
-import { TagScreen } from "./screens/TagScreen";
-import { SettingsScreen, type LogState } from "./screens/SettingsScreen";
-import { SourceError } from "./screens/SourceError";
-import { UpdateBanner } from "./components/UpdateBanner";
-import { noticeVersion } from "./updates";
+import { CollectionsScreen, type Phase } from "./collections/CollectionsScreen";
+import { DivesStep } from "./collections/DivesStep";
+import { TagScreen } from "./tag/TagScreen";
+import { SettingsScreen, type LogState } from "./settings/SettingsScreen";
+import { SourceError } from "./settings/SourceError";
+import { UpdateBanner } from "./updates/UpdateBanner";
+import { noticeVersion } from "./updates/updates";
 import type { AppInfo, LightroomStatus, LoadError, Settings, Sort, SourceInfo, SourceKind, UpdateStatus } from "./types";
 import "./App.css";
 
@@ -255,7 +255,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
         )}
         {screen !== "settings" && state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
         {log && screen === "collections" && !adjusting && (
-          <DivesScreen
+          <DivesStep
             log={log}
             selected={chosen}
             onSelect={setChosen}
