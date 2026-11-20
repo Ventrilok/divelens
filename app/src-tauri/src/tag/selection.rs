@@ -2,7 +2,7 @@
 //! Lightroom and their cameras, one clock offset each as in Create
 //! Collections, the live counts and "Suggest" for the chosen dive, and the
 //! values written on the photos taken during it. Nothing here talks to
-//! Lightroom; `lib.rs` does.
+//! Lightroom; the Tag Selection commands (`tag.rs`) do.
 //!
 //! A photo is in the dive when its capture time corrected by its camera's
 //! offset falls between the dive's start and end, exactly as in Create
@@ -18,9 +18,9 @@ use divelens_core::tags::{PhotoTags, Units};
 use divelens_core::{Dive, Error};
 use serde::{Deserialize, Serialize};
 
-use crate::collections::{Camera, CameraCount, Shots};
+use crate::apply::offsets::{Offsets, format_time, parse_time};
+use crate::apply::searches::{Camera, CameraCount, Shots};
 use crate::lightroom::FoundPhoto;
-use crate::offsets::{Offsets, format_time, parse_time};
 
 /// The photos selected in Lightroom, as the plugin described them, kept
 /// between the live counts and "Apply".

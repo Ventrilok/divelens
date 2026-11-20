@@ -1,4 +1,4 @@
-//! The settings: the file ([`file`]), the units the dive application shows
+//! The settings: the file ([`mod@file`]), the units the dive application shows
 //! ([`units`]), and the commands the Settings screen calls.
 
 mod file;
@@ -16,10 +16,11 @@ use divelens_core::tags::Units;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::applog;
 use crate::dive_log::{LogId, SourceInfo, WriteInProgress, Writes, guarded_change, source_info_of};
 use crate::files::config_dir;
+use crate::lightroom::commands::send_log_level;
 use crate::update::check_update;
-use crate::{applog, send_log_level};
 
 /// Where the app writes its log (`None`: no home folder).
 pub(crate) struct LogFile(pub(crate) Option<PathBuf>);
