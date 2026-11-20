@@ -1,8 +1,10 @@
 --[[
 Turns a "tag the selection" request from the app into the list of changes to
 make on each photo. Pure Lua (no Lightroom import) so it is tested outside
-Lightroom; Link.lua applies the changes in two catalog writes, the GPS and
-altitude in the second (splitGps).
+Lightroom. Link.lua makes the two catalog writes, the GPS and altitude in
+the second (splitGps); what goes in each, photo by photo (tagWrites,
+collectionWrites), and what the app is told afterwards (applyReply), is
+decided here.
 
 "Create Collections" requests are planned per dive with planCollections;
 a photo's GPS altitude (the depth, negative) is written only when the
@@ -104,10 +106,14 @@ local DIVE_IDENTITY = { "Source", "StartDate", "DiveId" }
 Tagging.MARKER = "WrittenAltitude"
 
 --- DiveLens fields "Tag Selection" and "Create Collections" read on each
---- photo before writing a dive (see retagChanges, photoWrites).
-Tagging.RETAG_FIELDS = {
-    "Source", "StartDate", "DiveId", "PhotoDepth", "PhotoTemp", "PhotoElapsed", "ClockOffset", Tagging.MARKER,
-}
+--- photo before writing a dive (see retagChanges, photoWrites): the dive
+--- identity, then the photo's own values, then the altitude marker.
+Tagging.RETAG_FIELDS = {}
+for _, list in ipairs { DIVE_IDENTITY, PER_PHOTO, { Tagging.MARKER } } do
+    for _, field in ipairs(list) do
+        table.insert(Tagging.RETAG_FIELDS, field)
+    end
+end
 
 local FT_PER_M = 3.28084 -- as core/src/tags.rs
 
@@ -268,6 +274,49 @@ function Tagging.progress(total, every)
     return p
 end
 
+--- Why a catalog write (Lightroom's withWriteAccessDo, run under pcall:
+--- `ok`, `status`) wrote nothing, or nil when it was executed: "error" and
+--- the error's text, or "busy" when Lightroom kept the catalog busy.
+function Tagging.writeFailure(ok, status)
+    if not ok then return "error", tostring(status) end
+    if status ~= "executed" then return "busy" end
+    return nil
+end
+
+--- True when a change of the second write clears the GPS altitude: the one
+--- write there Lightroom may refuse, which then leaves the altitude
+--- (Link.lua, writeGps).
+function Tagging.isAltitudeClear(change)
+    return change.field == "gpsAltitude" and change.value == nil
+end
+
+--- What the second write of an "Apply" did, from `ok` and `status` (as for
+--- writeFailure), and `cleared` and `refused` (altitudes cleared, and
+--- altitudes Lightroom refused to clear): { written = true, cleared,
+--- refused }, or { written = false, error = message, or nil when Lightroom
+--- kept the catalog busy }.
+function Tagging.secondWriteResult(ok, status, cleared, refused)
+    if not ok then return { written = false, error = tostring(status) } end
+    if status ~= "executed" then return { written = false } end
+    return { written = true, cleared = cleared, refused = refused }
+end
+
+--- The answer to the "Apply" `id`, once both writes are over. `outcome`:
+--- `ok` and `status` of the first write (as for writeFailure), and
+--- `second`, the second write's result (secondWriteResult), false when the
+--- first wrote nothing. Nothing written: "applyFailed", "error" or "busy";
+--- the first write only (dive data and location text, no GPS):
+--- "applyFailed", "gpsNotWritten"; both: `done`, as it is.
+function Tagging.applyReply(id, outcome, done)
+    local reason, detail = Tagging.writeFailure(outcome.ok, outcome.status)
+    if reason then return { type = "applyFailed", id = id, reason = reason, detail = detail } end
+    local second = outcome.second
+    if not second.written then
+        return { type = "applyFailed", id = id, reason = "gpsNotWritten", detail = second.error }
+    end
+    return done
+end
+
 -- One photo's own values, as the app sent them (core/src/tags.rs,
 -- PhotoTags): its per-photo fields (a missing value clears the field), its
 -- clock offset, and its GPS altitude when there is one to write, with the
@@ -343,8 +392,8 @@ local function writesDepth(own)
     return false
 end
 
---- One photo of a "Tag Selection" or "Create Collections" write, as Link.lua
---- makes it: `changes` (from plan, or a group's common changes) for every
+--- One photo of a "Tag Selection" or "Create Collections" write, as
+--- tagWrites and collectionWrites plan it: `changes` (from plan, or a group's common changes) for every
 --- photo; what the other dive the photo carried left (retagChanges, from
 --- `before`, what the photo carries; nil: nothing read); and the photo's
 --- own values, `own` (from planPhotos or planCollections; nil: none, the
@@ -368,6 +417,12 @@ function Tagging.photoWrites(changes, before, own)
     if own then extra = Tagging.notOverwritten(extra, own) end
     local first, second = Tagging.splitGps(changes, extra, own or {})
     return first, second, replaced
+end
+
+--- A Lightroom photo's id, as the app knows it: its local identifier, as
+--- text. The `idOf` of photoSet, sameSelection and the writes.
+function Tagging.photoId(photo)
+    return tostring(photo.localIdentifier)
 end
 
 --- The photos of a selection as a multiset, for sameSelection: { count =
@@ -395,6 +450,43 @@ function Tagging.sameSelection(set, photos, idOf)
         if now[id] ~= n then return false end
     end
     return true
+end
+
+--- Why "Tag Selection" writes nothing on `photos`, those selected now, or
+--- nil. With per-photo values (`perPhoto`, from planPhotos), the selection
+--- must be exactly the one described to the app (`described` = { id, set
+--- }, kept by Link.lua's describeSelection): "staleSelection" when the
+--- values are for another description, or none was made;
+--- "selectionChanged" when the photos are not those described. `idOf`
+--- gives a photo's id.
+function Tagging.selectionRefusal(perPhoto, described, photos, idOf)
+    if not perPhoto then return nil end
+    if not (described and described.id == perPhoto.selection) then return "staleSelection" end
+    if not Tagging.sameSelection(described.set, photos, idOf) then return "selectionChanged" end
+    return nil
+end
+
+--- The two catalog writes of a "Tag Selection", planned photo by photo
+--- (photoWrites) in the order of `photos`: `changes` (from plan) for every
+--- photo, what each carries before (`before` = { [photo] = ... }, read
+--- inside the first write; empty when not read) and its own values
+--- (`perPhoto`, from planPhotos, or nil; `idOf` gives a photo's id).
+--- Returns { writes = { { photo, changes }, ... }, the first write's, one
+--- per photo, even with nothing to write; later = { { photo, changes },
+--- ... }, the second write's, for the photos with a GPS position or
+--- altitude to write; cleared = photos that carried another dive's values;
+--- withValues = photos with their own values }.
+function Tagging.tagWrites(changes, photos, before, perPhoto, idOf)
+    local plan = { writes = {}, later = {}, cleared = 0, withValues = 0 }
+    for _, photo in ipairs(photos) do
+        local own = perPhoto and perPhoto.photos[idOf(photo)]
+        if own then plan.withValues = plan.withValues + 1 end
+        local now, afterwards, replaced = Tagging.photoWrites(changes, before[photo], own)
+        if replaced then plan.cleared = plan.cleared + 1 end
+        plan.writes[#plan.writes + 1] = { photo = photo, changes = now }
+        if #afterwards > 0 then plan.later[#plan.later + 1] = { photo = photo, changes = afterwards } end
+    end
+    return plan
 end
 
 --- Changes for one dive of a "Create Collections" request:
@@ -440,6 +532,58 @@ function Tagging.planCollections(request, formatDate)
     return groups, { parent = parent, group = group }
 end
 
+--- Finds the photos of planned groups (planCollections) in `byId`, the
+--- photos of the search the request names by id: sets `photo` on each
+--- planned photo, nil when it is no longer there. Returns the number of
+--- photos requested, found or not, and the list of those found.
+function Tagging.resolvePhotos(groups, byId)
+    local total, found = 0, {}
+    for _, g in ipairs(groups) do
+        total = total + #g.photos
+        for _, p in ipairs(g.photos) do
+            p.photo = byId[p.id]
+            if p.photo then found[#found + 1] = p.photo end
+        end
+    end
+    return total, found
+end
+
+--- The two catalog writes of a "Create Collections", planned group by
+--- group and photo by photo (photoWrites): `groups` from planCollections,
+--- their photos found (resolvePhotos); `before` = { [photo] = what it
+--- carries }, read inside the first write; `existing` = { [name] = true }
+--- for the collections already there. Returns:
+---   groups  = { [gi] = { steps, photos } }: one step per photo requested,
+---             found or not, { photo, changes } for the first write, or {}
+---             for a photo not found; `photos`, those found, for the
+---             collection;
+---   later   = { { photo, changes }, ... }: the second write's, for the
+---             photos with a GPS position or altitude to write;
+---   results = { [gi] = { collection, count = photos found, created } }, as
+---             the app is told: `created` when the collection was not
+---             there, even with no photo found (no collection made then).
+function Tagging.collectionWrites(groups, before, existing)
+    local plan = { groups = {}, later = {}, results = {} }
+    for gi, g in ipairs(groups) do
+        local steps, photos = {}, {}
+        for _, p in ipairs(g.photos) do
+            local step = {}
+            if p.photo then
+                -- Its changes for the first write, and its GPS position
+                -- and altitude for the second.
+                local now, gps = Tagging.photoWrites(g.common, before[p.photo], p.changes)
+                step.photo, step.changes = p.photo, now
+                if #gps > 0 then plan.later[#plan.later + 1] = { photo = p.photo, changes = gps } end
+                photos[#photos + 1] = p.photo
+            end
+            steps[#steps + 1] = step
+        end
+        plan.groups[gi] = { steps = steps, photos = photos }
+        plan.results[gi] = { collection = g.collection, count = #photos, created = not existing[g.collection] }
+    end
+    return plan
+end
+
 --- Follows `names` down from `root` (the catalog or a collection set): the
 --- collection set found, or nil. `names` empty: `root` itself.
 function Tagging.findSet(root, names)
@@ -456,6 +600,13 @@ function Tagging.findSet(root, names)
         current = found
     end
     return current
+end
+
+--- The item of `list` (collections or collection sets) named `name`, or nil.
+function Tagging.findChild(list, name)
+    for _, item in ipairs(list) do
+        if item:getName() == name then return item end
+    end
 end
 
 --- The collection sets under `root`, as a tree { name, children }.
@@ -494,6 +645,35 @@ function Tagging.describePhoto(id, iso, make, model, serial)
         model = clean(model) or clean(make),
         serial = clean(serial),
     }
+end
+
+--- Earliest and latest capture times of the selection, wall-clock
+--- "YYYY-MM-DDTHH:MM:SS" (or nil), overall and per camera (the app applies
+--- each camera's remembered clock offset). `list`: the photos described
+--- (describePhoto). Returns nil for no photo; otherwise the first time, the
+--- last, and the cameras in the order first seen, { { model, serial, from,
+--- to }, ... }.
+function Tagging.timeRange(list)
+    if #list == 0 then return nil end
+    local first, last
+    local cameras, order = {}, {}
+    for _, p in ipairs(list) do
+        local t = p.time
+        if t then
+            if not first or t < first then first = t end
+            if not last or t > last then last = t end
+            local key = (p.model or "") .. "|" .. (p.serial or "")
+            local c = cameras[key]
+            if not c then
+                c = { model = p.model, serial = p.serial, from = t, to = t }
+                cameras[key] = c
+                order[#order + 1] = c
+            end
+            if t < c.from then c.from = t end
+            if t > c.to then c.to = t end
+        end
+    end
+    return first, last, order
 end
 
 --- Wall-clock "YYYY-MM-DDTHH:MM:SS" to its parts, or nil.

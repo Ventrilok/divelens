@@ -209,3 +209,121 @@ fn collection_sets_are_found_by_path_and_listed() {
         "#,
     );
 }
+
+#[test]
+fn collection_writes_step_every_requested_photo() {
+    use divelens_core::tags::{
+        CollectionGroup, CollectionsRequest, DiveTags, LocationTags, PhotoTags, Units,
+    };
+    use serde_json::json;
+    let dive = sample_dive();
+    let point = divelens_core::profile::PhotoPoint {
+        elapsed_s: 160,
+        depth_m: 10.0,
+        temp_c: Some(25.0),
+    };
+    let group = |collection: &str, photos: Vec<PhotoTags>| CollectionGroup {
+        collection: collection.into(),
+        dive: DiveTags::new(&dive, Units::default(), "Subsurface"),
+        location: LocationTags::new(&dive.site, None, None),
+        photos,
+    };
+    let request = CollectionsRequest {
+        search: 3,
+        parent: Vec::new(),
+        group: Some("Dive Lens".into()),
+        groups: vec![
+            group(
+                "700 - Coral Garden",
+                vec![
+                    PhotoTags::new("11".into(), Some(point), 241, Units::default()),
+                    PhotoTags::new("12".into(), None, -30, Units::default()),
+                ],
+            ),
+            group(
+                "701 - North Reef",
+                vec![PhotoTags::new("21".into(), None, 0, Units::default())],
+            ),
+        ],
+    };
+    let lua = lua();
+    lua.globals()
+        .set("input", serde_json::to_string(&request).unwrap())
+        .unwrap();
+    let text: String = match lua
+        .load(
+            r#"
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            local groups = assert(Tagging.planCollections(Json.decode(input), function(iso) return iso end))
+            -- Only photo 11 is still in the catalog.
+            local p11 = { id = "11" }
+            local total, found = Tagging.resolvePhotos(groups, { ["11"] = p11 })
+            assert(groups[1].photos[1].photo == p11 and groups[1].photos[2].photo == nil)
+            local function ids(list)
+                local out = {}
+                for i, p in ipairs(list) do out[i] = p.id end
+                return #out > 0 and out or Json.emptyArray
+            end
+            -- The writes as photo ids and numbers of changes.
+            local function summary(plan)
+                local out = { groups = {}, later = {}, results = plan.results }
+                for gi, g in ipairs(plan.groups) do
+                    local steps = {}
+                    for i, s in ipairs(g.steps) do
+                        steps[i] = s.photo and { photo = s.photo.id, changes = #s.changes } or Json.null
+                    end
+                    out.groups[gi] = { steps = steps, photos = ids(g.photos) }
+                end
+                for i, l in ipairs(plan.later) do out.later[i] = { photo = l.photo.id, changes = #l.changes } end
+                return out
+            end
+            return Json.encode {
+                total = total,
+                found = ids(found),
+                first = summary(Tagging.collectionWrites(groups, {}, { ["700 - Coral Garden"] = true })),
+                second = summary(Tagging.collectionWrites(groups, {}, { ["701 - North Reef"] = true })),
+            }
+            "#,
+        )
+        .eval()
+    {
+        Ok(text) => text,
+        Err(e) => panic!("{e}"),
+    };
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    // One step per photo requested, found or not (progress counts them
+    // all); a collection counts only the photos found.
+    let groups = json!([
+        {
+            "steps": [{ "photo": "11", "changes": 15 }, null],
+            "photos": ["11"],
+        },
+        { "steps": [null], "photos": [] },
+    ]);
+    let later = json!([{ "photo": "11", "changes": 1 }]);
+    assert_eq!(
+        value,
+        json!({
+            "total": 3,
+            "found": ["11"],
+            "first": {
+                "groups": groups,
+                "later": later,
+                "results": [
+                    { "collection": "700 - Coral Garden", "count": 1, "created": false },
+                    { "collection": "701 - North Reef", "count": 0, "created": true },
+                ],
+            },
+            // Already there or not, even without a photo found.
+            "second": {
+                "groups": groups,
+                "later": later,
+                "results": [
+                    { "collection": "700 - Coral Garden", "count": 1, "created": true },
+                    { "collection": "701 - North Reef", "count": 0, "created": false },
+                ],
+            },
+        })
+    );
+}

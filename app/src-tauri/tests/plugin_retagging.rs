@@ -803,3 +803,25 @@ fn create_collections_clears_the_altitude_it_wrote_from_a_depth_cleared() {
     assert!(refiled(Before::FiledEarlier(&feet), None, &margin).is_empty());
     assert!(refiled(Before::FiledEarlier(&photo), Some(12.0), &margin).is_empty());
 }
+
+#[test]
+fn retag_fields_are_the_dive_identity_then_the_photo_values_then_the_marker() {
+    let lua = common::lua();
+    let fields: Vec<String> = lua
+        .load(r#"return require("Tagging").RETAG_FIELDS"#)
+        .eval()
+        .unwrap();
+    assert_eq!(
+        fields,
+        [
+            "Source",
+            "StartDate",
+            "DiveId",
+            "PhotoDepth",
+            "PhotoTemp",
+            "PhotoElapsed",
+            "ClockOffset",
+            "WrittenAltitude"
+        ]
+    );
+}
