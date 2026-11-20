@@ -107,6 +107,8 @@ The plug-in's pure-Lua parts (JSON, message framing, manifest, metadata fields) 
 
 A dev window started with `npm run tauri dev` connects to Lightroom by itself while it runs.
 
+Before a release that touches the plug-in or the catalog writes, run the [Lightroom checks](docs/contributing/lightroom-checks.md).
+
 The plug-in writes its log to `DiveLens.log` in Lightroom's log folder, next to the app's `DiveLens App.log`: `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/` on macOS, `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\` on Windows. These logs contain your own data (dive sites, file paths): read them, but never commit them or post them in an issue or a pull request.
 
 Never copy files from the Adobe Lightroom SDK into the repository. The legacy 0.x plug-in's licence code, compiled Lua bytecode and the `luac5.1` binary must not be brought over either.
