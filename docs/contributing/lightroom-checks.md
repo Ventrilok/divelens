@@ -1,6 +1,6 @@
 # Lightroom checks
 
-The automatic tests cannot prove that Lightroom accepts what Dive Lens writes to its catalog, or that one **Undo** takes it all back. These thirteen checks are played by hand in Lightroom Classic, on a test catalog, with fictional photos.
+The automatic tests cannot prove that Lightroom accepts what Dive Lens writes to its catalog, or that one **Undo** takes it all back, and they do not see the screens. These eighteen checks are played by hand in Lightroom Classic, on a test catalog, with fictional photos.
 
 Play them before a release that touches the plug-in or the catalog writes, and after a large refactoring. Compare the result with the previous run: a difference is a finding, even if it looks harmless.
 
@@ -8,22 +8,23 @@ Play them before a release that touches the plug-in or the catalog writes, and a
 
 1. In Lightroom Classic: **File › New Catalog…**, in a temporary folder. Never use your usual catalog.
 2. **File › Import Photos and Video…**: choose the folder `docs/contributing/lightroom-checks/`, and import it with **Copy** into a folder next to the test catalog. Never use **Add**: Lightroom could write metadata into the files of the repository.
-3. In Dive Lens settings (**Help › Plug-in Extras › Dive Lens Settings…**), set every setting to its value in the "Base" column of the table below.
+3. Open Dive Lens settings (**Help › Plug-in Extras › Dive Lens Settings…**). Export your own settings first (**Export or import › Export…**): the checks replace them. Then set every setting to its base value in the table below.
+4. After the last check, import your own settings back (**Export or import › Import…**).
 
 ### Settings
 
-Each check says in its "Settings" column which settings it is played with ([the checks](#the-checks)). Every check uses the base settings except check 10, which changes two of them; set them back after it.
+Each check says in its "Settings" column which settings it is played with ([the checks](#the-checks)). Every check uses the base settings except checks 10, 16 and 18, which say what they change; set those settings back after each of them.
 
-| Settings section › setting | Base (checks 1 to 9 and 11) | Check 10 |
-|---|---|---|
-| Dive log › Application | Subsurface | Subsurface |
-| Dive log › log file | `core/fixtures/subsurface/fictional.xml` | the same |
-| Display › Depth | Metres | **Feet** |
-| Display › Temperature | °C | °C |
-| Writing on photos › Copy depth to GPS altitude | **Off** | **On** |
-| Collections › Place in | Catalog root | Catalog root |
-| Collections › Group in the set | Dive Lens | Dive Lens |
-| Camera cards › clock offset of Test Camera A and Test Camera B | 0:00 | 0:00 |
+| Settings section › setting | Base |
+|---|---|
+| Dive log › Application | Subsurface |
+| Dive log › log file | `core/fixtures/subsurface/fictional.xml` |
+| Display › Depth | Metres |
+| Display › Temperature | °C |
+| Writing on photos › Copy depth to GPS altitude | **Off** |
+| Collections › Place in | Catalog root |
+| Collections › Group in the set | Dive Lens |
+| Camera cards › clock offset of Test Camera A and Test Camera B | 0:00 |
 
 The language, the log level and the automatic update check have no effect on the checks.
 
@@ -83,12 +84,26 @@ Each check starts from the state left by the previous one unless it says otherwi
 
 If the reference shows on Windows that one Undo does not take back both writes, stop and report it: it is not fixed by a refactoring.
 
+### Screen checks
+
+These checks write nothing on photos: they look at what the app shows.
+
+| # | Settings | Start | Action | Expected |
+|---|---|---|---|---|
+| 14 | Base | Select A1, A2, A3. | **Tag Selection…**, without choosing a dive. Then, with the app still open, select X1 alone in Lightroom, then A1 and B1 together. | A1, A2, A3: dive 101 marked "Covers the selection" and shown in detail. X1 alone: no dive marked. A1 and B1: no dive marked. |
+| 15 | Base | Any selection. | In **Tag Selection…**: type "Glacier" in the search field, then **Clear filters**. Set **Rating** to "5★ and more", then **Clear filters**. In **Create Collections…**, first step: set **Country** to Lemuria, then **Clear filters**. Set **Period** from 2025-06-17 to 2025-06-17, then **Clear filters**. | Glacier: dive 102 only. 5★ and more: dive 107 only. Lemuria: dive 104 only. 17 June 2025: dives 106 and 107 only. After each **Clear filters**: every dive back. |
+| 16 | Depth **Feet**, everything else as Base | Any selection. | Open **Tag Selection…** and read the depths in the dive list. Then set Depth back to Metres and read them again. | In feet: dive 101 60 ft, dive 108 102 ft. In metres: dive 101 18.4 m, dive 108 31.2 m. |
+| 17 | Base | Connected to the internet. | In Dive Lens settings, **Updates**: click **Check now**. | When the version played is the latest one published: "Up to date · last checked today at" the current time. Otherwise: "Version … available", with the latest version. |
+| 18 | Log file: a copy of the fictional log (see Action), everything else as Base | Copy `core/fixtures/subsurface/fictional.xml` into the test folder, next to the test catalog. | In Dive Lens settings, **Dive log**: **Choose a file…** and choose that copy. Quit Dive Lens. Rename the copy. Open **Tag Selection…**. On the screen shown, **Choose a file…** and choose `core/fixtures/subsurface/fictional.xml` of the repository. | A screen "Subsurface dive log not found", with the copy's former path, the buttons **Choose a file…** and **Choose a folder…**, and no **Try again**. After choosing the file: the dive list. |
+
+A development build never looks for updates by itself (only an installed copy does, at most once a day): on a development build, no update notice on opening proves nothing. Check 17 asks GitHub on any build.
+
 ## Recording the result
 
 In the pull request, give:
 
 - the system (macOS or Windows) and the Lightroom Classic version;
 - the Dive Lens version;
-- one line per check, 1 to 13: **OK**, or the difference described in words.
+- one line per check, 1 to 18: **OK**, or the difference described in words.
 
 Describe differences in words only. No real dive data, no screenshot of a real catalog.
