@@ -1,6 +1,6 @@
 # Lightroom checks
 
-The automatic tests cannot prove that Lightroom accepts what Dive Lens writes to its catalog, or that one **Undo** takes it all back. These eleven checks are played by hand in Lightroom Classic, on a test catalog, with fictional photos.
+The automatic tests cannot prove that Lightroom accepts what Dive Lens writes to its catalog, or that one **Undo** takes it all back, and they do not see the screens. These eighteen checks are played by hand in Lightroom Classic, on a test catalog, with fictional photos.
 
 Play them before a release that touches the plug-in or the catalog writes, and after a large refactoring. Compare the result with the previous run: a difference is a finding, even if it looks harmless.
 
@@ -8,7 +8,27 @@ Play them before a release that touches the plug-in or the catalog writes, and a
 
 1. In Lightroom Classic: **File › New Catalog…**, in a temporary folder. Never use your usual catalog.
 2. **File › Import Photos and Video…**: choose the folder `docs/contributing/lightroom-checks/`, and import it with **Copy** into a folder next to the test catalog. Never use **Add**: Lightroom could write metadata into the files of the repository.
-3. In Dive Lens settings: source Subsurface, dive log `core/fixtures/subsurface/fictional.xml`, metric units, altitude option off (it is turned on only in check 10).
+3. Open Dive Lens settings (**Help › Plug-in Extras › Dive Lens Settings…**). Export your own settings first (**Export or import › Export…**): the checks replace them. Then set every setting to its base value in the table below.
+4. After the last check, import your own settings back (**Export or import › Import…**).
+
+### Settings
+
+Each check says in its "Settings" column which settings it is played with ([the checks](#the-checks)). Every check uses the base settings except checks 10, 16 and 18, which say what they change; set those settings back after each of them.
+
+| Settings section › setting | Base |
+|---|---|
+| Dive log › Application | Subsurface |
+| Dive log › log file | `core/fixtures/subsurface/fictional.xml` |
+| Display › Depth | Metres |
+| Display › Temperature | °C |
+| Writing on photos › Copy depth to GPS altitude | **Off** |
+| Collections › Place in | Catalog root |
+| Collections › Group in the set | Dive Lens |
+| Camera cards › clock offset of Test Camera A and Test Camera B | 0:00 |
+
+The language, the log level and the automatic update check have no effect on the checks.
+
+Dive Lens remembers each camera's last clock offset outside the catalog, so a new catalog does not reset it. If a camera card in **Tag Selection** or **Create Collections** shows another offset than 0:00 (left by an earlier run), set it to 0:00 before **Apply**.
 
 ### Playing on a development build (macOS)
 
@@ -46,21 +66,37 @@ Expected for dive 101: `MaxDepth` 18.4 m, country "Atlantis", city "North Reef",
 
 Each check starts from the state left by the previous one unless it says otherwise. Reset (remove the Dive Lens values, or use a fresh import) whenever a check says "clean".
 
-| # | Start | Action | Expected |
-|---|---|---|---|
-| 1 | Clean. Select A1, A2, A3. | **Library › Plug-in Extras › Tag Selection…**, choose dive 101, **Apply**. | Dive Lens fields filled. Dive values as above. Each photo has its own depth: A1 18.0 m, A2 15.0 m, A3 10.0 m. GPS and altitude written. |
-| 2 | After 1. | **Edit › Undo** once. | Everything is gone, GPS and altitude included. |
-| 3 | Start from the state after check 1 (run it again first if you undid it). Select A1. | **Library › Plug-in Extras › Tag Selection…**, choose dive 102, **Apply**. | The dive fields show dive 102 (number 102, Glacier Wall, GPS -64.125, -60.5 as Lightroom displays it). A1's own values from dive 101 (photo depth, photo temperature, elapsed time, clock offset) are empty. No photo depth is written, since A1 (09:40) is outside dive 102 (14:00-14:35). A refusal is not expected. |
-| 4 | After 3. Select A1. | **Tag Selection…**, choose dive 102 again, **Apply**. | Nothing else changes. |
-| 5 | Select one photo, then none. | Select one photo and open **Tag Selection…** (the menu item is disabled with no photo selected). Then, in Lightroom, deselect everything (**Edit › Select None**). Note what the app shows (Apply disabled with a message saying to select photos, or a refusal if you apply). | Nothing is written. |
-| 6 | Select A1, open the app on that selection. | Change the selection in Lightroom (select B1), then click **Apply** in the app. | Never the values of the old selection on other photos: either a refusal with nothing written, or the app describes the new selection again and writes on the new one. |
-| 7 | Clean. Select A1, A2, A3, B1, B2. | **Library › Plug-in Extras › Create Collections…** for dives 101 and 102. | Collections in the "Dive Lens" set, photos in the right collection, values written. |
-| 8 | After 7. | **Edit › Undo** once. | Note exactly what one Undo takes back. If a collection set was just created, it forms its own Undo step (separate write in the current code). |
-| 9 | After 7 (run check 7 again first if you undid it). | Run **Create Collections…** again. | Nothing duplicated. |
-| 10 | Clean. Settings: units in feet, altitude option on. Select A1, A2, A3. | **Tag Selection…**, dive 101, **Apply**. | Depths shown in ft: A1 photo depth about 59 ft (18.0 m), max depth about 60 ft (18.4 m); GPS altitude about -18 m (Lightroom shows it in its own unit). The exact texts are those recorded in the reference run. Set the settings back afterwards. |
-| 11 | Windows only. | Play checks 2 and 8. | One Undo is enough. |
+| # | Settings | Start | Action | Expected |
+|---|---|---|---|---|
+| 1 | Base | Clean. Select A1, A2, A3. | **Library › Plug-in Extras › Tag Selection…**, choose dive 101, **Apply**. | Dive Lens fields: dive 101, values as above. Photo depth: A1 18.0 m, A2 15.0 m, A3 10.0 m. GPS filled. GPS altitude empty. |
+| 2 | Base | After 1. | **Edit › Undo** once. | Dive Lens fields, location and GPS empty. |
+| 3 | Base | Start from the state after check 1 (run it again first if you undid it). Select A1. | **Library › Plug-in Extras › Tag Selection…**, choose dive 102, **Apply**. | Dive Lens fields: dive 102, Glacier Wall. GPS -64.125, -60.5. Photo depth, photo temperature, elapsed time and clock offset empty. No refusal. |
+| 4 | Base | After 3. Select A1. | **Tag Selection…**, choose dive 102 again, **Apply**. | No change. |
+| 5 | Base | Select one photo, then none. | Select one photo and open **Tag Selection…** (the menu item is disabled with no photo selected). Then, in Lightroom, deselect everything (**Edit › Select None**). Note what the app shows. | Nothing is written. |
+| 6 | Base | Select A1, open the app on that selection. | Change the selection in Lightroom (select B1), then click **Apply** in the app. | B1 never gets A1's values: either a refusal and nothing written, or the app switches to B1 and writes B1's values. |
+| 7 | Base | Clean. Select A1, A2, A3, B1, B2. | **Library › Plug-in Extras › Create Collections…** for dives 101 and 102. | A "Dive Lens" set with one collection per dive (101, 102). Each photo in its dive's collection, Dive Lens fields filled. |
+| 8 | Base | After 7. | **Edit › Undo** once. | Everything check 7 wrote is undone. A "Dive Lens" set created by check 7 needs a second Undo. |
+| 9 | Base | After 7 (run check 7 again first if you undid it). | Run **Create Collections…** again. | Nothing duplicated. |
+| 10 | Depth **Feet**, Copy depth to GPS altitude **On**, everything else as Base | Clean. Select A1, A2, A3. | **Tag Selection…**, dive 101, **Apply**. Afterwards, set Depth back to Metres and the altitude copy back to Off. | Photo depth: A1 about 59 ft. Max depth about 60 ft. GPS altitude about -18 m (Lightroom may show it in feet). |
+| 11 | Base | Windows only. | Play checks 2 and 8. | One Undo takes everything back. |
+| 12 | Base | Clean. Select B1, B2. | **Tag Selection…**, choose dive **101** (not the one marked "Covers the selection"). On the Test Camera B card, click **Suggest**, then **Apply**. | Suggest gives −4:30. B1 and B2: dive 101, Clock Offset -04:30. Photo depth: B1 18.0 m, B2 15.0 m. |
+| 13 | Base | After 12. Select B1, B2. | Open **Tag Selection…**. Then open **Create Collections…**, choose dive 101 and go to the cameras step. Close both without applying. To finish, set Test Camera B back to 0:00: **Tag Selection…** on B1, B2, dive 102, Test Camera B at 0:00, **Apply**. | Tag Selection: dive 101 marked "Covers the selection", Test Camera B card at −4:30 with "remembered offset". Create Collections: Test Camera B card at −4:30 with "remembered offset". |
 
 If the reference shows on Windows that one Undo does not take back both writes, stop and report it: it is not fixed by a refactoring.
+
+### Screen checks
+
+These checks write nothing on photos: they look at what the app shows.
+
+| # | Settings | Start | Action | Expected |
+|---|---|---|---|---|
+| 14 | Base | Select A1, A2, A3. | **Tag Selection…**, without choosing a dive. Then, with the app still open, select X1 alone in Lightroom, then A1 and B1 together. | A1, A2, A3: dive 101 marked "Covers the selection" and shown in detail. X1 alone: no dive marked. A1 and B1: no dive marked. |
+| 15 | Base | Any selection. | In **Tag Selection…**: type "Glacier" in the search field, then **Clear filters**. Set **Rating** to "5★ and more", then **Clear filters**. In **Create Collections…**, first step: set **Country** to Lemuria, then **Clear filters**. Set **Period** from 2025-06-17 to 2025-06-17, then **Clear filters**. | Glacier: dive 102 only. 5★ and more: dive 107 only. Lemuria: dive 104 only. 17 June 2025: dives 106 and 107 only. After each **Clear filters**: every dive back. |
+| 16 | Depth **Feet**, everything else as Base | Any selection. | Open **Tag Selection…** and read the depths in the dive list. Then set Depth back to Metres and read them again. | In feet: dive 101 60 ft, dive 108 102 ft. In metres: dive 101 18.4 m, dive 108 31.2 m. |
+| 17 | Base | Connected to the internet. | In Dive Lens settings, **Updates**: click **Check now**. | When the version played is the latest one published: "Up to date · last checked today at" the current time. Otherwise: "Version … available", with the latest version. |
+| 18 | Log file: a copy of the fictional log (see Action), everything else as Base | Copy `core/fixtures/subsurface/fictional.xml` into the test folder, next to the test catalog. | In Dive Lens settings, **Dive log**: **Choose a file…** and choose that copy. Quit Dive Lens. Rename the copy. Open **Tag Selection…**. On the screen shown, **Choose a file…** and choose `core/fixtures/subsurface/fictional.xml` of the repository. | A screen "Subsurface dive log not found", with the copy's former path, the buttons **Choose a file…** and **Choose a folder…**, and no **Try again**. After choosing the file: the dive list. |
+
+A development build never looks for updates by itself (only an installed copy does, at most once a day): on a development build, no update notice on opening proves nothing. Check 17 asks GitHub on any build.
 
 ## Recording the result
 
@@ -68,6 +104,6 @@ In the pull request, give:
 
 - the system (macOS or Windows) and the Lightroom Classic version;
 - the Dive Lens version;
-- one line per check, 1 to 11: **OK**, or the difference described in words.
+- one line per check, 1 to 18: **OK**, or the difference described in words.
 
 Describe differences in words only. No real dive data, no screenshot of a real catalog.
