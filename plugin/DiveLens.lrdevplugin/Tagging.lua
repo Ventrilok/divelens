@@ -575,10 +575,13 @@ end
 ---   later   = { { photo, changes }, ... }: the second write's, for the
 ---             photos with a GPS position or altitude to write;
 ---   results = { [gi] = { collection, count = photos found, created } }, as
----             the app is told: `created` when the collection was not
----             there, even with no photo found (no collection made then).
+---             the app is told: `created` only for the group that really
+---             makes its collection: a photo found, the name neither there
+---             nor made by an earlier group (that one is completed);
+---   cleared = photos that carried another dive's values (as tagWrites).
 function Tagging.collectionWrites(groups, before, existing)
-    local plan = { groups = {}, later = {}, results = {} }
+    local plan = { groups = {}, later = {}, results = {}, cleared = 0 }
+    local made = {}
     for gi, g in ipairs(groups) do
         local steps, photos = {}, {}
         for _, p in ipairs(g.photos) do
@@ -586,7 +589,8 @@ function Tagging.collectionWrites(groups, before, existing)
             if p.photo then
                 -- Its changes for the first write, and its GPS position
                 -- and altitude for the second.
-                local now, gps = Tagging.photoWrites(g.common, before[p.photo], p.changes)
+                local now, gps, replaced = Tagging.photoWrites(g.common, before[p.photo], p.changes)
+                if replaced then plan.cleared = plan.cleared + 1 end
                 step.photo, step.changes = p.photo, now
                 if #gps > 0 then plan.later[#plan.later + 1] = { photo = p.photo, changes = gps } end
                 photos[#photos + 1] = p.photo
@@ -594,7 +598,9 @@ function Tagging.collectionWrites(groups, before, existing)
             steps[#steps + 1] = step
         end
         plan.groups[gi] = { steps = steps, photos = photos }
-        plan.results[gi] = { collection = g.collection, count = #photos, created = not existing[g.collection] }
+        local created = #photos > 0 and not existing[g.collection] and not made[g.collection]
+        if created then made[g.collection] = true end
+        plan.results[gi] = { collection = g.collection, count = #photos, created = created }
     end
     return plan
 end

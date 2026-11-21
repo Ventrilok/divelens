@@ -103,12 +103,12 @@ function ApplyCollections.run(s, message)
     local total, found = Tagging.resolvePhotos(groups, s.search.photos)
     local undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)"
     local progress = Tagging.progress(total, CatalogWrite.PROGRESS_EVERY)
-    local results, later = {}, {}
+    local results, later, cleared = {}, {}, 0
     local ok, status = LrTasks.pcall(function()
         return catalog:withWriteAccessDo(undoName, function()
             local before = CatalogWrite.photosBefore(catalog, found)
             local planned = Tagging.collectionWrites(groups, before, existing)
-            results, later = planned.results, planned.later
+            results, later, cleared = planned.results, planned.later, planned.cleared
             for gi, g in ipairs(groups) do
                 local group = planned.groups[gi]
                 -- One step per photo requested: written when found.
@@ -137,7 +137,8 @@ function ApplyCollections.run(s, message)
         Log.warn("collections written but not the GPS and altitude of %d photos: %s", #later, second.error or "Lightroom busy")
     else
         CatalogWrite.logSecondWrite(later, second)
-        Log.info("collections written: %d groups, %d photos (GPS altitude cleared on %d)", #results, total, second.cleared)
+        Log.info("collections written: %d groups, %d photos; another dive's values cleared or replaced on %d (GPS altitude cleared on %d)",
+            #results, total, cleared, second.cleared)
     end
 end
 
