@@ -50,14 +50,14 @@
 | A9 Deux types d'erreur pour Tag | Aligné : l'écriture de Tag renvoie ses refus de Lightroom comme Collections (en erreur) | Task 3 |
 | A10 Verrous empoisonnés | Phase 4 (n°13) | Task 12 |
 | A11 Trois traducteurs, code brut dans Tag (n°1) | Textes lisibles en Task 4 ; un seul traducteur en Task 9 | Tasks 4, 9 |
-| A12 Tag bloqué sur « Lecture de la sélection… » | Si accepté par le propriétaire | Task 5 |
-| A13 GPS invalide abandonné en silence | Si accepté | Task 5 |
-| A14 « Appliquer » grisé sans explication (Collections) | Si accepté | Task 6 |
-| A15 Réglages des appareils actifs pendant une écriture | Si accepté | Task 6 |
+| A12 Tag bloqué sur « Lecture de la sélection… » | Corrigé (accepté par le propriétaire le 2026-11-21) | Task 5 |
+| A13 GPS invalide abandonné en silence | Corrigé (accepté) | Task 5 |
+| A14 « Appliquer » grisé sans explication (Collections) | Corrigé (accepté) | Task 6 |
+| A15 Réglages des appareils actifs pendant une écriture | Corrigé (accepté) | Task 6 |
 | A16 Échec de recherche dit « Rien n'a été écrit… réappliquez » | Corrigé : textes propres à la recherche | Task 4 |
 | A17 Réglage non enregistré laissé à l'écran (n°4) | Phase 4 | Task 11 |
 
-**Différences voulues avec la référence 2.1.1** (à ne pas prendre pour des régressions à la recette) : messages d'erreur de « Tagger la sélection » lisibles ; messages d'échec de recherche reformulés ; libellé « créée » correct dans le résumé de « Créer les collections » ; défauts A12 à A15 corrigés s'ils sont acceptés. Aucun des contrôles 1 à 18 ne change de résultat attendu, sauf mention dans la PR concernée.
+**Différences voulues avec la référence 2.1.1** (à ne pas prendre pour des régressions à la recette) : messages d'erreur de « Tagger la sélection » lisibles ; messages d'échec de recherche reformulés ; libellé « créée » correct dans le résumé de « Créer les collections » ; défauts A12 à A15 corrigés. Aucun des contrôles 1 à 18 ne change de résultat attendu, sauf mention dans la PR concernée.
 
 **Windows.** Pas de testeur : le contrôle 11 reste « non joué », pas d'installateur d'essai. Risque résiduel accepté par le propriétaire ou non : l'enveloppe fusionnée est exactement ce dont dépend « un seul Annuler » sous Windows, et la version corrective arrivera chez les utilisateurs Windows sans ce contrôle.
 
@@ -68,7 +68,7 @@
 | 3a | `fix/plugin-always-answers` | 1, 2 | correction (plug-in) |
 | 3b | `fix/apply-engine-align` | 3 | correction (moteur + adaptation de l'écran Tag) |
 | 3c | `fix/apply-messages` | 4 | correction (textes) |
-| 3d | `fix/apply-screen-defects` | 5, 6 | correction (écrans), selon décision |
+| 3d | `fix/apply-screen-defects` | 5, 6 | correction (écrans) |
 | 3e | `refactor/one-catalog-write` | 7 | fusion (plug-in) |
 | 3f | `refactor/one-apply-engine` | 8 | fusion (moteur) |
 | 3g | `refactor/one-apply-interface` | 9, 10 | fusion (interface) + test n°5 |
@@ -168,7 +168,7 @@ Chaque PR part de `main` à jour, après fusion de la précédente (pas d'empile
 - [ ] **Step 4:** `npm test`, `npm run build` → PASS.
 - [ ] **Step 5: Commit** `fix(app): show a readable message for every apply and search failure`
 
-### Task 5: « Tagger la sélection » ne reste plus bloqué, et refuse un GPS invalide (A12, A13) — si accepté
+### Task 5: « Tagger la sélection » ne reste plus bloqué, et refuse un GPS invalide (A12, A13) (acceptés le 2026-11-21)
 
 **Files:**
 - Modify: `app/src/tag/rules.ts`, `app/src/tag/TagScreen.tsx`
@@ -184,7 +184,7 @@ Chaque PR part de `main` à jour, après fusion de la précédente (pas d'empile
 - [ ] **Step 4:** `npm test`, `npm run build` → PASS.
 - [ ] **Step 5: Commit** `fix(app): never leave tag selection reading, refuse an invalid gps`
 
-### Task 6: « Créer les collections » dit pourquoi « Appliquer » est grisé ; appareils figés pendant l'écriture (A14, A15) — si accepté
+### Task 6: « Créer les collections » dit pourquoi « Appliquer » est grisé ; appareils figés pendant l'écriture (A14, A15) (acceptés le 2026-11-21)
 
 **Files:**
 - Modify: `app/src/collections/rules.ts` (`collectionsBlocker`), `app/src/collections/CollectionsScreen.tsx`, `app/src/tag/TagScreen.tsx`, `app/src/apply/CameraCard.tsx` (prop `disabled`)
