@@ -12,6 +12,8 @@ use chrono::{Duration, NaiveDateTime};
 use divelens_core::apps::DiveApp;
 use serde::{Deserialize, Serialize};
 
+use crate::lightroom::ApplyOutcome;
+
 const CURRENT_VERSION: u32 = 1;
 
 /// A camera: model and serial number when the photos carry one, model alone
@@ -44,6 +46,14 @@ impl Offsets {
     pub fn get(&self, key: &str) -> Option<i32> {
         self.cameras.get(key).copied()
     }
+}
+
+/// Whether the offsets `applied` are remembered once Lightroom answered
+/// `outcome`: when it wrote, even if only the GPS and altitude were left out
+/// (`gpsNotWritten`: the offsets are on the photos), and there are some.
+pub fn should_remember(outcome: &ApplyOutcome, applied: &BTreeMap<String, i32>) -> bool {
+    let written = matches!(outcome, ApplyOutcome::Applied { .. }) || outcome.half_written();
+    written && !applied.is_empty()
 }
 
 /// A wall-clock time `YYYY-MM-DDTHH:MM:SS`.
@@ -112,6 +122,25 @@ mod tests {
         std::fs::write(dir.join(md.offsets_file), "{broken").unwrap();
         assert_eq!(Offsets::load(&dir, md), Offsets::default());
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn offsets_are_remembered_only_when_something_was_written() {
+        let applied = BTreeMap::from([("TG-7|A1".to_string(), 240)]);
+        let none = BTreeMap::new();
+        let written = ApplyOutcome::Applied { count: 3 };
+        let refused = ApplyOutcome::Failed {
+            reason: "busy".into(),
+            detail: None,
+        };
+        let gps_not_written = ApplyOutcome::Failed {
+            reason: "gpsNotWritten".into(),
+            detail: None,
+        };
+        assert!(should_remember(&written, &applied));
+        assert!(!should_remember(&written, &none));
+        assert!(!should_remember(&refused, &applied));
+        assert!(should_remember(&gps_not_written, &applied));
     }
 
     #[test]

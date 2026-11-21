@@ -6,13 +6,14 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
+use std::sync::mpsc::RecvError;
 
 use divelens_core::collections::Span;
 use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
 use divelens_core::{Dive, Error, Site};
 
 use super::selection::{InDive, PerPhoto, Refusal, Selection};
-use super::{LocationChoice, TagError};
+use super::{LocationChoice, TagApplied, TagError};
 use crate::apply::searches::Searches;
 use crate::lightroom::ApplyOutcome;
 
@@ -108,12 +109,10 @@ pub(super) fn described(
 
 /// Adds the per-photo values to `req`; returns the offsets applied, to
 /// remember once written, and the error of a profile that could not be read
-/// (the dive data are then written alone, the caller logs it). The "depth
-/// to altitude" setting is read only when there are per-photo values.
+/// (the dive data are then written alone, the caller logs it).
 pub(super) fn apply_per_photo(
     req: &mut TagRequest,
     outcome: Result<PerPhoto, Refusal>,
-    depth_to_altitude: impl FnOnce() -> bool,
 ) -> Result<(BTreeMap<String, i32>, Option<Error>), TagError> {
     match outcome {
         Ok(PerPhoto::Values {
@@ -123,9 +122,6 @@ pub(super) fn apply_per_photo(
         }) => {
             req.selection = Some(described);
             req.photos = photos;
-            if depth_to_altitude() {
-                req.copy_depth_to_altitude();
-            }
             Ok((applied, None))
         }
         Ok(PerPhoto::Unreadable(e)) => Ok((BTreeMap::new(), Some(e))),
@@ -134,17 +130,23 @@ pub(super) fn apply_per_photo(
     }
 }
 
-/// The offsets applied are remembered when Lightroom wrote, even if only
-/// the GPS and altitude were left out, and there are some.
-pub(super) fn remember_offsets(outcome: &ApplyOutcome, applied: &BTreeMap<String, i32>) -> bool {
-    let written = matches!(outcome, ApplyOutcome::Applied { .. }) || outcome.half_written();
-    written && !applied.is_empty()
+/// What Lightroom answered: the photos written, or a refusal as the
+/// screen reads it.
+pub(super) fn applied(answer: Result<usize, ApplyOutcome>) -> Result<TagApplied, TagError> {
+    answer
+        .map(|count| TagApplied { count })
+        .map_err(TagError::from)
+}
+
+/// The answer of the plugin link, or "link lost" when its reply channel
+/// closed without one (the link dropped while Lightroom was writing).
+pub(super) fn heard<T>(received: Result<T, RecvError>) -> Result<T, TagError> {
+    received.map_err(|_| TagError::LinkLost)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
 
     use chrono::{Duration, NaiveDate};
     use divelens_core::profile::PhotoPoint;
@@ -337,35 +339,29 @@ mod tests {
     }
 
     #[test]
-    fn altitude_setting_is_read_only_for_per_photo_values() {
+    fn per_photo_values_are_added_to_the_request() {
         let mut request = TagRequest::default();
         assert!(matches!(
-            apply_per_photo(&mut request, Err(Refusal::Describe), || panic!(
-                "setting read"
-            )),
+            apply_per_photo(&mut request, Err(Refusal::Describe)),
             Err(TagError::NoPhotos)
         ));
         assert!(matches!(
-            apply_per_photo(&mut request, Err(Refusal::Profile(garbled())), || panic!(
-                "setting read"
-            )),
+            apply_per_photo(&mut request, Err(Refusal::Profile(garbled()))),
             Err(TagError::Source {
                 detail: Error::BadProfile(_)
             })
         ));
         // A profile that cannot be read: the dive data alone, the error
         // handed back to be logged.
-        let unreadable = apply_per_photo(&mut request, Ok(PerPhoto::Unreadable(garbled())), || {
-            panic!("setting read")
-        });
+        let unreadable = apply_per_photo(&mut request, Ok(PerPhoto::Unreadable(garbled())));
         assert!(matches!(
             unreadable,
             Ok((ref applied, Some(Error::BadProfile(_)))) if applied.is_empty()
         ));
         assert_eq!(request, TagRequest::default());
 
-        // Per-photo values: the setting is read once, the depth goes to the
-        // altitude only when it is on.
+        // Per-photo values: the depth goes to the altitude only when the
+        // setting is on, which the caller applies to the whole request.
         let values = || {
             Ok(PerPhoto::Values {
                 described: 42,
@@ -383,14 +379,11 @@ mod tests {
             })
         };
         for on in [false, true] {
-            let reads = Cell::new(0);
             let mut request = TagRequest::default();
-            let (applied, unreadable) = apply_per_photo(&mut request, values(), || {
-                reads.set(reads.get() + 1);
-                on
-            })
-            .unwrap();
-            assert_eq!(reads.get(), 1);
+            let (applied, unreadable) = apply_per_photo(&mut request, values()).unwrap();
+            if on {
+                request.copy_depth_to_altitude();
+            }
             assert!(unreadable.is_none());
             assert_eq!(applied, BTreeMap::from([("TG-7|A1".to_string(), 240)]));
             assert_eq!(request.selection, Some(42));
@@ -401,21 +394,44 @@ mod tests {
     }
 
     #[test]
-    fn offsets_are_remembered_only_when_something_was_written() {
-        let applied = BTreeMap::from([("TG-7|A1".to_string(), 240)]);
-        let none = BTreeMap::new();
-        let written = ApplyOutcome::Applied { count: 3 };
-        let refused = ApplyOutcome::Failed {
+    fn a_refused_tagging_is_an_error() {
+        assert_eq!(applied(Ok(3)).unwrap().count, 3);
+        let refused = applied(Err(ApplyOutcome::Failed {
             reason: "busy".into(),
             detail: None,
-        };
-        let gps_not_written = ApplyOutcome::Failed {
-            reason: "gpsNotWritten".into(),
-            detail: None,
-        };
-        assert!(remember_offsets(&written, &applied));
-        assert!(!remember_offsets(&written, &none));
-        assert!(!remember_offsets(&refused, &applied));
-        assert!(remember_offsets(&gps_not_written, &applied));
+        }));
+        assert!(matches!(
+            refused,
+            Err(TagError::Lightroom { ref reason, detail: None }) if reason == "busy"
+        ));
+        // As the screen reads it: the same shape as Create Collections.
+        assert_eq!(
+            serde_json::to_value(refused.unwrap_err()).unwrap(),
+            serde_json::json!({ "error": "lightroom", "reason": "busy", "detail": null })
+        );
+        assert_eq!(
+            serde_json::to_value(applied(Ok(2)).unwrap()).unwrap(),
+            serde_json::json!({ "count": 2 })
+        );
+    }
+
+    #[test]
+    fn a_lost_link_during_tagging_is_link_lost() {
+        let (reply, answer) = std::sync::mpsc::channel::<Result<usize, ApplyOutcome>>();
+        drop(reply);
+        assert!(matches!(heard(answer.recv()), Err(TagError::LinkLost)));
+        let (reply, answer) = std::sync::mpsc::channel::<Result<usize, ApplyOutcome>>();
+        reply.send(Ok(4)).unwrap();
+        assert!(matches!(heard(answer.recv()), Ok(Ok(4))));
+    }
+
+    #[test]
+    fn the_altitude_option_leaves_a_request_without_photo_values_unchanged() {
+        let d = dive("A", 701);
+        let location = Some(LocationTags::new(&d.site, Some(12.5), Some(-45.25)));
+        let request = base_request(Some(&d), location, Units::default(), "MacDive").unwrap();
+        let mut copied = request.clone();
+        copied.copy_depth_to_altitude();
+        assert_eq!(copied, request);
     }
 }

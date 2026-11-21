@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 use crate::apply::errors::CollectionsError;
-use crate::apply::offsets::Offsets;
+use crate::apply::offsets::{Offsets, should_remember};
 use crate::apply::searches::{Searches, keep_search};
 use crate::apply::send;
 use crate::dive_log::{LogChanged, LogId, SourceInfo, Writes, open, source_info};
@@ -77,12 +77,36 @@ pub(crate) enum TagError {
     Source {
         detail: Error,
     },
+    /// Lightroom refused or failed; `reason` as in [`ApplyOutcome::Failed`].
+    #[serde(rename_all = "camelCase")]
+    Lightroom {
+        reason: String,
+        detail: Option<String>,
+    },
 }
 
 impl From<LogChanged> for TagError {
     fn from(_: LogChanged) -> Self {
         Self::LogChanged
     }
+}
+
+impl From<ApplyOutcome> for TagError {
+    fn from(outcome: ApplyOutcome) -> Self {
+        match outcome {
+            ApplyOutcome::Failed { reason, detail } => Self::Lightroom { reason, detail },
+            ApplyOutcome::Applied { .. } => Self::Lightroom {
+                reason: "error".into(),
+                detail: Some("unexpected answer".into()),
+            },
+        }
+    }
+}
+
+/// What "Tag Selection › Apply" wrote: the number of photos tagged.
+#[derive(Debug, Serialize)]
+pub(crate) struct TagApplied {
+    count: usize,
 }
 
 /// Tag Selection's descriptions of the Lightroom selection: the latest one
@@ -127,9 +151,7 @@ fn tag_request(
         )?;
         // The profile of the configured log, read now; only when needed.
         let outcome = selection::per_photo(&dive, described, units, || source.profile(&dive.id));
-        let (offsets, unreadable) = rules::apply_per_photo(&mut request, outcome, || {
-            Settings::load(&config_dir(app)).depth_to_altitude
-        })?;
+        let (offsets, unreadable) = rules::apply_per_photo(&mut request, outcome)?;
         if let Some(e) = unreadable {
             log::warn!(
                 "profile of dive {} not read, dive data without per-photo values: {e:?}",
@@ -137,6 +159,11 @@ fn tag_request(
             );
         }
         applied = offsets;
+    }
+    // The "depth to altitude" setting applies to the whole request, as in
+    // Create Collections: without per-photo values there is nothing to copy.
+    if Settings::load(&config_dir(app)).depth_to_altitude {
+        request.copy_depth_to_altitude();
     }
     Ok((request, applied))
 }
@@ -154,7 +181,7 @@ pub(crate) async fn tag_selection(
     app: AppHandle,
     log: LogId,
     choice: TagChoice,
-) -> Result<ApplyOutcome, TagError> {
+) -> Result<TagApplied, TagError> {
     tauri::async_runtime::spawn_blocking(move || {
         let writes = app.state::<Writes>();
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
@@ -176,8 +203,11 @@ pub(crate) async fn tag_selection(
         if sent.is_err() {
             return Err(TagError::NotConnected);
         }
-        let outcome = outcome.recv().map_err(|_| TagError::LinkLost)?;
-        if rules::remember_offsets(&outcome, &applied) {
+        let answer = rules::heard(outcome.recv())?;
+        let outcome = answer
+            .as_ref()
+            .map_or_else(Clone::clone, |&count| ApplyOutcome::Applied { count });
+        if should_remember(&outcome, &applied) {
             let dir = config_dir(&app);
             let mut offsets = Offsets::load(&dir, info.app);
             selection::remember(&applied, &mut offsets);
@@ -191,7 +221,7 @@ pub(crate) async fn tag_selection(
             }
             ApplyOutcome::Failed { .. } => log::warn!("selection not tagged: {outcome:?}"),
         }
-        Ok(outcome)
+        rules::applied(answer)
     })
     .await
     .expect("tagging task failed")

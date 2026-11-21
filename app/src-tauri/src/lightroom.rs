@@ -197,7 +197,8 @@ pub enum Command {
     /// Tag the photos selected in Lightroom at the time the plugin gets it.
     Apply {
         request: Box<TagRequest>,
-        reply: Sender<ApplyOutcome>,
+        /// The number of photos written, or why Lightroom wrote nothing.
+        reply: Sender<Result<usize, ApplyOutcome>>,
     },
     /// Every photo of the catalog captured between two days (`YYYY-MM-DD`,
     /// inclusive).
@@ -227,7 +228,7 @@ pub enum Command {
 
 /// A request waiting for the plugin's answer.
 enum Pending {
-    Apply(Sender<ApplyOutcome>),
+    Apply(Sender<Result<usize, ApplyOutcome>>),
     Find(Sender<Result<PhotoSearch, ApplyOutcome>>, Vec<FoundPhoto>),
     Collections(Sender<Result<Vec<WrittenCollection>, ApplyOutcome>>),
     Sets(Sender<Result<Vec<CollectionSet>, ApplyOutcome>>),
@@ -237,7 +238,7 @@ impl Pending {
     fn fail(self, outcome: ApplyOutcome) {
         // A caller that stopped waiting is no longer interested.
         match self {
-            Pending::Apply(reply) => drop(reply.send(outcome)),
+            Pending::Apply(reply) => drop(reply.send(Err(outcome))),
             Pending::Find(reply, _) => drop(reply.send(Err(outcome))),
             Pending::Collections(reply) => drop(reply.send(Err(outcome))),
             Pending::Sets(reply) => drop(reply.send(Err(outcome))),
@@ -573,7 +574,7 @@ fn session(
                     }
                     FromPlugin::Applied { id, count } => match pending.remove(&id) {
                         Some(Pending::Apply(reply)) => {
-                            let _ = reply.send(ApplyOutcome::Applied { count });
+                            let _ = reply.send(Ok(count));
                         }
                         Some(other) => other.fail(ApplyOutcome::Failed {
                             reason: "error".into(),
@@ -1004,6 +1005,7 @@ mod tests {
         plugin.join().unwrap();
         assert_eq!(end, End::Bye);
         let (selection, outcome) = result_rx.recv().unwrap();
+        let outcome = outcome.unwrap_err();
         assert_eq!(selection.photos.len(), 1);
         assert_eq!(selection.photos[0].model.as_deref(), Some("TG-7"));
         assert_eq!(
@@ -1022,7 +1024,7 @@ mod tests {
         lines: &mut dyn Iterator<Item = String>,
         to_app: &mut TcpStream,
         commands: &Sender<Command>,
-    ) -> Receiver<ApplyOutcome> {
+    ) -> Receiver<Result<usize, ApplyOutcome>> {
         lines.next().unwrap(); // hello
         write(to_app, &format!("{HELLO}\n"));
         let ping: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
@@ -1074,12 +1076,7 @@ mod tests {
         plugin.join().unwrap();
         assert_eq!(end, End::Bye);
         let outcome = outcome_rx.recv().unwrap();
-        assert_eq!(outcome, ApplyOutcome::Applied { count: 120 });
-        // As the front end reads it.
-        assert_eq!(
-            serde_json::to_value(&outcome).unwrap(),
-            serde_json::json!({ "outcome": "applied", "count": 120 })
-        );
+        assert_eq!(outcome, Ok(120));
         assert!(events.contains(&Event::Progress {
             done: 50,
             total: 120
@@ -1104,7 +1101,7 @@ mod tests {
         });
         run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {});
         plugin.join().unwrap();
-        let outcome = outcome_rx.recv().unwrap();
+        let outcome = outcome_rx.recv().unwrap().unwrap_err();
         assert!(outcome.half_written());
         // As the front end reads it, to show its own text.
         assert_eq!(
@@ -1143,10 +1140,10 @@ mod tests {
         plugin.join().unwrap();
         assert_eq!(
             outcome_rx.recv().unwrap(),
-            ApplyOutcome::Failed {
+            Err(ApplyOutcome::Failed {
                 reason: "noSelection".into(),
                 detail: None
-            }
+            })
         );
     }
 

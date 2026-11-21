@@ -34,9 +34,8 @@ import { useDiveBrowser } from "../dives/useDiveBrowser";
 import type { Sort } from "../dives/filters";
 import { formatInt, t, tn } from "../i18n";
 import { gpsInput } from "./sites";
-import { canApplyTag, selectionChanged, tagBlocker, tagSummary } from "./rules";
+import { canApplyTag, describeAgain, selectionChanged, tagBlocker, tagSummary } from "./rules";
 import type {
-  ApplyOutcome,
   CollectionsError,
   Dive,
   DiveLog,
@@ -91,9 +90,9 @@ function describeFailure(e: CollectionsError): string | null {
   }
 }
 
-function failure(e: ApplyOutcome | TagError): string {
+function failure(e: TagError): string {
   if (selectionChanged(e)) return t("tag.err.selectionChanged");
-  const key = "outcome" in e ? (e.outcome === "failed" ? e.reason : "") : e.error;
+  const key = e.error === "lightroom" ? e.reason : e.error;
   switch (key) {
     case "noSelection":
       return t("tag.err.noSelection");
@@ -101,7 +100,7 @@ function failure(e: ApplyOutcome | TagError): string {
       return t("tag.err.busy");
     case "gpsNotWritten": {
       // Written but for the GPS and altitude: Undo, then apply again.
-      const detail = "outcome" in e && e.outcome === "failed" ? e.detail : null;
+      const detail = e.error === "lightroom" ? e.detail : null;
       return detail ? t("tag.err.gpsNotWrittenDetail", { detail }) : t("tag.err.gpsNotWritten");
     }
     case "linkLost":
@@ -109,7 +108,7 @@ function failure(e: ApplyOutcome | TagError): string {
     case "notConnected":
       return t("tag.err.notConnected");
     default: {
-      const detail = "outcome" in e ? (e.outcome === "failed" ? (e.detail ?? e.reason) : "") : JSON.stringify(e);
+      const detail = e.error === "lightroom" ? (e.detail ?? e.reason) : JSON.stringify(e);
       return t("tag.err.other", { detail });
     }
   }
@@ -324,20 +323,17 @@ export function TagScreen({
     onDismissNotice();
     setRun({ state: "writing", done: 0, total: lr.selected });
     tagSelection(logRef(log.source), choice)
-      .then((outcome) => {
-        setRun(
-          outcome.outcome === "applied"
-            ? { state: "done", count: outcome.count }
-            : { state: "failed", message: failure(outcome) },
-        );
-        // Described again: the offsets applied are now the remembered ones,
-        // or the selection changed meanwhile.
+      .then(({ count }) => {
+        setRun({ state: "done", count });
+        // Described again: the offsets applied are now the remembered ones.
         if (needsValues) setAgain((n) => n + 1);
-        if (outcome.outcome === "applied") setTouched(new Set());
+        setTouched(new Set());
       })
       .catch((e: TagError) => {
         setRun({ state: "failed", message: failure(e) });
-        if (selectionChanged(e)) setAgain((n) => n + 1);
+        // Described again: the offsets applied may be the remembered ones now,
+        // or the selection changed meanwhile.
+        if (describeAgain(e, needsValues)) setAgain((n) => n + 1);
       });
   };
 

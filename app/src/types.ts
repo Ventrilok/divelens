@@ -191,17 +191,10 @@ export interface TagPreview {
   coverTo: string | null;
 }
 
-export type ApplyOutcome =
-  | { outcome: "applied"; count: number }
-  | {
-      outcome: "failed";
-      /**
-       * "gpsNotWritten": all written but the GPS and altitude (the plugin's second write did not happen);
-       * "selectionChanged" / "staleSelection": nothing written, the selection is no longer the one described.
-       */
-      reason: "noSelection" | "busy" | "badRequest" | "gpsNotWritten" | "selectionChanged" | "staleSelection" | "error" | string;
-      detail: string | null;
-    };
+/** What Tag Selection wrote: the number of photos tagged. */
+export interface TagApplied {
+  count: number;
+}
 
 export type TagError =
   | {
@@ -216,7 +209,16 @@ export type TagError =
         /** The selection shown must be described again (its per-photo values). */
         | "noPhotos";
     }
-  | { error: "source"; detail: ReaderError };
+  | { error: "source"; detail: ReaderError }
+  | {
+      error: "lightroom";
+      /**
+       * "gpsNotWritten": all written but the GPS and altitude (the plugin's second write did not happen);
+       * "selectionChanged" / "staleSelection": nothing written, the selection is no longer the one described.
+       */
+      reason: "noSelection" | "busy" | "badRequest" | "gpsNotWritten" | "selectionChanged" | "staleSelection" | "error" | string;
+      detail: string | null;
+    };
 
 // --- Create Collections (app/src-tauri/src/collections.rs, collections/plan.rs) ------------------
 

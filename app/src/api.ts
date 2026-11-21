@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { isLogChanged } from "./diveLog";
 import type {
   AppInfo,
-  ApplyOutcome,
+  TagApplied,
   CollectionSet,
   CollectionChoices,
   CollectionsPreview,
@@ -80,7 +80,7 @@ export const onShowScreen = (handler: (screen: string) => void): Promise<Unliste
 
 /** Tags the photos selected in Lightroom with data of `log`; rejects with a TagError. */
 export const tagSelection = (log: LogRef, choice: TagChoice) =>
-  onLog(invoke<ApplyOutcome>("tag_selection", { log, choice }), true);
+  onLog(invoke<TagApplied>("tag_selection", { log, choice }), true);
 
 /**
  * Describes the photos selected in Lightroom now, with the offsets
