@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{WRITES_LUA, lua, run, sample_dive};
+use common::{WRITES_LUA, json_of, lua, run, sample_dive};
 
 #[test]
 fn collections_plan_writes_dive_data_and_per_photo_values() {
@@ -329,11 +329,6 @@ fn collection_writes_step_every_requested_photo() {
 }
 
 /// Runs Lua on `groups` (name, photo ids found) and returns the plan as JSON.
-fn plan_json(code: &str) -> serde_json::Value {
-    let text: String = lua().load(code).eval().unwrap_or_else(|e| panic!("{e}"));
-    serde_json::from_str(&text).unwrap()
-}
-
 const GROUPS_LUA: &str = r#"
     local Json = require "Json"
     local Tagging = require "Tagging"
@@ -346,11 +341,14 @@ const GROUPS_LUA: &str = r#"
 
 #[test]
 fn a_group_without_photo_found_is_not_created() {
-    let out = plan_json(&format!(
-        r#"{GROUPS_LUA}
+    let out = json_of(
+        &lua(),
+        &format!(
+            r#"{GROUPS_LUA}
         local plan = Tagging.collectionWrites({{ group("101 - Coral Garden", {{}}) }}, {{}}, {{}})
         return Json.encode(plan.results)"#
-    ));
+        ),
+    );
     assert_eq!(
         out,
         serde_json::json!([{ "collection": "101 - Coral Garden", "count": 0, "created": false }])
@@ -359,15 +357,18 @@ fn a_group_without_photo_found_is_not_created() {
 
 #[test]
 fn a_second_group_of_the_same_new_name_is_completed() {
-    let out = plan_json(&format!(
-        r#"{GROUPS_LUA}
+    let out = json_of(
+        &lua(),
+        &format!(
+            r#"{GROUPS_LUA}
         local groups = {{
             group("101 - Coral Garden", {{ {{ id = "1" }} }}),
             group("101 - Coral Garden", {{ {{ id = "2" }} }}),
         }}
         local plan = Tagging.collectionWrites(groups, {{}}, {{}})
         return Json.encode(plan.results)"#
-    ));
+        ),
+    );
     assert_eq!(
         out,
         serde_json::json!([
@@ -379,8 +380,10 @@ fn a_second_group_of_the_same_new_name_is_completed() {
 
 #[test]
 fn collection_writes_count_replaced_dive_values() {
-    let out = plan_json(&format!(
-        r#"{GROUPS_LUA}
+    let out = json_of(
+        &lua(),
+        &format!(
+            r#"{GROUPS_LUA}
         local other, same, bare = {{ id = "1" }}, {{ id = "2" }}, {{ id = "3" }}
         local common = {{
             {{ kind = "plugin", field = "Source", value = "Subsurface" }},
@@ -397,6 +400,7 @@ fn collection_writes_count_replaced_dive_values() {
         }}
         local plan = Tagging.collectionWrites({{ g }}, before, {{}})
         return Json.encode({{ cleared = plan.cleared }})"#
-    ));
+        ),
+    );
     assert_eq!(out, serde_json::json!({ "cleared": 1 }));
 }

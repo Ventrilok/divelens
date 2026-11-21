@@ -320,13 +320,17 @@ function Tagging.applyReply(id, outcome, done)
 end
 
 --- The answer to the "Apply" `id` when an unexpected Lua error ended the
---- request, so the app is never left waiting. `stage` says how far it got:
---- "before" (the first catalog write had not run: "applyFailed", "error",
---- nothing written), "afterFirst" (the first write ran, the GPS and altitude
---- may not have: "applyFailed", "gpsNotWritten", never "nothing written"),
---- "replied" (the app already has its answer: nil, send nothing). `err` is
---- the error text, given as the detail.
-function Tagging.crashReply(id, stage, err)
+--- request, so the app is never left waiting. `record` is the plug-in's
+--- apply record as it is, nil or `{ id = ..., stage = ... }`; it counts only
+--- when its `id` is this request's (the app's ids restart at each launch),
+--- otherwise the request is taken as "before". `stage` says how far the apply
+--- got: "before" (the first catalog write had not run: "applyFailed",
+--- "error", nothing written), "afterFirst" (the first write ran, the GPS and
+--- altitude may not have: "applyFailed", "gpsNotWritten", never "nothing
+--- written"), "replied" (the app already has its answer: nil, send nothing).
+--- `err` is the error text, given as the detail.
+function Tagging.crashReply(id, record, err)
+    local stage = type(record) == "table" and record.id == id and record.stage or "before"
     if stage == "replied" then return nil end
     local reason = stage == "afterFirst" and "gpsNotWritten" or "error"
     return { type = "applyFailed", id = id, reason = reason, detail = tostring(err) }
