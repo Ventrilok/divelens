@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Jamais déplacement et correction dans la même pull request. Une PR de fusion ne change aucun test existant, sauf leurs chemins d'import.
+- Jamais déplacement et correction dans la même pull request. Une PR de fusion ne change aucun test existant, sauf leurs chemins d'import et les noms de types renommés par le déplacement (aucune assertion modifiée).
 - Rien ne change dans ce qui est écrit sur les photos, l'ordre des deux écritures, le nom d'annulation, ni le fait qu'un seul « Annuler » défait l'écriture (A5 excepté, voir le tableau).
 - Entre les deux écritures du plug-in, rien n'est envoyé à l'app et rien ne cède la main ; GPS et altitude dans la seconde.
 - Les messages entre l'app et le plug-in ne changent pas : on réutilise les raisons existantes (`noSelection`, `busy`, `badRequest`, `staleSearch`, `parentNotFound`, `error`, `gpsNotWritten`, `selectionChanged`…). Si un message devait changer, `PROTOCOL` monte dans `Link.lua` et `lightroom.rs` ensemble, et le propriétaire est prévenu avant.
@@ -59,7 +59,7 @@
 
 **Différences voulues avec la référence 2.1.1** (à ne pas prendre pour des régressions à la recette) : messages d'erreur de « Tagger la sélection » lisibles ; messages d'échec de recherche reformulés ; libellé « créée » correct dans le résumé de « Créer les collections » ; défauts A12 à A15 corrigés. Aucun des contrôles 1 à 18 ne change de résultat attendu, sauf mention dans la PR concernée.
 
-**Windows.** Pas de testeur : le contrôle 11 reste « non joué », pas d'installateur d'essai. Risque résiduel accepté par le propriétaire ou non : l'enveloppe fusionnée est exactement ce dont dépend « un seul Annuler » sous Windows, et la version corrective arrivera chez les utilisateurs Windows sans ce contrôle.
+**Windows.** Pas de testeur : le contrôle 11 reste « non joué », pas d'installateur d'essai. Risque résiduel, à trancher par le propriétaire avant la version : l'enveloppe fusionnée est exactement ce dont dépend « un seul Annuler » sous Windows, et la version corrective arrivera chez les utilisateurs Windows sans ce contrôle.
 
 ## Pull requests
 
@@ -77,6 +77,8 @@
 | 4b | `fix/recover-after-internal-failure` | 12 | correction n°13 |
 | — | — | 13 | recette, puis version |
 
+Le choix du spec « phase 3 en deux pull requests » devient plusieurs PR plus petites, par surface ; le principe tient : toutes les corrections avant les fusions, jamais mélangées dans une même PR.
+
 Chaque PR part de `main` à jour, après fusion de la précédente (pas d'empilement cette fois : chaque fusion est courte).
 
 ---
@@ -92,15 +94,16 @@ Chaque PR part de `main` à jour, après fusion de la précédente (pas d'empile
 - Test: `app/src-tauri/tests/plugin_tag_selection.rs`
 
 **Interfaces:**
-- Produces: `Tagging.crashReply(id, stage, err) -> message | nil`, `stage` ∈ `"before"`, `"afterFirst"`, `"replied"`. Utilisé par Task 7.
+- Produces: `Tagging.crashReply(id, record, err) -> message | nil`, où `record` est `s.applyStage` tel quel (nil, ou `{ id, stage }` avec `stage` ∈ `"before"`, `"afterFirst"`, `"replied"`) ; la règle n'utilise `record.stage` que si `record.id == id`, sinon `"before"`. Tests ajoutés : `crash_with_no_apply_record_says_nothing_written`, `crash_for_another_request_ignores_its_record`.
+- `closeSockets` remet `s.applyStage` à nil (les numéros de requête de l'app repartent à 1 à chaque lancement).
 - Produces: chaque enveloppe tient `s.applyStage = { id = id, stage = ... }` ; le gestionnaire protégé de `Link.lua` le lit en cas d'erreur.
 
 - [ ] **Step 1: Tests de la règle**, dans `plugin_tag_selection.rs`, sur le modèle des tests de `Tagging.applyReply` :
-  - `crash_before_the_first_write_says_nothing_written` : `crashReply(7, "before", "boom")` → `{ type = "applyFailed", id = 7, reason = "error", detail = "boom" }`.
-  - `crash_after_the_first_write_says_written_but_gps` : `crashReply(7, "afterFirst", "boom")` → `reason = "gpsNotWritten"`, `detail = "boom"`.
-  - `crash_after_the_reply_sends_nothing` : `crashReply(7, "replied", "boom")` → `nil`.
+  - `crash_before_the_first_write_says_nothing_written` : `crashReply(7, { id = 7, stage = "before" }, "boom")` → `{ type = "applyFailed", id = 7, reason = "error", detail = "boom" }`.
+  - `crash_after_the_first_write_says_written_but_gps` : `crashReply(7, { id = 7, stage = "afterFirst" }, "boom")` → `reason = "gpsNotWritten"`, `detail = "boom"`.
+  - `crash_after_the_reply_sends_nothing` : `crashReply(7, { id = 7, stage = "replied" }, "boom")` → `nil`.
 - [ ] **Step 2:** `cargo test -p divelens --test plugin_tag_selection crash_` → FAIL (`crashReply` absente).
-- [ ] **Step 3:** Écrire `Tagging.crashReply`. Dans `Link.lua`, ajouter `apply = ApplyTags.run` à la table des gestionnaires protégés ; sur erreur, envoyer `Tagging.crashReply(message.id, stage, err)` (étape lue dans `s.applyStage` si son `id` est celui du message, sinon `"before"`), rien si `nil`. Dans les deux enveloppes : `stage = "before"` à l'entrée, `"afterFirst"` dès que la première écriture a renvoyé `"executed"`, `"replied"` juste après `Send.toApp(s, reply)` ; déplacer l'envoi de la réponse **avant** les lignes de journal qui suivent.
+- [ ] **Step 3:** Écrire `Tagging.crashReply`. Dans `Link.lua`, ajouter `apply = ApplyTags.run` à la table des gestionnaires protégés ; sur erreur, envoyer `Tagging.crashReply(message.id, s.applyStage, err)` (la règle lit l'étape si l'`id` correspond, sinon `"before"`), rien si `nil`, puis journaliser. Dans les deux enveloppes : `stage = "before"` à l'entrée, `"afterFirst"` dès que la première écriture a renvoyé `"executed"`, `"replied"` juste après `Send.toApp(s, reply)` ; déplacer l'envoi de la réponse **avant** les lignes de journal qui suivent.
 - [ ] **Step 4:** `cargo test -p divelens` → PASS (y compris « chaque fichier se compile »).
 - [ ] **Step 5: Commit** `fix(plugin): always answer an apply, even on an unexpected error`
 
@@ -133,7 +136,7 @@ Chaque PR part de `main` à jour, après fusion de la précédente (pas d'empile
 - Produces: `TagError::Lightroom { reason: String, detail: Option<String> }` (même forme sérialisée que `CollectionsError::Lightroom` : `{ "error": "lightroom", "reason", "detail" }`).
 - Produces: `tag_selection(...) -> Result<TagApplied, TagError>`, `TagApplied { count: usize }` sérialisé `{ "count": n }`. Un refus de Lightroom (`ApplyOutcome::Failed`) devient `Err(TagError::Lightroom { reason, detail })`.
 - Produces: `Command::Apply { request, reply: mpsc::Sender<Result<usize, ApplyOutcome>> }`, sur le modèle de `Command::ApplyCollections` (traduction interne à `lightroom.rs`, aucun message vers le plug-in ne change).
-- Produces: `crate::apply::offsets::should_remember(outcome: &ApplyOutcome, applied: &BTreeMap<String, i32>) -> bool` (l'actuelle `rules::remember_offsets`, déplacée ici), utilisée par les deux commandes. Pour Collections, `applied` = décalages des appareils dont au moins une photo a été écrite (ce que `Session::remember` enregistre aujourd'hui).
+- Produces: `crate::apply::offsets::should_remember(outcome: &ApplyOutcome, applied: &BTreeMap<String, i32>) -> bool` (l'actuelle `rules::remember_offsets`, déplacée ici), utilisée par les deux commandes. Pour Collections, `applied` vient d'une nouvelle `Session::applied(&choices) -> BTreeMap<String, i32>` (les décalages des appareils dont au moins une photo a été écrite : ce que `Session::remember` enregistre aujourd'hui), passée à `should_remember`.
 - Produces: `TagRequest::copy_depth_to_altitude` appelé pour Tag hors de la branche « valeurs par photo », comme pour Collections.
 
 - [ ] **Step 1: Tests** :
@@ -209,7 +212,7 @@ Chaque PR part de `main` à jour, après fusion de la précédente (pas d'empile
 - Test: tous les tests `plugin_*.rs` inchangés ; `the_plugin_files_compile` (existant)
 
 **Interfaces:**
-- Consumes: `Tagging.crashReply` (Task 1), `Tagging.applyReply`, `CatalogWrite.writeGpsLater`.
+- Consumes: `Tagging.applyReply`, `CatalogWrite.writeGpsLater`. Ne consomme pas `crashReply` : après la fusion, le gestionnaire protégé de `Link.lua` attrape toujours les erreurs imprévues avec `Tagging.crashReply(message.id, s.applyStage, err)`, et `CatalogWrite.apply` continue de tenir `s.applyStage` (`before` / `afterFirst` / `replied`).
 - Produces: `CatalogWrite.apply(s, id, job)` qui envoie exactement une réponse. `job` = `{ undoName, total, before = function(catalog) -> map | nil, writeFirst = function(catalog, before, advance) -> { later = {...}, result = ... }, done = function(result) -> message, log = function(result, second) }`. `before` absent = pas de lecture (A1) ; l'ensemble « Dive Lens » de Collections reste créé avant, hors de `apply` (A5).
 
 - [ ] **Step 1:** Écrire `CatalogWrite.apply` en reprenant mot pour mot la séquence actuelle (pcall, première écriture, seconde aussitôt, `s.lastHeard`, `applyReply`, envoi, journal, étapes de Task 1).
@@ -242,7 +245,7 @@ Chaque PR part de `main` à jour, après fusion de la précédente (pas d'empile
 - Test: les tests des traducteurs (Task 4) déplacés vers `apply/failure.test.ts` sans changer leurs assertions
 
 **Interfaces:**
-- Produces: `applyFailure(e: ApplyError, feature: "tag" | "collections"): string`, `searchFailure(e: ApplyError, feature: "tag" | "collections"): string | null`. `feature` choisit les textes propres à chaque écran (nom d'annulation, « sélection » / « photos trouvées »).
+- Produces: `applyFailure(e: ApplyError, feature: "tag" | "collections"): string`, avec un `case "<raison>"` par raison du plug-in (le scan de Task 10 s'appuie dessus), `searchFailure(e: ApplyError, feature: "tag" | "collections"): string | null`. `feature` choisit les textes propres à chaque écran (nom d'annulation, « sélection » / « photos trouvées »).
 - Produces: `<ProgressBar done total label />`, `<CameraClock cameras offsets onChange onSuggest disabled ... />` (props reprises du bloc commun aux deux écrans).
 
 - [ ] **Step 1:** Déplacer, sans changer un texte ni un comportement.
@@ -267,7 +270,7 @@ Sur le modèle de `the_plugin_speaks_the_same_protocol` (lecture de texte ligne 
 
 ### Recette de la phase 3
 
-- [ ] Le propriétaire joue les contrôles 1 à 18 sur macOS avec la version construite depuis `main` (ses copies de catalogue réelles pour 1 à 10, les photos fictives pour 11 à 18). Résultat comparé à la phase 2 ; seules les différences voulues listées plus haut sont admises. Contrôle 11 : non joué.
+- [ ] Le propriétaire joue les contrôles 1 à 18 sur macOS avec la version construite depuis `main` (contrôles 1 à 18 de `docs/contributing/lightroom-checks.md`, sur un catalogue de test avec les photos fictives). Résultat comparé à la phase 2 ; seules les différences voulues listées plus haut sont admises. Contrôle 11 : non joué.
 
 ---
 
@@ -297,7 +300,7 @@ Sur le modèle de `the_plugin_speaks_the_same_protocol` (lecture de texte ligne 
 **Interfaces:**
 - Produces: `pub(crate) fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T>` : verrou empoisonné → `PoisonError::into_inner`, avec un `log::error!` ; même réaction que réglages, carnet et journal aujourd'hui.
 
-- [ ] **Step 1: Tests** : `a_poisoned_lock_is_recovered` (un fil panique en tenant le verrou ; `lock` rend la valeur) ; `no_lock_panics_anymore` : aucun fichier de `src/` ne contient `.lock().expect(` ni `.lock().unwrap(` (lecture des sources, comme le test du protocole).
+- [ ] **Step 1: Tests** : `a_poisoned_lock_is_recovered` (un fil panique en tenant le verrou ; `lock` rend la valeur) ; `no_lock_panics_anymore` : aucun fichier de `src/` ne contient `.lock().expect(` ni `.lock().unwrap(` (lecture des sources, comme le test du protocole). Le scan saute les modules `#[cfg(test)]` (et `tests/`), où ces appels existent (dive_log.rs, applog.rs, apply/searches.rs), et construit ses chaînes de recherche avec `concat!` pour que le fichier de test ne se trouve pas lui-même.
 - [ ] **Step 2:** `cargo test -p divelens locks` → FAIL.
 - [ ] **Step 3:** Implémenter et remplacer.
 - [ ] **Step 4:** `cargo clippy -p divelens --all-targets -- -D warnings`, `cargo test -p divelens` → PASS.
@@ -305,7 +308,7 @@ Sur le modèle de `the_plugin_speaks_the_same_protocol` (lecture de texte ligne 
 
 ### Task 13: Recette finale et version corrective
 
-- [ ] Le propriétaire rejoue les contrôles 1 à 18 sur macOS (11 non joué) avec la version construite depuis `main`.
+- [ ] Le propriétaire rejoue les contrôles 1 à 18 de `docs/contributing/lightroom-checks.md`, sur un catalogue de test avec les photos fictives, sur macOS (11 non joué) avec la version construite depuis `main`.
 - [ ] Le propriétaire lance, depuis `app/` sur `main` à jour : `npm run release -- patch` (2.1.1 → 2.1.2). La PR `build: release 2.1.2` se fusionne d'elle-même une fois la CI verte ; le brouillon de version est relu puis publié par le propriétaire.
 - [ ] Après publication : vérifier qu'une copie 2.1.1 installée propose bien la 2.1.2.
 - [ ] Nettoyage, avec l'accord du propriétaire : copies de travail `.worktrees/*`, branches distantes déjà fusionnées.
