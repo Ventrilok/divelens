@@ -48,8 +48,8 @@ Each check starts from the state left by the previous one unless it says otherwi
 
 | # | Start | Action | Expected |
 |---|---|---|---|
-| 1 | Clean. Select A1, A2, A3. | **Library › Plug-in Extras › Tag Selection…**, choose dive 101, **Apply**. | Dive Lens fields filled. Dive values as above. Each photo has its own depth: A1 18.0 m, A2 15.0 m, A3 10.0 m. GPS and altitude written. |
-| 2 | After 1. | **Edit › Undo** once. | Everything is gone, GPS and altitude included. |
+| 1 | Clean. Select A1, A2, A3. | **Library › Plug-in Extras › Tag Selection…**, choose dive 101, **Apply**. | Dive Lens fields filled. Dive values as above. Each photo has its own depth: A1 18.0 m, A2 15.0 m, A3 10.0 m. GPS written; no GPS altitude, since the altitude option is off. |
+| 2 | After 1. | **Edit › Undo** once. | Everything is gone, GPS included. |
 | 3 | Start from the state after check 1 (run it again first if you undid it). Select A1. | **Library › Plug-in Extras › Tag Selection…**, choose dive 102, **Apply**. | The dive fields show dive 102 (number 102, Glacier Wall, GPS -64.125, -60.5 as Lightroom displays it). A1's own values from dive 101 (photo depth, photo temperature, elapsed time, clock offset) are empty. No photo depth is written, since A1 (09:40) is outside dive 102 (14:00-14:35). A refusal is not expected. |
 | 4 | After 3. Select A1. | **Tag Selection…**, choose dive 102 again, **Apply**. | Nothing else changes. |
 | 5 | Select one photo, then none. | Select one photo and open **Tag Selection…** (the menu item is disabled with no photo selected). Then, in Lightroom, deselect everything (**Edit › Select None**). Note what the app shows (Apply disabled with a message saying to select photos, or a refusal if you apply). | Nothing is written. |
