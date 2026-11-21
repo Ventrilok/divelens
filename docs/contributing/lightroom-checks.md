@@ -1,6 +1,6 @@
 # Lightroom checks
 
-The automatic tests cannot prove that Lightroom accepts what Dive Lens writes to its catalog, or that one **Undo** takes it all back. These eleven checks are played by hand in Lightroom Classic, on a test catalog, with fictional photos.
+The automatic tests cannot prove that Lightroom accepts what Dive Lens writes to its catalog, or that one **Undo** takes it all back. These thirteen checks are played by hand in Lightroom Classic, on a test catalog, with fictional photos.
 
 Play them before a release that touches the plug-in or the catalog writes, and after a large refactoring. Compare the result with the previous run: a difference is a finding, even if it looks harmless.
 
@@ -23,8 +23,11 @@ Each check says in its "Settings" column which settings it is played with ([the 
 | Writing on photos › Copy depth to GPS altitude | **Off** | **On** |
 | Collections › Place in | Catalog root | Catalog root |
 | Collections › Group in the set | Dive Lens | Dive Lens |
+| Camera cards › clock offset of Test Camera A and Test Camera B | 0:00 | 0:00 |
 
 The language, the log level and the automatic update check have no effect on the checks.
+
+Dive Lens remembers each camera's last clock offset outside the catalog, so a new catalog does not reset it. If a camera card in **Tag Selection** or **Create Collections** shows another offset than 0:00 (left by an earlier run), set it to 0:00 before **Apply**.
 
 ### Playing on a development build (macOS)
 
@@ -75,6 +78,8 @@ Each check starts from the state left by the previous one unless it says otherwi
 | 9 | Base | After 7 (run check 7 again first if you undid it). | Run **Create Collections…** again. | Nothing duplicated. |
 | 10 | Depth **Feet**, Copy depth to GPS altitude **On**, everything else as Base | Clean. Select A1, A2, A3. | **Tag Selection…**, dive 101, **Apply**. Afterwards, set Depth back to Metres and the altitude copy back to Off. | Photo depth: A1 about 59 ft. Max depth about 60 ft. GPS altitude about -18 m (Lightroom may show it in feet). |
 | 11 | Base | Windows only. | Play checks 2 and 8. | One Undo takes everything back. |
+| 12 | Base | Clean. Select B1, B2. | **Tag Selection…**, choose dive **101** (not the one marked "Covers the selection"). On the Test Camera B card, click **Suggest**, then **Apply**. | Suggest gives −4:30. B1 and B2: dive 101, Clock Offset -04:30. Photo depth: B1 18.0 m, B2 15.0 m. |
+| 13 | Base | After 12. Select B1, B2. | Open **Tag Selection…**. Then open **Create Collections…**, choose dive 101 and go to the cameras step. Close both without applying. To finish, set Test Camera B back to 0:00: **Tag Selection…** on B1, B2, dive 102, Test Camera B at 0:00, **Apply**. | Tag Selection: dive 101 marked "Covers the selection", Test Camera B card at −4:30 with "remembered offset". Create Collections: Test Camera B card at −4:30 with "remembered offset". |
 
 If the reference shows on Windows that one Undo does not take back both writes, stop and report it: it is not fixed by a refactoring.
 
@@ -84,6 +89,6 @@ In the pull request, give:
 
 - the system (macOS or Windows) and the Lightroom Classic version;
 - the Dive Lens version;
-- one line per check, 1 to 11: **OK**, or the difference described in words.
+- one line per check, 1 to 13: **OK**, or the difference described in words.
 
 Describe differences in words only. No real dive data, no screenshot of a real catalog.
