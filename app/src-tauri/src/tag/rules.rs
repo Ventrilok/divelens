@@ -130,6 +130,15 @@ pub(super) fn apply_per_photo(
     }
 }
 
+/// The "depth to altitude" setting applied to the whole request, as Create
+/// Collections does: a request without per-photo values has nothing to copy.
+/// The setting is read here only, so a refusal before it never reads it.
+pub(super) fn with_altitude(req: &mut TagRequest, depth_to_altitude: impl FnOnce() -> bool) {
+    if depth_to_altitude() {
+        req.copy_depth_to_altitude();
+    }
+}
+
 /// What Lightroom answered: the photos written, or a refusal as the
 /// screen reads it.
 pub(super) fn applied(answer: Result<usize, ApplyOutcome>) -> Result<TagApplied, TagError> {
@@ -381,9 +390,7 @@ mod tests {
         for on in [false, true] {
             let mut request = TagRequest::default();
             let (applied, unreadable) = apply_per_photo(&mut request, values()).unwrap();
-            if on {
-                request.copy_depth_to_altitude();
-            }
+            with_altitude(&mut request, || on);
             assert!(unreadable.is_none());
             assert_eq!(applied, BTreeMap::from([("TG-7|A1".to_string(), 240)]));
             assert_eq!(request.selection, Some(42));
@@ -391,6 +398,25 @@ mod tests {
             let altitude = request.photos[0].gps_altitude;
             assert_eq!(altitude, on.then_some(-3.0));
         }
+    }
+
+    #[test]
+    fn a_refusal_before_the_altitude_never_reads_the_setting() {
+        // The order `tag_request` follows: per-photo values, then the setting.
+        let run = |outcome: Result<PerPhoto, Refusal>| {
+            let mut request = TagRequest::default();
+            apply_per_photo(&mut request, outcome)?;
+            with_altitude(&mut request, || panic!("setting read"));
+            Ok::<_, TagError>(())
+        };
+        assert!(matches!(
+            run(Err(Refusal::Describe)),
+            Err(TagError::NoPhotos)
+        ));
+        assert!(matches!(
+            run(Err(Refusal::Profile(garbled()))),
+            Err(TagError::Source { .. })
+        ));
     }
 
     #[test]

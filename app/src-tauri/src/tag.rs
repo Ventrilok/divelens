@@ -57,7 +57,9 @@ pub(crate) struct TagChoice {
     offsets: std::collections::HashMap<String, i32>,
 }
 
-/// Why Tag Selection wrote nothing before reaching Lightroom, or lost track.
+/// Why Tag Selection did not finish: it stopped before reaching Lightroom, lost
+/// track of the write, or Lightroom answered with a refusal or a failure (also
+/// `gpsNotWritten`: everything written but the GPS and altitude).
 #[derive(Debug, Serialize)]
 #[serde(tag = "error", rename_all = "camelCase")]
 pub(crate) enum TagError {
@@ -162,9 +164,9 @@ fn tag_request(
     }
     // The "depth to altitude" setting applies to the whole request, as in
     // Create Collections: without per-photo values there is nothing to copy.
-    if Settings::load(&config_dir(app)).depth_to_altitude {
-        request.copy_depth_to_altitude();
-    }
+    rules::with_altitude(&mut request, || {
+        Settings::load(&config_dir(app)).depth_to_altitude
+    });
     Ok((request, applied))
 }
 

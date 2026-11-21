@@ -197,7 +197,8 @@ pub enum Command {
     /// Tag the photos selected in Lightroom at the time the plugin gets it.
     Apply {
         request: Box<TagRequest>,
-        /// The number of photos written, or why Lightroom wrote nothing.
+        /// The number of photos written, or Lightroom's refusal or failure
+        /// (including `gpsNotWritten`: written, but for the GPS and altitude).
         reply: Sender<Result<usize, ApplyOutcome>>,
     },
     /// Every photo of the catalog captured between two days (`YYYY-MM-DD`,
@@ -1103,7 +1104,7 @@ mod tests {
         plugin.join().unwrap();
         let outcome = outcome_rx.recv().unwrap().unwrap_err();
         assert!(outcome.half_written());
-        // As the front end reads it, to show its own text.
+        // The refusal as the screen reads it (`TagError::Lightroom`): its own text.
         assert_eq!(
             serde_json::to_value(&outcome).unwrap(),
             serde_json::json!({ "outcome": "failed", "reason": "gpsNotWritten", "detail": "aborted" })
