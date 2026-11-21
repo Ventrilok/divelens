@@ -139,35 +139,30 @@ fn tag_request(
         None => None,
     };
     let location = rules::location(choice.location.as_ref(), dive.as_ref(), || source.sites())?;
-    let mut request = rules::base_request(dive.as_ref(), location, units, info.app.name)?;
-    let mut applied = std::collections::BTreeMap::new();
-    // Per-photo values (spec F8): when the dive has a profile, on the photos
-    // of the selection shown taken during the dive, with the offsets shown.
-    // A profile that cannot be read leaves the dive data alone.
-    if let Some(dive) = dive.filter(|d| d.has_profile) {
-        let described = rules::described(
-            &app.state::<TagState>().selections,
-            choice.search,
-            &dive,
-            &choice.offsets,
-        )?;
-        // The profile of the configured log, read now; only when needed.
-        let outcome = selection::per_photo(&dive, described, units, || source.profile(&dive.id));
-        let (offsets, unreadable) = rules::apply_per_photo(&mut request, outcome)?;
-        if let Some(e) = unreadable {
-            log::warn!(
-                "profile of dive {} not read, dive data without per-photo values: {e:?}",
-                dive.id
-            );
-        }
-        applied = offsets;
+    let dive_id = dive.as_ref().map(|d| d.id.clone());
+    let built = rules::build_request(
+        dive,
+        location,
+        units,
+        info.app.name,
+        |dive| {
+            rules::described(
+                &app.state::<TagState>().selections,
+                choice.search,
+                dive,
+                &choice.offsets,
+            )
+        },
+        |id| source.profile(id),
+        || Settings::load(&config_dir(app)).depth_to_altitude,
+    )?;
+    if let Some(e) = built.unreadable {
+        log::warn!(
+            "profile of dive {} not read, dive data without per-photo values: {e:?}",
+            dive_id.unwrap_or_default()
+        );
     }
-    // The "depth to altitude" setting applies to the whole request, as in
-    // Create Collections: without per-photo values there is nothing to copy.
-    rules::with_altitude(&mut request, || {
-        Settings::load(&config_dir(app)).depth_to_altitude
-    });
-    Ok((request, applied))
+    Ok((built.request, built.applied))
 }
 
 /// Tags the photos selected in Lightroom (at the moment Lightroom gets the

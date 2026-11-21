@@ -9,10 +9,11 @@ use std::sync::Mutex;
 use std::sync::mpsc::RecvError;
 
 use divelens_core::collections::Span;
+use divelens_core::profile::Sample;
 use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
 use divelens_core::{Dive, Error, Site};
 
-use super::selection::{InDive, PerPhoto, Refusal, Selection};
+use super::selection::{InDive, PerPhoto, Refusal, Selection, per_photo};
 use super::{LocationChoice, TagApplied, TagError};
 use crate::apply::searches::Searches;
 use crate::lightroom::ApplyOutcome;
@@ -130,6 +131,45 @@ pub(super) fn apply_per_photo(
     }
 }
 
+/// What `build_request` made: the request, the offsets applied (to remember
+/// once written) and the error of a profile that could not be read.
+pub(super) struct Built {
+    pub request: TagRequest,
+    pub applied: BTreeMap<String, i32>,
+    pub unreadable: Option<Error>,
+}
+
+/// The request Tag Selection sends, in the order the refusals win: the dive
+/// data and location, then, for a dive with a profile, the per-photo values
+/// (`described` gives the selection the screen shows, `profile` reads the
+/// profile of a dive id: each only when needed), then the "depth to
+/// altitude" setting (`depth_to_altitude`, read last, so a refusal before it
+/// never reads it). A profile that cannot be read leaves the dive data alone.
+pub(super) fn build_request(
+    dive: Option<Dive>,
+    location: Option<LocationTags>,
+    units: Units,
+    source: &str,
+    described: impl FnOnce(&Dive) -> Result<Option<(u64, Vec<InDive>)>, TagError>,
+    profile: impl FnOnce(&str) -> Result<Vec<Sample>, Error>,
+    depth_to_altitude: impl FnOnce() -> bool,
+) -> Result<Built, TagError> {
+    let mut request = base_request(dive.as_ref(), location, units, source)?;
+    let mut applied = BTreeMap::new();
+    let mut unreadable = None;
+    if let Some(dive) = dive.filter(|d| d.has_profile) {
+        let described = described(&dive)?;
+        let outcome = per_photo(&dive, described, units, || profile(&dive.id));
+        (applied, unreadable) = apply_per_photo(&mut request, outcome)?;
+    }
+    with_altitude(&mut request, depth_to_altitude);
+    Ok(Built {
+        request,
+        applied,
+        unreadable,
+    })
+}
+
 /// The "depth to altitude" setting applied to the whole request, as Create
 /// Collections does: a request without per-photo values has nothing to copy.
 /// The setting is read here only, so a refusal before it never reads it.
@@ -156,6 +196,8 @@ pub(super) fn heard<T>(received: Result<T, RecvError>) -> Result<T, TagError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use std::cell::Cell;
 
     use chrono::{Duration, NaiveDate};
     use divelens_core::profile::PhotoPoint;
@@ -402,21 +444,113 @@ mod tests {
 
     #[test]
     fn a_refusal_before_the_altitude_never_reads_the_setting() {
-        // The order `tag_request` follows: per-photo values, then the setting.
-        let run = |outcome: Result<PerPhoto, Refusal>| {
-            let mut request = TagRequest::default();
-            apply_per_photo(&mut request, outcome)?;
-            with_altitude(&mut request, || panic!("setting read"));
-            Ok::<_, TagError>(())
+        let build = |described: Option<(u64, Vec<InDive>)>, profile: Result<Vec<Sample>, Error>| {
+            build_request(
+                Some(dive("A", 701)),
+                None,
+                Units::default(),
+                "MacDive",
+                |_| Ok(described),
+                |_| profile,
+                || panic!("setting read"),
+            )
         };
+        // The screen showed no selection, the profile reads: it must be described.
+        assert!(matches!(build(None, Ok(vec![])), Err(TagError::NoPhotos)));
+        // Photos shown, but the profile no longer reads.
+        let photos = Some((42, vec![photo_in_dive()]));
         assert!(matches!(
-            run(Err(Refusal::Describe)),
-            Err(TagError::NoPhotos)
-        ));
-        assert!(matches!(
-            run(Err(Refusal::Profile(garbled()))),
+            build(photos, Err(garbled())),
             Err(TagError::Source { .. })
         ));
+        // An unknown description: refused by `described` itself.
+        let refused = build_request(
+            Some(dive("A", 701)),
+            None,
+            Units::default(),
+            "MacDive",
+            |_| Err(TagError::NoPhotos),
+            |_| panic!("profile read"),
+            || panic!("setting read"),
+        );
+        assert!(matches!(refused, Err(TagError::NoPhotos)));
+        // Nothing chosen: refused before anything is read.
+        let nothing = build_request(
+            None,
+            None,
+            Units::default(),
+            "MacDive",
+            |_| panic!("described"),
+            |_| panic!("profile read"),
+            || panic!("setting read"),
+        );
+        assert!(matches!(nothing, Err(TagError::NothingChosen)));
+    }
+
+    /// A photo taken 25 minutes into the dive, with no clock offset.
+    fn photo_in_dive() -> InDive {
+        InDive {
+            id: "1".into(),
+            camera: "TG-7|A1".into(),
+            offset: 0,
+            corrected: NaiveDate::from_ymd_opt(2025, 12, 30)
+                .unwrap()
+                .and_hms_opt(9, 25, 0)
+                .unwrap(),
+        }
+    }
+
+    #[test]
+    fn the_altitude_setting_decides_the_altitude_of_the_request_built() {
+        let sample = |time_s, depth_m| Sample {
+            time_s,
+            depth_m,
+            temp_c: None,
+        };
+        let profile = vec![sample(0, 0.0), sample(3000, 30.0)];
+        for on in [false, true] {
+            let reads = Cell::new(0);
+            let built = build_request(
+                Some(dive("A", 701)),
+                None,
+                Units::default(),
+                "MacDive",
+                |_| Ok(Some((42, vec![photo_in_dive()]))),
+                |_| Ok(profile.clone()),
+                || {
+                    reads.set(reads.get() + 1);
+                    on
+                },
+            )
+            .unwrap();
+            assert_eq!(reads.get(), 1);
+            assert_eq!(built.request.selection, Some(42));
+            assert_eq!(built.request.photos.len(), 1);
+            assert_eq!(built.applied, BTreeMap::from([("TG-7|A1".to_string(), 0)]));
+            let altitude = built.request.photos[0].gps_altitude;
+            assert_eq!(altitude, on.then_some(-15.0), "setting on: {on}");
+        }
+        // A dive without a profile: no per-photo step, the setting is still
+        // read, and there is nothing to copy.
+        let mut flat = dive("A", 701);
+        flat.has_profile = false;
+        let reads = Cell::new(0);
+        let built = build_request(
+            Some(flat),
+            None,
+            Units::default(),
+            "MacDive",
+            |_| panic!("described"),
+            |_| panic!("profile read"),
+            || {
+                reads.set(reads.get() + 1);
+                true
+            },
+        )
+        .unwrap();
+        assert_eq!(reads.get(), 1);
+        assert!(built.request.photos.is_empty());
+        assert!(built.applied.is_empty());
     }
 
     #[test]
