@@ -3,7 +3,6 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { isLogChanged } from "./diveLog";
 import type {
   AppInfo,
-  TagApplied,
   CollectionSet,
   CollectionChoices,
   CollectionsPreview,
@@ -19,6 +18,7 @@ import type {
   SelectionPhotos,
   SelectionPreview,
   Settings,
+  TagApplied,
   TagChoice,
   TagPreview,
   UpdateStatus,

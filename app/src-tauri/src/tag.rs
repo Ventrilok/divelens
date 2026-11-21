@@ -201,10 +201,7 @@ pub(crate) async fn tag_selection(
             return Err(TagError::NotConnected);
         }
         let answer = rules::heard(outcome.recv())?;
-        let outcome = answer
-            .as_ref()
-            .map_or_else(Clone::clone, |&count| ApplyOutcome::Applied { count });
-        if should_remember(&outcome, &applied) {
+        if should_remember(&answer, &applied) {
             let dir = config_dir(&app);
             let mut offsets = Offsets::load(&dir, info.app);
             selection::remember(&applied, &mut offsets);
@@ -212,11 +209,11 @@ pub(crate) async fn tag_selection(
                 log::error!("clock offsets not saved: {e}");
             }
         }
-        match &outcome {
-            ApplyOutcome::Applied { count } => {
+        match &answer {
+            Ok(count) => {
                 log::info!("selection tagged: {count} photos, per-photo values on {with_values}")
             }
-            ApplyOutcome::Failed { .. } => log::warn!("selection not tagged: {outcome:?}"),
+            Err(outcome) => log::warn!("selection not tagged: {outcome:?}"),
         }
         rules::applied(answer)
     })

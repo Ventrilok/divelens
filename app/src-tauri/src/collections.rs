@@ -15,7 +15,7 @@ use crate::apply::searches::{Searches, keep_search};
 use crate::apply::{ask, send};
 use crate::dive_log::{LogId, Writes, open, source_info};
 use crate::files::config_dir;
-use crate::lightroom::{ApplyOutcome, CollectionSet, Command, WrittenCollection};
+use crate::lightroom::{CollectionSet, Command, WrittenCollection};
 use crate::settings::{Settings, units_in_use};
 use plan::{Choices, Period, Preview, Session};
 
@@ -197,12 +197,7 @@ pub(crate) async fn apply_collections(
             .inspect_err(|e| log::warn!("collections not written: {e:?}"))?;
         // The offsets are on the photos once the first catalog write is
         // done, even when the GPS and altitude write did not follow.
-        let outcome = answer
-            .as_ref()
-            .map_or_else(Clone::clone, |written| ApplyOutcome::Applied {
-                count: written.iter().map(|c| c.count).sum(),
-            });
-        if should_remember(&outcome, &applied) {
+        if should_remember(&answer, &applied) {
             let dir = config_dir(&app);
             let mut offsets = Offsets::load(&dir, log.app);
             offsets.cameras.extend(applied);

@@ -655,7 +655,7 @@ mod tests {
         assert!(applied.is_empty());
         // Lightroom wrote, but no camera had an offset applied: the offsets
         // file is left as it is.
-        let written = ApplyOutcome::Applied { count: 0 };
+        let written = Ok::<usize, ApplyOutcome>(0);
         assert!(!crate::apply::offsets::should_remember(&written, &applied));
     }
 
