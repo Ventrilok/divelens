@@ -63,6 +63,7 @@ end
 -- (Tagging.photoWrites). Always answers the app.
 function ApplyCollections.run(s, message)
     local id = message.id
+    s.applyStage = { id = id, stage = "before" }
     local function fail(reason, detail)
         Log.warn("collections refused: %s %s", reason, detail or "")
         Send.toApp(s, { type = "applyFailed", id = id, reason = reason, detail = detail })
@@ -123,11 +124,14 @@ function ApplyCollections.run(s, message)
         end, { timeout = CatalogWrite.WRITE_TIMEOUT })
     end)
     -- Straight on to the second write: nothing sent or yielded in between.
+    if ok and status == "executed" then s.applyStage.stage = "afterFirst" end
     local second = ok and status == "executed" and CatalogWrite.writeGpsLater(catalog, undoName, later)
     s.lastHeard = LrDate.currentTime()
     local reply = Tagging.applyReply(id, { ok = ok, status = status, second = second },
         { type = "collectionsApplied", id = id, groups = results })
     if reply.reason == "error" or reply.reason == "busy" then return fail(reply.reason, reply.detail) end
+    Send.toApp(s, reply)
+    s.applyStage.stage = "replied"
     if reply.reason == "gpsNotWritten" then
         -- The first write stays: collections, dive data and location text.
         Log.warn("collections written but not the GPS and altitude of %d photos: %s", #later, second.error or "Lightroom busy")
@@ -135,7 +139,6 @@ function ApplyCollections.run(s, message)
         CatalogWrite.logSecondWrite(later, second)
         Log.info("collections written: %d groups, %d photos (GPS altitude cleared on %d)", #results, total, second.cleared)
     end
-    Send.toApp(s, reply)
 end
 
 -- The catalog's collection sets, for the app's settings.

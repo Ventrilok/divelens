@@ -319,6 +319,19 @@ function Tagging.applyReply(id, outcome, done)
     return done
 end
 
+--- The answer to the "Apply" `id` when an unexpected Lua error ended the
+--- request, so the app is never left waiting. `stage` says how far it got:
+--- "before" (the first catalog write had not run: "applyFailed", "error",
+--- nothing written), "afterFirst" (the first write ran, the GPS and altitude
+--- may not have: "applyFailed", "gpsNotWritten", never "nothing written"),
+--- "replied" (the app already has its answer: nil, send nothing). `err` is
+--- the error text, given as the detail.
+function Tagging.crashReply(id, stage, err)
+    if stage == "replied" then return nil end
+    local reason = stage == "afterFirst" and "gpsNotWritten" or "error"
+    return { type = "applyFailed", id = id, reason = reason, detail = tostring(err) }
+end
+
 -- One photo's own values, as the app sent them (core/src/tags.rs,
 -- PhotoTags): its per-photo fields (a missing value clears the field), its
 -- clock offset, and its GPS altitude when there is one to write, with the

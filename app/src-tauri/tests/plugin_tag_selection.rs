@@ -574,3 +574,40 @@ fn tag_writes_keeps_photo_order_and_counts() {
         })
     );
 }
+
+fn crash_reply(stage: &str) -> serde_json::Value {
+    json_of(
+        &lua(),
+        &format!(
+            r#"
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            local reply = Tagging.crashReply(7, "{stage}", "boom")
+            return Json.encode {{ reply = reply, none = reply == nil }}
+            "#
+        ),
+    )
+}
+
+#[test]
+fn crash_before_the_first_write_says_nothing_written() {
+    use serde_json::json;
+    assert_eq!(
+        crash_reply("before")["reply"],
+        json!({ "type": "applyFailed", "id": 7, "reason": "error", "detail": "boom" })
+    );
+}
+
+#[test]
+fn crash_after_the_first_write_says_written_but_gps() {
+    use serde_json::json;
+    assert_eq!(
+        crash_reply("afterFirst")["reply"],
+        json!({ "type": "applyFailed", "id": 7, "reason": "gpsNotWritten", "detail": "boom" })
+    );
+}
+
+#[test]
+fn crash_after_the_reply_sends_nothing() {
+    assert_eq!(crash_reply("replied")["none"], true);
+}
