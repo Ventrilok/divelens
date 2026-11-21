@@ -63,6 +63,7 @@ end
 -- (Tagging.photoWrites). Always answers the app.
 function ApplyCollections.run(s, message)
     local id = message.id
+    s.applyStage = { id = id, stage = "before" }
     local function fail(reason, detail)
         Log.warn("collections refused: %s %s", reason, detail or "")
         Send.toApp(s, { type = "applyFailed", id = id, reason = reason, detail = detail })
@@ -102,12 +103,12 @@ function ApplyCollections.run(s, message)
     local total, found = Tagging.resolvePhotos(groups, s.search.photos)
     local undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)"
     local progress = Tagging.progress(total, CatalogWrite.PROGRESS_EVERY)
-    local results, later = {}, {}
+    local results, later, cleared = {}, {}, 0
     local ok, status = LrTasks.pcall(function()
         return catalog:withWriteAccessDo(undoName, function()
             local before = CatalogWrite.photosBefore(catalog, found)
             local planned = Tagging.collectionWrites(groups, before, existing)
-            results, later = planned.results, planned.later
+            results, later, cleared = planned.results, planned.later, planned.cleared
             for gi, g in ipairs(groups) do
                 local group = planned.groups[gi]
                 -- One step per photo requested: written when found.
@@ -123,19 +124,22 @@ function ApplyCollections.run(s, message)
         end, { timeout = CatalogWrite.WRITE_TIMEOUT })
     end)
     -- Straight on to the second write: nothing sent or yielded in between.
+    if ok and status == "executed" then s.applyStage.stage = "afterFirst" end
     local second = ok and status == "executed" and CatalogWrite.writeGpsLater(catalog, undoName, later)
     s.lastHeard = LrDate.currentTime()
     local reply = Tagging.applyReply(id, { ok = ok, status = status, second = second },
         { type = "collectionsApplied", id = id, groups = results })
     if reply.reason == "error" or reply.reason == "busy" then return fail(reply.reason, reply.detail) end
+    Send.toApp(s, reply)
+    s.applyStage.stage = "replied"
     if reply.reason == "gpsNotWritten" then
         -- The first write stays: collections, dive data and location text.
         Log.warn("collections written but not the GPS and altitude of %d photos: %s", #later, second.error or "Lightroom busy")
     else
         CatalogWrite.logSecondWrite(later, second)
-        Log.info("collections written: %d groups, %d photos (GPS altitude cleared on %d)", #results, total, second.cleared)
+        Log.info("collections written: %d groups, %d photos; another dive's values cleared or replaced on %d (GPS altitude cleared on %d)",
+            #results, total, cleared, second.cleared)
     end
-    Send.toApp(s, reply)
 end
 
 -- The catalog's collection sets, for the app's settings.

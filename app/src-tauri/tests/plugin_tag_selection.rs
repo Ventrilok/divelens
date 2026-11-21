@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{WRITES_LUA, lua, run, sample_dive};
+use common::{WRITES_LUA, json_of, lua, run, sample_dive};
 
 /// The plan the plugin makes from a request built by the app, as
 /// "kind field=value" lines (value "nil" clears the field).
@@ -365,14 +365,6 @@ fn dive_values_reach_the_plugin_by_name_with_real_values() {
 }
 
 /// What `lua` returns, a JSON text (Json.encode), as a value to compare.
-fn json_of(lua: &mlua::Lua, code: &str) -> serde_json::Value {
-    let text: String = match lua.load(code).eval() {
-        Ok(text) => text,
-        Err(e) => panic!("{e}"),
-    };
-    serde_json::from_str(&text).unwrap()
-}
-
 #[test]
 fn apply_reply_says_why_nothing_or_part_was_written() {
     use serde_json::json;
@@ -572,5 +564,63 @@ fn tag_writes_keeps_photo_order_and_counts() {
                 "withValues": 1,
             },
         })
+    );
+}
+
+fn crash_reply(record: &str) -> serde_json::Value {
+    json_of(
+        &lua(),
+        &format!(
+            r#"
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            local reply = Tagging.crashReply(7, {record}, "boom")
+            return Json.encode {{ reply = reply, none = reply == nil }}
+            "#
+        ),
+    )
+}
+
+#[test]
+fn crash_before_the_first_write_says_nothing_written() {
+    use serde_json::json;
+    assert_eq!(
+        crash_reply(r#"{ id = 7, stage = "before" }"#)["reply"],
+        json!({ "type": "applyFailed", "id": 7, "reason": "error", "detail": "boom" })
+    );
+}
+
+#[test]
+fn crash_after_the_first_write_says_written_but_gps() {
+    use serde_json::json;
+    assert_eq!(
+        crash_reply(r#"{ id = 7, stage = "afterFirst" }"#)["reply"],
+        json!({ "type": "applyFailed", "id": 7, "reason": "gpsNotWritten", "detail": "boom" })
+    );
+}
+
+#[test]
+fn crash_after_the_reply_sends_nothing() {
+    assert_eq!(
+        crash_reply(r#"{ id = 7, stage = "replied" }"#)["none"],
+        true
+    );
+}
+
+#[test]
+fn crash_with_no_apply_record_says_nothing_written() {
+    use serde_json::json;
+    assert_eq!(
+        crash_reply("nil")["reply"],
+        json!({ "type": "applyFailed", "id": 7, "reason": "error", "detail": "boom" })
+    );
+}
+
+#[test]
+fn crash_for_another_request_ignores_its_record() {
+    use serde_json::json;
+    assert_eq!(
+        crash_reply(r#"{ id = 3, stage = "replied" }"#)["reply"],
+        json!({ "type": "applyFailed", "id": 7, "reason": "error", "detail": "boom" })
     );
 }

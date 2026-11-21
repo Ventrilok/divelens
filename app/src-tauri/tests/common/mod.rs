@@ -32,6 +32,15 @@ pub fn run(lua: &Lua, code: &str) {
     }
 }
 
+/// Runs Lua code that returns JSON text, and parses it.
+pub fn json_of(lua: &Lua, code: &str) -> serde_json::Value {
+    let text: String = match lua.load(code).eval() {
+        Ok(text) => text,
+        Err(e) => panic!("{e}"),
+    };
+    serde_json::from_str(&text).unwrap()
+}
+
 pub fn sample_dive() -> divelens_core::Dive {
     let start = chrono::NaiveDate::from_ymd_opt(2025, 12, 31)
         .unwrap()

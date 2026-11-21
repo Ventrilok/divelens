@@ -319,6 +319,23 @@ function Tagging.applyReply(id, outcome, done)
     return done
 end
 
+--- The answer to the "Apply" `id` when an unexpected Lua error ended the
+--- request, so the app is never left waiting. `record` is the plug-in's
+--- apply record as it is, nil or `{ id = ..., stage = ... }`; it counts only
+--- when its `id` is this request's (the app's ids restart at each launch),
+--- otherwise the request is taken as "before". `stage` says how far the apply
+--- got: "before" (the first catalog write had not run: "applyFailed",
+--- "error", nothing written), "afterFirst" (the first write ran, the GPS and
+--- altitude may not have: "applyFailed", "gpsNotWritten", never "nothing
+--- written"), "replied" (the app already has its answer: nil, send nothing).
+--- `err` is the error text, given as the detail.
+function Tagging.crashReply(id, record, err)
+    local stage = type(record) == "table" and record.id == id and record.stage or "before"
+    if stage == "replied" then return nil end
+    local reason = stage == "afterFirst" and "gpsNotWritten" or "error"
+    return { type = "applyFailed", id = id, reason = reason, detail = tostring(err) }
+end
+
 -- One photo's own values, as the app sent them (core/src/tags.rs,
 -- PhotoTags): its per-photo fields (a missing value clears the field), its
 -- clock offset, and its GPS altitude when there is one to write, with the
@@ -562,10 +579,13 @@ end
 ---   later   = { { photo, changes }, ... }: the second write's, for the
 ---             photos with a GPS position or altitude to write;
 ---   results = { [gi] = { collection, count = photos found, created } }, as
----             the app is told: `created` when the collection was not
----             there, even with no photo found (no collection made then).
+---             the app is told: `created` only for the group that really
+---             makes its collection: a photo found, the name neither there
+---             nor made by an earlier group (that one is completed);
+---   cleared = photos that carried another dive's values (as tagWrites).
 function Tagging.collectionWrites(groups, before, existing)
-    local plan = { groups = {}, later = {}, results = {} }
+    local plan = { groups = {}, later = {}, results = {}, cleared = 0 }
+    local made = {}
     for gi, g in ipairs(groups) do
         local steps, photos = {}, {}
         for _, p in ipairs(g.photos) do
@@ -573,7 +593,8 @@ function Tagging.collectionWrites(groups, before, existing)
             if p.photo then
                 -- Its changes for the first write, and its GPS position
                 -- and altitude for the second.
-                local now, gps = Tagging.photoWrites(g.common, before[p.photo], p.changes)
+                local now, gps, replaced = Tagging.photoWrites(g.common, before[p.photo], p.changes)
+                if replaced then plan.cleared = plan.cleared + 1 end
                 step.photo, step.changes = p.photo, now
                 if #gps > 0 then plan.later[#plan.later + 1] = { photo = p.photo, changes = gps } end
                 photos[#photos + 1] = p.photo
@@ -581,7 +602,9 @@ function Tagging.collectionWrites(groups, before, existing)
             steps[#steps + 1] = step
         end
         plan.groups[gi] = { steps = steps, photos = photos }
-        plan.results[gi] = { collection = g.collection, count = #photos, created = not existing[g.collection] }
+        local created = #photos > 0 and not existing[g.collection] and not made[g.collection]
+        if created then made[g.collection] = true end
+        plan.results[gi] = { collection = g.collection, count = #photos, created = created }
     end
     return plan
 end

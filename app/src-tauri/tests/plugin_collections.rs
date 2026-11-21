@@ -3,7 +3,7 @@
 
 mod common;
 
-use common::{WRITES_LUA, lua, run, sample_dive};
+use common::{WRITES_LUA, json_of, lua, run, sample_dive};
 
 #[test]
 fn collections_plan_writes_dive_data_and_per_photo_values() {
@@ -312,10 +312,10 @@ fn collection_writes_step_every_requested_photo() {
                 "later": later,
                 "results": [
                     { "collection": "700 - Coral Garden", "count": 1, "created": false },
-                    { "collection": "701 - North Reef", "count": 0, "created": true },
+                    { "collection": "701 - North Reef", "count": 0, "created": false },
                 ],
             },
-            // Already there or not, even without a photo found.
+            // Created only with a photo found and the name not there.
             "second": {
                 "groups": groups,
                 "later": later,
@@ -326,4 +326,81 @@ fn collection_writes_step_every_requested_photo() {
             },
         })
     );
+}
+
+/// Runs Lua on `groups` (name, photo ids found) and returns the plan as JSON.
+const GROUPS_LUA: &str = r#"
+    local Json = require "Json"
+    local Tagging = require "Tagging"
+    local function group(name, photos)
+        local list = {}
+        for i, photo in ipairs(photos) do list[i] = { id = photo.id, photo = photo, changes = {} } end
+        return { collection = name, common = {}, photos = list }
+    end
+"#;
+
+#[test]
+fn a_group_without_photo_found_is_not_created() {
+    let out = json_of(
+        &lua(),
+        &format!(
+            r#"{GROUPS_LUA}
+        local plan = Tagging.collectionWrites({{ group("101 - Coral Garden", {{}}) }}, {{}}, {{}})
+        return Json.encode(plan.results)"#
+        ),
+    );
+    assert_eq!(
+        out,
+        serde_json::json!([{ "collection": "101 - Coral Garden", "count": 0, "created": false }])
+    );
+}
+
+#[test]
+fn a_second_group_of_the_same_new_name_is_completed() {
+    let out = json_of(
+        &lua(),
+        &format!(
+            r#"{GROUPS_LUA}
+        local groups = {{
+            group("101 - Coral Garden", {{ {{ id = "1" }} }}),
+            group("101 - Coral Garden", {{ {{ id = "2" }} }}),
+        }}
+        local plan = Tagging.collectionWrites(groups, {{}}, {{}})
+        return Json.encode(plan.results)"#
+        ),
+    );
+    assert_eq!(
+        out,
+        serde_json::json!([
+            { "collection": "101 - Coral Garden", "count": 1, "created": true },
+            { "collection": "101 - Coral Garden", "count": 1, "created": false },
+        ])
+    );
+}
+
+#[test]
+fn collection_writes_count_replaced_dive_values() {
+    let out = json_of(
+        &lua(),
+        &format!(
+            r#"{GROUPS_LUA}
+        local other, same, bare = {{ id = "1" }}, {{ id = "2" }}, {{ id = "3" }}
+        local common = {{
+            {{ kind = "plugin", field = "Source", value = "Subsurface" }},
+            {{ kind = "plugin", field = "StartDate", value = "2026-01-02T10:00:00" }},
+            {{ kind = "plugin", field = "DiveId", value = "A" }},
+        }}
+        local g = group("101 - Coral Garden", {{ other, same, bare }})
+        g.common = common
+        -- Photo 1 carries another dive, photo 2 the same dive, photo 3 none.
+        local before = {{
+            [other] = {{ Source = "Subsurface", StartDate = "2026-01-01T09:00:00", DiveId = "B", PhotoDepth = "5" }},
+            [same] = {{ Source = "Subsurface", StartDate = "2026-01-02T10:00:00", DiveId = "A", PhotoDepth = "5" }},
+            [bare] = {{}},
+        }}
+        local plan = Tagging.collectionWrites({{ g }}, before, {{}})
+        return Json.encode({{ cleared = plan.cleared }})"#
+        ),
+    );
+    assert_eq!(out, serde_json::json!({ "cleared": 1 }));
 }

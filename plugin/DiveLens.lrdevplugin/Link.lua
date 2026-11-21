@@ -39,6 +39,7 @@ local Json = require "Json"
 local Log = require "Log"
 local Selection = require "Selection"
 local Send = require "Send"
+local Tagging = require "Tagging"
 
 local PROTOCOL = 6
 local APP_ID = "com.querton.divelens.desktop" -- the app's bundle identifier
@@ -177,22 +178,21 @@ local function handle(s, text)
         Send.toApp(s, { type = "pong" })
     elseif message.type == "logLevel" then
         if Log.setLevel(message.level) then Log.info("log level: %s", tostring(message.level)) end
-    elseif message.type == "apply" then
-        ApplyTags.run(s, message)
-    elseif message.type == "findPhotos" or message.type == "applyCollections" or message.type == "listSets"
+    elseif message.type == "apply" or message.type == "findPhotos" or message.type == "applyCollections" or message.type == "listSets"
         or message.type == "describeSelection" then
-        -- The app waits for an answer: an error still gets one.
+        -- The app waits for an answer: unless the answer was already sent, an error still gets one.
         local handlers = {
-            findPhotos = ApplyCollections.find, applyCollections = ApplyCollections.run,
+            apply = ApplyTags.run, findPhotos = ApplyCollections.find, applyCollections = ApplyCollections.run,
             listSets = ApplyCollections.listSets,
             describeSelection = Selection.describe,
         }
         local handler = handlers[message.type]
         local ok, err = LrTasks.pcall(handler, s, message)
         if not ok then
-            Log.error("%s failed: %s", message.type, err)
             s.lastHeard = LrDate.currentTime()
-            Send.toApp(s, { type = "applyFailed", id = message.id, reason = "error", detail = tostring(err) })
+            local reply = Tagging.crashReply(message.id, s.applyStage, err)
+            if reply then Send.toApp(s, reply) end
+            Log.error("%s failed: %s", message.type, err)
         end
     else
         Log.debug("ignored message type %s", tostring(message.type))
@@ -225,6 +225,7 @@ local function closeSockets(s)
     s.selectionSignature = nil
     s.search = nil -- photo ids belong to one app session
     s.described = nil
+    s.applyStage = nil -- request ids restart at each app launch
     s.selectionDescribed = nil
     s.thumbnailRequests = {}
     s.thumbnailOutbox = {}
