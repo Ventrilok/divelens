@@ -108,6 +108,49 @@ function CatalogWrite.writeGpsLater(catalog, undoName, later)
     return Tagging.secondWriteResult(ok, status, cleared, refused)
 end
 
+-- The envelope both features write through, for the "apply" `id`: the first
+-- catalog write, the second one right after it, and the one answer to the
+-- app. It keeps `s.applyStage` ("before" is set by the feature at the very
+-- start of its run; "afterFirst" and "replied" here), which Link.lua's
+-- protected handler reads when an unexpected error ends the request
+-- (Tagging.crashReply). `job`:
+--   catalog    the catalog the feature already works on
+--   undoName   the Undo name of both writes
+--   total      photos the first write goes through, for the progress messages
+--   fail       function(reason, detail): the feature's refusal (logs, then
+--              tells the app "applyFailed"), used when a write fails or is busy
+--   before     optional function(catalog) -> what the photos carry before,
+--              read inside the first write; absent = nothing is read
+--   writeFirst function(catalog, before, advance) -> result: the first write's
+--              body; calls advance() once per step, and returns
+--              { later = the GPS changes for the second write, ... } plus
+--              whatever done and log need
+--   done       function(result) -> the message when everything was written
+--   log        function(result, second): the log lines once the app has its
+--              answer; second.written is false when the GPS did not go
+function CatalogWrite.apply(s, id, job)
+    local catalog = job.catalog
+    local progress = Tagging.progress(job.total, CatalogWrite.PROGRESS_EVERY)
+    local function advance() CatalogWrite.advance(s, id, job.total, progress) end
+    local result
+    local ok, status = LrTasks.pcall(function()
+        return catalog:withWriteAccessDo(job.undoName, function()
+            local before = job.before and job.before(catalog)
+            result = job.writeFirst(catalog, before, advance)
+        end, { timeout = CatalogWrite.WRITE_TIMEOUT })
+    end)
+    -- Straight on to the second write: nothing sent or yielded in between.
+    if ok and status == "executed" then s.applyStage.stage = "afterFirst" end
+    local second = ok and status == "executed" and CatalogWrite.writeGpsLater(catalog, job.undoName, result.later)
+    s.lastHeard = LrDate.currentTime() -- the app's pings waited during the writes
+    local reply = Tagging.applyReply(id, { ok = ok, status = status, second = second },
+        ok and status == "executed" and job.done(result))
+    if reply.reason == "error" or reply.reason == "busy" then return job.fail(reply.reason, reply.detail) end
+    Send.toApp(s, reply)
+    s.applyStage.stage = "replied"
+    job.log(result, second)
+end
+
 function CatalogWrite.logSecondWrite(later, second)
     if #later == 0 then
         Log.info("no GPS or altitude to write: no second write")

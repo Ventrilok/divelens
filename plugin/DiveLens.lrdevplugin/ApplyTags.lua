@@ -9,8 +9,6 @@ Part of DiveLens, GPL-3.0-or-later.
 ]]
 
 local LrApplication = import "LrApplication"
-local LrDate = import "LrDate"
-local LrTasks = import "LrTasks"
 
 local CatalogWrite = require "CatalogWrite"
 local Log = require "Log"
@@ -49,37 +47,35 @@ function ApplyTags.run(s, message)
     local refusal = Tagging.selectionRefusal(perPhoto, s.described, photos, Tagging.photoId)
     if refusal then return fail(refusal) end
     local total = #photos
-    local undoName = LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)"
-    local progress = Tagging.progress(total, CatalogWrite.PROGRESS_EVERY)
-    local cleared, withValues, later = 0, 0, {}
-    local ok, status = LrTasks.pcall(function()
-        return catalog:withWriteAccessDo(undoName, function()
-            local before = Tagging.writesDive(changes) and CatalogWrite.photosBefore(catalog, photos) or {}
+    CatalogWrite.apply(s, id, {
+        catalog = catalog,
+        undoName = LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)",
+        total = total,
+        fail = fail,
+        before = function()
+            return Tagging.writesDive(changes) and CatalogWrite.photosBefore(catalog, photos) or {}
+        end,
+        writeFirst = function(_, before, advance)
             local planned = Tagging.tagWrites(changes, photos, before, perPhoto, Tagging.photoId)
-            cleared, withValues, later = planned.cleared, planned.withValues, planned.later
             for _, w in ipairs(planned.writes) do
                 CatalogWrite.write(w.photo, w.changes)
-                CatalogWrite.advance(s, id, total, progress)
+                advance()
             end
-        end, { timeout = CatalogWrite.WRITE_TIMEOUT })
-    end)
-    -- Straight on to the second write: nothing sent or yielded in between.
-    if ok and status == "executed" then s.applyStage.stage = "afterFirst" end
-    local second = ok and status == "executed" and CatalogWrite.writeGpsLater(catalog, undoName, later)
-    s.lastHeard = LrDate.currentTime() -- the app's pings waited during the writes
-    local reply = Tagging.applyReply(id, { ok = ok, status = status, second = second },
-        { type = "applied", id = id, count = total })
-    if reply.reason == "error" or reply.reason == "busy" then return fail(reply.reason, reply.detail) end
-    Send.toApp(s, reply)
-    s.applyStage.stage = "replied"
-    if reply.reason == "gpsNotWritten" then
-        -- The first write stays: dive data and location text, without GPS.
-        Log.warn("tagged %d photos but not the GPS and altitude of %d: %s", total, #later, second.error or "Lightroom busy")
-    else
-        CatalogWrite.logSecondWrite(later, second)
-        Log.info("tagged %d photos, per-photo values on %d; another dive's values cleared or replaced on %d (GPS altitude cleared on %d)",
-            total, withValues, cleared, second.cleared)
-    end
+            return { later = planned.later, cleared = planned.cleared, withValues = planned.withValues }
+        end,
+        done = function() return { type = "applied", id = id, count = total } end,
+        log = function(result, second)
+            local later = result.later
+            if not second.written then
+                -- The first write stays: dive data and location text, without GPS.
+                Log.warn("tagged %d photos but not the GPS and altitude of %d: %s", total, #later, second.error or "Lightroom busy")
+            else
+                CatalogWrite.logSecondWrite(later, second)
+                Log.info("tagged %d photos, per-photo values on %d; another dive's values cleared or replaced on %d (GPS altitude cleared on %d)",
+                    total, result.withValues, result.cleared, second.cleared)
+            end
+        end,
+    })
 end
 
 return ApplyTags
