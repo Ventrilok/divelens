@@ -26,6 +26,11 @@ const writeWords = [/written/i, /écrit/i, /undo/i, /annuler/i, /apply again/i, 
 describe.each(["en", "fr"] as const)("Create Collections search failure texts (%s)", (lang) => {
   beforeEach(() => setLanguage(lang));
 
+  it("dives that vanished say to reopen Dive Lens", () => {
+    const sentence = lang === "en" ? "To see the dive log as it is now, reopen Dive Lens." : "Pour voir le carnet de plongée à jour, rouvrez Dive Lens.";
+    expect(searchFailure({ error: "nothingChosen" })).toContain(sentence);
+  });
+
   it.each(errors.map((e) => [JSON.stringify(e), e] as const))("%s", (_, e) => {
     const text = searchFailure(e);
     expect(text.trim()).not.toBe("");

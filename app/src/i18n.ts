@@ -170,8 +170,8 @@ const en = {
   "tag.err.badRequest": "Lightroom could not use the request from Dive Lens. Nothing was written. If it happens again, report the problem.",
   "tag.err.nothingChosen": "Nothing was written: choose a dive or a site first.",
   "tag.err.badGps": "The GPS position is not valid. Nothing was written: correct the latitude and longitude, then apply again.",
-  "tag.err.unknownDive": "This dive is no longer in the dive log. Nothing was written: choose another dive.",
-  "tag.err.unknownSite": "This site is no longer in the dive log. Nothing was written: choose another site.",
+  "tag.err.unknownDive": "This dive is no longer in the dive log. Nothing was written: choose another dive. To see the dive log as it is now, reopen Dive Lens.",
+  "tag.err.unknownSite": "This site is no longer in the dive log. Nothing was written: choose another site. To see the dive log as it is now, reopen Dive Lens.",
   "tag.err.source": "The dive log could not be read: {detail}. Nothing was written.",
   "tag.err.selectionChanged":
     "The selection changed in Lightroom. Nothing was written: check the per-photo data, then apply again.",
@@ -257,7 +257,7 @@ const en = {
   "coll.search.err.lightroom": "Dive Lens could not look for the photos in Lightroom: {detail}",
   "coll.search.err.generic": "Dive Lens could not look for the photos in Lightroom.",
   "coll.search.err.source": "The dive log could not be read: {detail}",
-  "coll.search.err.divesGone": "The dives chosen are no longer in the dive log: go back and choose other dives.",
+  "coll.search.err.divesGone": "The dives chosen are no longer in the dive log: go back and choose other dives. To see the dive log as it is now, reopen Dive Lens.",
 
   "settings.title": "Settings",
   "settings.saveError": "Setting not saved: {detail}",
@@ -538,8 +538,8 @@ const fr: Record<Key, string> = {
   "tag.err.badRequest": "Lightroom n'a pas pu utiliser la demande de Dive Lens. Rien n'a été écrit. Si cela se reproduit, signalez le problème.",
   "tag.err.nothingChosen": "Rien n'a été écrit : choisissez d'abord une plongée ou un site.",
   "tag.err.badGps": "La position GPS n'est pas valide. Rien n'a été écrit : corrigez la latitude et la longitude, puis appliquez à nouveau.",
-  "tag.err.unknownDive": "Cette plongée n'est plus dans le carnet de plongée. Rien n'a été écrit : choisissez une autre plongée.",
-  "tag.err.unknownSite": "Ce site n'est plus dans le carnet de plongée. Rien n'a été écrit : choisissez un autre site.",
+  "tag.err.unknownDive": "Cette plongée n'est plus dans le carnet de plongée. Rien n'a été écrit : choisissez une autre plongée. Pour voir le carnet de plongée à jour, rouvrez Dive Lens.",
+  "tag.err.unknownSite": "Ce site n'est plus dans le carnet de plongée. Rien n'a été écrit : choisissez un autre site. Pour voir le carnet de plongée à jour, rouvrez Dive Lens.",
   "tag.err.source": "Le carnet de plongée n'a pas pu être lu : {detail}. Rien n'a été écrit.",
   "tag.err.selectionChanged":
     "La sélection a changé dans Lightroom. Rien n'a été écrit : vérifiez les données par photo, puis appliquez à nouveau.",
@@ -625,7 +625,7 @@ const fr: Record<Key, string> = {
   "coll.search.err.lightroom": "Dive Lens n'a pas pu chercher les photos dans Lightroom : {detail}",
   "coll.search.err.generic": "Dive Lens n'a pas pu chercher les photos dans Lightroom.",
   "coll.search.err.source": "Le carnet de plongée n'a pas pu être lu : {detail}",
-  "coll.search.err.divesGone": "Les plongées choisies ne sont plus dans le carnet de plongée : revenez en arrière et choisissez d'autres plongées.",
+  "coll.search.err.divesGone": "Les plongées choisies ne sont plus dans le carnet de plongée : revenez en arrière et choisissez d'autres plongées. Pour voir le carnet de plongée à jour, rouvrez Dive Lens.",
 
   "settings.title": "Réglages",
   "settings.saveError": "Réglage non enregistré : {detail}",

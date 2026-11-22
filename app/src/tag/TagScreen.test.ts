@@ -83,6 +83,12 @@ describe.each(["en", "fr"] as const)("Tag Selection failure texts (%s)", (lang) 
     for (const e of others) expect(failure(e), JSON.stringify(e)).toContain(nothingWritten);
   });
 
+  it("a vanished dive or site says to reopen Dive Lens", () => {
+    const sentence = lang === "en" ? "To see the dive log as it is now, reopen Dive Lens." : "Pour voir le carnet de plongée à jour, rouvrez Dive Lens.";
+    expect(failure({ error: "unknownDive" })).toContain(sentence);
+    expect(failure({ error: "unknownSite" })).toContain(sentence);
+  });
+
   it("read: a newer description replaced this one", () => {
     expect(describeFailure({ error: "noPhotos" })).toBeNull();
     expect(describeFailure({ error: "logChanged" })).toBeNull();
