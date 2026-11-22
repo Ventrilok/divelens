@@ -193,6 +193,14 @@ mod tests {
         let saved = Offsets::load(&dir, app);
         assert_eq!(saved.get("TG-7|A1"), Some(240));
         assert_eq!(saved.get("Nikon|"), Some(60));
+        // Refused after a saved write: the saved values stay as they are.
+        remember_applied(
+            &dir,
+            app,
+            &refused,
+            &BTreeMap::from([("Nikon|".to_string(), 999)]),
+        );
+        assert_eq!(Offsets::load(&dir, app), saved);
         // The GPS and altitude missing: the offsets are on the photos.
         let gps = Err::<usize, _>(ApplyOutcome::Failed {
             reason: "gpsNotWritten".into(),

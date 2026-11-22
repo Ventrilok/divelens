@@ -201,6 +201,8 @@ pub(crate) async fn apply_collections(
             |outcome| log::warn!("collections refused by Lightroom: {outcome:?}"),
         )
         .inspect_err(|e| {
+            // `ask` (inside) fails only with these two; a Lightroom
+            // refusal is logged by `on_refused` above.
             if matches!(e, ApplyError::NotConnected | ApplyError::LinkLost) {
                 log::warn!("collections not written: {e:?}");
             }

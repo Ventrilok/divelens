@@ -18,7 +18,9 @@ pub(crate) enum ApplyError {
     UnknownDive,
     UnknownSite,
     /// No photo search to work on (link reconnected, app restarted, or a
-    /// newer search replaced it).
+    /// newer search replaced it). In Tag Selection: the dive has a profile
+    /// but the selection the screen shows is no longer kept, it must be
+    /// described again.
     NoPhotos,
     /// No photo goes to any dive.
     NothingToWrite,
@@ -54,14 +56,22 @@ mod tests {
     use std::sync::mpsc;
 
     use super::*;
-    use crate::apply::heard;
+    use crate::apply::{answered, heard};
+    use crate::tag::TagApplied;
 
     #[test]
-    fn a_refusal_is_an_error_as_the_screen_reads_it() {
-        let refused = ApplyError::from(ApplyOutcome::Failed {
+    fn a_refused_write_is_an_error_as_the_screen_reads_it() {
+        let seen = std::cell::RefCell::new(Vec::new());
+        let on_refused = |o: &ApplyOutcome| seen.borrow_mut().push(o.clone());
+        assert!(matches!(answered(Ok(3), on_refused), Ok(3)));
+        assert!(seen.borrow().is_empty(), "never called on a written answer");
+        let busy = ApplyOutcome::Failed {
             reason: "busy".into(),
             detail: None,
-        });
+        };
+        let refused = answered(Err::<usize, _>(busy.clone()), on_refused).map(TagApplied::from);
+        assert_eq!(*seen.borrow(), vec![busy], "called once with the outcome");
+        let refused = refused.unwrap_err();
         assert!(matches!(
             refused,
             ApplyError::Lightroom { ref reason, detail: None } if reason == "busy"
@@ -69,6 +79,12 @@ mod tests {
         assert_eq!(
             serde_json::to_value(refused).unwrap(),
             serde_json::json!({ "error": "lightroom", "reason": "busy", "detail": null })
+        );
+        // As Tag Selection returns a written answer.
+        let tagged = answered(Ok(2), |_| ()).map(TagApplied::from).unwrap();
+        assert_eq!(
+            serde_json::to_value(tagged).unwrap(),
+            serde_json::json!({ "count": 2 })
         );
     }
 

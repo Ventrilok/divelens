@@ -61,6 +61,12 @@ pub(crate) struct TagApplied {
     count: usize,
 }
 
+impl From<usize> for TagApplied {
+    fn from(count: usize) -> Self {
+        Self { count }
+    }
+}
+
 /// Tag Selection's descriptions of the Lightroom selection: the latest one
 /// only is kept (its own, never Create Collections' photo search).
 #[derive(Default)]
@@ -145,7 +151,7 @@ pub(crate) async fn tag_selection(
             |outcome| log::warn!("selection not tagged: {outcome:?}"),
         )?;
         log::info!("selection tagged: {count} photos, per-photo values on {with_values}");
-        Ok(TagApplied { count })
+        Ok(TagApplied::from(count))
     })
     .await
     .expect("tagging task failed")
@@ -229,17 +235,4 @@ pub(crate) async fn suggest_tag_offsets(
     })
     .await
     .expect("suggestion task failed")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn what_tagging_wrote_is_the_count() {
-        assert_eq!(
-            serde_json::to_value(TagApplied { count: 2 }).unwrap(),
-            serde_json::json!({ "count": 2 })
-        );
-    }
 }

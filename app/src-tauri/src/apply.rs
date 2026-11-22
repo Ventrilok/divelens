@@ -62,6 +62,15 @@ pub(crate) fn write_and_remember<T>(
 ) -> Result<T, ApplyError> {
     let answer = ask(app, command)?;
     offsets::remember_applied(&config_dir(app), info.app, &answer, applied);
+    answered(answer, on_refused)
+}
+
+/// What Lightroom answered: the written value, or a refusal as the screen
+/// reads it (`on_refused` sees the outcome first, once).
+pub(crate) fn answered<T>(
+    answer: Result<T, ApplyOutcome>,
+    on_refused: impl FnOnce(&ApplyOutcome),
+) -> Result<T, ApplyError> {
     answer.map_err(|outcome| {
         on_refused(&outcome);
         ApplyError::from(outcome)
