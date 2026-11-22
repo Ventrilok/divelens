@@ -8,6 +8,9 @@ mod settings;
 mod tag;
 mod update;
 
+// For the contract test (tests/apply_contract.rs).
+pub use lightroom::APPLY_REASONS;
+
 use std::sync::Mutex;
 use std::sync::mpsc;
 
