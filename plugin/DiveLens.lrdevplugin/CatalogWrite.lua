@@ -2,8 +2,9 @@
 What Tag Selection (ApplyTags.lua) and Create Collections
 (ApplyCollections.lua) share to write in the catalog: Lightroom's date
 format, one photo's changes, what the photos carry before a write, the
-progress messages to the app, and the second catalog write of an "Apply",
-the GPS positions and altitudes. What goes on each photo is decided by
+progress messages to the app, the envelope of an "Apply" (the first catalog
+write and the one answer to the app) and its second catalog write, the GPS
+positions and altitudes. What goes on each photo is decided by
 Tagging.lua.
 
 Part of DiveLens, GPL-3.0-or-later.
@@ -116,9 +117,10 @@ end
 -- (Tagging.crashReply). `job`:
 --   catalog    the catalog the feature already works on
 --   undoName   the Undo name of both writes
---   total      photos the first write goes through, for the progress messages
+--   total      photos requested, found or not, for the progress messages
 --   fail       function(reason, detail): the feature's refusal (logs, then
---              tells the app "applyFailed"), used when a write fails or is busy
+--              tells the app "applyFailed"), used when the first write fails or
+--              is busy (a second-write failure goes out as "gpsNotWritten")
 --   before     optional function(catalog) -> what the photos carry before,
 --              read inside the first write; absent = nothing is read
 --   writeFirst function(catalog, before, advance) -> result: the first write's
@@ -135,7 +137,7 @@ function CatalogWrite.apply(s, id, job)
     local result
     local ok, status = LrTasks.pcall(function()
         return catalog:withWriteAccessDo(job.undoName, function()
-            local before = job.before and job.before(catalog)
+            local before = job.before and job.before(catalog) or {}
             result = job.writeFirst(catalog, before, advance)
         end, { timeout = CatalogWrite.WRITE_TIMEOUT })
     end)

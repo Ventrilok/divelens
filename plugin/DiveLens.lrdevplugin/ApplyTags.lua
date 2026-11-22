@@ -52,8 +52,8 @@ function ApplyTags.run(s, message)
         undoName = LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)",
         total = total,
         fail = fail,
-        before = function()
-            return Tagging.writesDive(changes) and CatalogWrite.photosBefore(catalog, photos) or {}
+        before = function(cat)
+            return Tagging.writesDive(changes) and CatalogWrite.photosBefore(cat, photos) or {}
         end,
         writeFirst = function(_, before, advance)
             local planned = Tagging.tagWrites(changes, photos, before, perPhoto, Tagging.photoId)

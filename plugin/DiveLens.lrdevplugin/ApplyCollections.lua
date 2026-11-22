@@ -105,8 +105,8 @@ function ApplyCollections.run(s, message)
         undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)",
         total = total,
         fail = fail,
-        before = function() return CatalogWrite.photosBefore(catalog, found) end,
-        writeFirst = function(_, before, advance)
+        before = function(cat) return CatalogWrite.photosBefore(cat, found) end,
+        writeFirst = function(cat, before, advance)
             local planned = Tagging.collectionWrites(groups, before, existing)
             for gi, g in ipairs(groups) do
                 local group = planned.groups[gi]
@@ -116,7 +116,7 @@ function ApplyCollections.run(s, message)
                     advance()
                 end
                 if #group.photos > 0 then
-                    local collection = catalog:createCollection(g.collection, container, true)
+                    local collection = cat:createCollection(g.collection, container, true)
                     collection:addPhotos(group.photos)
                 end
             end
