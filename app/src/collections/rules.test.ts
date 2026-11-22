@@ -31,6 +31,12 @@ describe("collectionsBlocker", () => {
     expect(t("coll.previewFailed")).not.toBe("coll.previewFailed");
   });
 
+  it("says the photos are being searched when the search restarts after a failed preview", () => {
+    expect(collectionsBlocker({ ...ok, search: { state: "searching" }, preview: null, previewFailed: true })).toBe(
+      t("coll.searching"),
+    );
+  });
+
   it("keeps the earlier blockers before a failed preview", () => {
     expect(collectionsBlocker({ ...ok, preview: null, previewFailed: true, parentMissing: true })).toBe(
       t("coll.parentMissing", { path: ok.parent.join(" › ") }),

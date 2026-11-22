@@ -229,7 +229,7 @@ export function TagScreen({
       .catch((e: CollectionsError) => {
         const after = readingAfterFailure(e, live, retried.current === version);
         if (!after) return;
-        setReadFailure(after.message ?? describeFailure(e));
+        setReadFailure(after.message !== undefined ? after.message : describeFailure(e));
         setReading(after.reading);
         if (after.describeAgain) {
           retried.current = version;
