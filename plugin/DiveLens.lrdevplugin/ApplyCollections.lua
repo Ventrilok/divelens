@@ -10,7 +10,6 @@ Part of DiveLens, GPL-3.0-or-later.
 ]]
 
 local LrApplication = import "LrApplication"
-local LrDate = import "LrDate"
 local LrTasks = import "LrTasks"
 
 local CatalogWrite = require "CatalogWrite"
@@ -101,45 +100,41 @@ function ApplyCollections.run(s, message)
 
     -- The photos found, in the catalog.
     local total, found = Tagging.resolvePhotos(groups, s.search.photos)
-    local undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)"
-    local progress = Tagging.progress(total, CatalogWrite.PROGRESS_EVERY)
-    local results, later, cleared = {}, {}, 0
-    local ok, status = LrTasks.pcall(function()
-        return catalog:withWriteAccessDo(undoName, function()
-            local before = CatalogWrite.photosBefore(catalog, found)
+    CatalogWrite.apply(s, id, {
+        catalog = catalog,
+        undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)",
+        total = total,
+        fail = fail,
+        before = function(cat) return CatalogWrite.photosBefore(cat, found) end,
+        writeFirst = function(cat, before, advance)
             local planned = Tagging.collectionWrites(groups, before, existing)
-            results, later, cleared = planned.results, planned.later, planned.cleared
             for gi, g in ipairs(groups) do
                 local group = planned.groups[gi]
                 -- One step per photo requested: written when found.
                 for _, step in ipairs(group.steps) do
                     if step.photo then CatalogWrite.write(step.photo, step.changes) end
-                    CatalogWrite.advance(s, id, total, progress)
+                    advance()
                 end
                 if #group.photos > 0 then
-                    local collection = catalog:createCollection(g.collection, container, true)
+                    local collection = cat:createCollection(g.collection, container, true)
                     collection:addPhotos(group.photos)
                 end
             end
-        end, { timeout = CatalogWrite.WRITE_TIMEOUT })
-    end)
-    -- Straight on to the second write: nothing sent or yielded in between.
-    if ok and status == "executed" then s.applyStage.stage = "afterFirst" end
-    local second = ok and status == "executed" and CatalogWrite.writeGpsLater(catalog, undoName, later)
-    s.lastHeard = LrDate.currentTime()
-    local reply = Tagging.applyReply(id, { ok = ok, status = status, second = second },
-        { type = "collectionsApplied", id = id, groups = results })
-    if reply.reason == "error" or reply.reason == "busy" then return fail(reply.reason, reply.detail) end
-    Send.toApp(s, reply)
-    s.applyStage.stage = "replied"
-    if reply.reason == "gpsNotWritten" then
-        -- The first write stays: collections, dive data and location text.
-        Log.warn("collections written but not the GPS and altitude of %d photos: %s", #later, second.error or "Lightroom busy")
-    else
-        CatalogWrite.logSecondWrite(later, second)
-        Log.info("collections written: %d groups, %d photos; another dive's values cleared or replaced on %d (GPS altitude cleared on %d)",
-            #results, total, cleared, second.cleared)
-    end
+            return { later = planned.later, results = planned.results, cleared = planned.cleared }
+        end,
+        done = function(result) return { type = "collectionsApplied", id = id, groups = result.results } end,
+        log = function(result, second)
+            local later = result.later
+            if not second.written then
+                -- The first write stays: collections, dive data and location text.
+                Log.warn("collections written but not the GPS and altitude of %d photos: %s", #later, second.error or "Lightroom busy")
+            else
+                CatalogWrite.logSecondWrite(later, second)
+                Log.info("collections written: %d groups, %d photos; another dive's values cleared or replaced on %d (GPS altitude cleared on %d)",
+                    #result.results, total, result.cleared, second.cleared)
+            end
+        end,
+    })
 end
 
 -- The catalog's collection sets, for the app's settings.
