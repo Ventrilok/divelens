@@ -22,7 +22,9 @@ import { clampOffset, keepOffsets } from "../apply/cameras";
 import { coveringDive } from "./covers";
 import { logRef, nextSearchNumber } from "../diveLog";
 import { sourceName } from "../sourceText";
-import { CameraCard } from "../apply/CameraCard";
+import { CameraClock } from "../apply/CameraClock";
+import { applyFailure, searchFailure } from "../apply/failure";
+import { ProgressBar } from "../apply/ProgressBar";
 import { DiveDetail, useProfile } from "../dives/DiveDetail";
 import { LogNotice } from "../ui/LogNotice";
 import { DiveList } from "../dives/DiveList";
@@ -34,9 +36,9 @@ import { useDiveBrowser } from "../dives/useDiveBrowser";
 import type { Sort } from "../dives/filters";
 import { formatInt, t, tn } from "../i18n";
 import { gpsInput } from "./sites";
-import { canApplyTag, describeAgain, gpsRefused, readingAfterFailure, selectionChanged, tagBlocker, tagSummary } from "./rules";
+import { canApplyTag, describeAgain, gpsRefused, readingAfterFailure, tagBlocker, tagSummary } from "./rules";
 import type {
-  CollectionsError,
+  ApplyError,
   Dive,
   DiveLog,
   LightroomStatus,
@@ -44,7 +46,6 @@ import type {
   SelectionPreview,
   Site,
   TagChoice,
-  TagError,
   TagPreview,
 } from "../types";
 
@@ -70,60 +71,6 @@ interface Counts {
 
 function siteLine(site: Site): string {
   return [site.name, site.location, site.country].filter(Boolean).join(", ");
-}
-
-/** Why the selection could not be described; null: a newer description replaced this one. */
-export function describeFailure(e: CollectionsError): string | null {
-  switch (e.error) {
-    case "noPhotos":
-    case "logChanged": // the app reads the log again and starts the screen again
-      return null;
-    case "notConnected":
-    case "linkLost":
-      return t("tag.disconnected");
-    case "lightroom":
-      return e.detail ? t("tag.perPhoto.failed", { detail: e.detail }) : t("tag.perPhoto.failedNoDetail");
-    case "source":
-      return t("tag.perPhoto.failed", { detail: e.detail.detail });
-    default:
-      return t("tag.perPhoto.failedNoDetail");
-  }
-}
-
-export function failure(e: TagError): string {
-  if (selectionChanged(e)) return t("tag.err.selectionChanged");
-  const key = e.error === "lightroom" ? e.reason : e.error;
-  switch (key) {
-    case "noSelection":
-      return t("tag.err.noSelection");
-    case "busy":
-      return t("tag.err.busy");
-    case "gpsNotWritten": {
-      // Written but for the GPS and altitude: Undo, then apply again.
-      const detail = e.error === "lightroom" ? e.detail : null;
-      return detail ? t("tag.err.gpsNotWrittenDetail", { detail }) : t("tag.err.gpsNotWritten");
-    }
-    case "linkLost":
-      return t("tag.err.linkLost");
-    case "notConnected":
-      return t("tag.err.notConnected");
-    case "nothingChosen":
-      return t("tag.err.nothingChosen");
-    case "badGps":
-      return t("tag.err.badGps");
-    case "unknownDive":
-      return t("tag.err.unknownDive");
-    case "unknownSite":
-      return t("tag.err.unknownSite");
-    case "logChanged":
-      return t("log.changedNothingWritten");
-    case "badRequest":
-      return t("tag.err.badRequest");
-    default:
-      if (e.error === "source") return t("tag.err.source", { detail: e.detail.detail });
-      // A reason this version does not know: say what it can, never the code.
-      return e.error === "lightroom" && e.detail ? t("tag.err.other", { detail: e.detail }) : t("tag.err.lightroom");
-  }
 }
 
 export function TagScreen({
@@ -226,10 +173,10 @@ export function TagScreen({
         setDescribed({ photos, version });
         setReading(false);
       })
-      .catch((e: CollectionsError) => {
+      .catch((e: ApplyError) => {
         const after = readingAfterFailure(e, live, retried.current === version);
         if (!after) return;
-        setReadFailure(after.message !== undefined ? after.message : describeFailure(e));
+        setReadFailure(after.message !== undefined ? after.message : searchFailure(e, "tag"));
         setReading(after.reading);
         if (after.describeAgain) {
           retried.current = version;
@@ -347,8 +294,8 @@ export function TagScreen({
         if (needsValues) setAgain((n) => n + 1);
         setTouched(new Set());
       })
-      .catch((e: TagError) => {
-        setRun({ state: "failed", message: failure(e) });
+      .catch((e: ApplyError) => {
+        setRun({ state: "failed", message: applyFailure(e, "tag") });
         // Described again: the offsets applied may be the remembered ones now,
         // or the selection changed meanwhile.
         if (describeAgain(e, needsValues)) setAgain((n) => n + 1);
@@ -455,29 +402,17 @@ export function TagScreen({
                         {tn("tag.perPhoto.count", shownCounts.inDive, { total: formatInt(shownCounts.total) })}
                       </p>
                       {described.photos.cameras.length > 0 && (
-                        <div className="cams">
-                          {described.photos.cameras.map((c) => {
-                            const count = shownCounts.cameras.find((k) => k.key === c.key);
-                            const inDive = count?.inDives ?? 0;
-                            return (
-                              <CameraCard
-                                key={c.key}
-                                camera={c}
-                                offset={offsets[c.key] ?? 0}
-                                remembered={
-                                  c.remembered !== null && offsets[c.key] === c.remembered && !touched.has(c.key)
-                                }
-                                inDives={inDive}
-                                outside={count?.outside ?? 0}
-                                gauge={t("tag.perPhoto.inDive", { n: formatInt(inDive) })}
-                                note={notes[c.key] || null}
-                                onOffset={(m) => setOffset(c.key, m)}
-                                onSuggest={() => suggest(c.key)}
-                                disabled={writing}
-                              />
-                            );
-                          })}
-                        </div>
+                        <CameraClock
+                          cameras={described.photos.cameras}
+                          offsets={offsets}
+                          touched={touched}
+                          notes={notes}
+                          counts={(key) => shownCounts.cameras.find((k) => k.key === key)}
+                          gauge={(inDives) => t("tag.perPhoto.inDive", { n: formatInt(inDives) })}
+                          onChange={setOffset}
+                          onSuggest={suggest}
+                          disabled={writing}
+                        />
                       )}
                     </>
                   )}
@@ -554,23 +489,7 @@ export function TagScreen({
 
       <div className="card selection-bar apply-bar">
         {writing ? (
-          <div className="apply-progress">
-            <div className="apply-progress-text">
-              <span className="strong">{t("tag.writing")}</span>
-              {run.done > 0 && <span className="muted">{t("tag.progress", { done: run.done, total: run.total })}</span>}
-            </div>
-            <div
-              className="bar"
-              role="progressbar"
-              aria-label={t("tag.writing")}
-              aria-valuemin={0}
-              aria-valuemax={run.total}
-              aria-valuenow={run.done}
-            >
-              <div className="bar-fill" style={{ width: `${run.total > 0 ? (100 * run.done) / run.total : 0}%` }} />
-            </div>
-            <span className="muted small">{t("tag.writingHint")}</span>
-          </div>
+          <ProgressBar done={run.done} total={run.total} label={t("tag.writing")} />
         ) : (
           <span className={blocker ? "muted" : ""}>
             <span className={blocker ? "" : "strong"}>{summary}</span>
