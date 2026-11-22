@@ -224,13 +224,6 @@ pub fn applied_offsets(photos: &[InDive]) -> BTreeMap<String, i32> {
         .collect()
 }
 
-/// Remembers `applied` in `offsets`, leaving the other cameras as they are.
-pub fn remember(applied: &BTreeMap<String, i32>, offsets: &mut Offsets) {
-    for (camera, offset) in applied {
-        offsets.cameras.insert(camera.clone(), *offset);
-    }
-}
-
 /// What Tag Selection writes per photo, for a dive with a profile.
 #[derive(Debug)]
 pub enum PerPhoto {
@@ -502,7 +495,7 @@ mod tests {
         let mut remembered = Offsets::default();
         remembered.cameras.insert("Nikon|".into(), 60);
         remembered.cameras.insert("TG-7|A1".into(), 120);
-        remember(&applied, &mut remembered);
+        remembered.cameras.extend(applied);
         assert_eq!(remembered.get("TG-7|A1"), Some(240));
         assert_eq!(remembered.get("GoPro|"), None);
         assert_eq!(remembered.get("Nikon|"), Some(60), "other cameras kept");

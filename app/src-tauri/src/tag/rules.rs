@@ -6,42 +6,41 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
-use std::sync::mpsc::RecvError;
 
 use divelens_core::collections::Span;
 use divelens_core::profile::Sample;
 use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
 use divelens_core::{Dive, Error, Site};
 
+use super::LocationChoice;
 use super::selection::{InDive, PerPhoto, Refusal, Selection, per_photo};
-use super::{LocationChoice, TagApplied, TagError};
+use crate::apply::errors::ApplyError;
 use crate::apply::searches::Searches;
-use crate::lightroom::ApplyOutcome;
 
 /// A position edited on the screen is whole and valid, or absent: half a
 /// position, or one off the globe, is refused.
-pub(super) fn check_gps(lat: Option<f64>, lon: Option<f64>) -> Result<(), TagError> {
+pub(super) fn check_gps(lat: Option<f64>, lon: Option<f64>) -> Result<(), ApplyError> {
     match (lat, lon) {
-        (Some(a), Some(b)) if !valid_gps(a, b) => Err(TagError::BadGps),
-        (Some(_), None) | (None, Some(_)) => Err(TagError::BadGps),
+        (Some(a), Some(b)) if !valid_gps(a, b) => Err(ApplyError::BadGps),
+        (Some(_), None) | (None, Some(_)) => Err(ApplyError::BadGps),
         _ => Ok(()),
     }
 }
 
 /// The dive `id` names (the first, should two share it).
-pub(super) fn find_dive(dives: Vec<Dive>, id: &str) -> Result<Dive, TagError> {
+pub(super) fn find_dive(dives: Vec<Dive>, id: &str) -> Result<Dive, ApplyError> {
     dives
         .into_iter()
         .find(|d| d.id == id)
-        .ok_or(TagError::UnknownDive)
+        .ok_or(ApplyError::UnknownDive)
 }
 
 /// The site `site_id` names (the first, should two share it).
-pub(super) fn find_site(sites: Vec<Site>, site_id: &str) -> Result<Site, TagError> {
+pub(super) fn find_site(sites: Vec<Site>, site_id: &str) -> Result<Site, ApplyError> {
     sites
         .into_iter()
         .find(|s| s.id.as_deref() == Some(site_id))
-        .ok_or(TagError::UnknownSite)
+        .ok_or(ApplyError::UnknownSite)
 }
 
 /// The location to write, if one is ticked: the dive's own site (a dive
@@ -51,16 +50,16 @@ pub(super) fn location(
     choice: Option<&LocationChoice>,
     dive: Option<&Dive>,
     sites: impl FnOnce() -> Result<Vec<Site>, Error>,
-) -> Result<Option<LocationTags>, TagError> {
+) -> Result<Option<LocationTags>, ApplyError> {
     Ok(match choice {
         None => None,
         Some(LocationChoice::DiveSite) => {
-            let dive = dive.ok_or(TagError::NothingChosen)?;
+            let dive = dive.ok_or(ApplyError::NothingChosen)?;
             Some(LocationTags::new(&dive.site, None, None))
         }
         Some(LocationChoice::Site { site_id, lat, lon }) => {
             check_gps(*lat, *lon)?;
-            let sites = sites().map_err(|detail| TagError::Source { detail })?;
+            let sites = sites().map_err(|detail| ApplyError::Source { detail })?;
             let site = find_site(sites, site_id)?;
             Some(LocationTags::new(&site, *lat, *lon))
         }
@@ -74,9 +73,9 @@ pub(super) fn base_request(
     location: Option<LocationTags>,
     units: Units,
     source: &str,
-) -> Result<TagRequest, TagError> {
+) -> Result<TagRequest, ApplyError> {
     if dive.is_none() && location.is_none() {
-        return Err(TagError::NothingChosen);
+        return Err(ApplyError::NothingChosen);
     }
     Ok(TagRequest {
         dive: dive.map(|d| DiveTags::new(d, units, source)),
@@ -94,12 +93,12 @@ pub(super) fn described(
     search: Option<u64>,
     dive: &Dive,
     offsets: &HashMap<String, i32>,
-) -> Result<Option<(u64, Vec<InDive>)>, TagError> {
+) -> Result<Option<(u64, Vec<InDive>)>, ApplyError> {
     Ok(match search {
         None => None,
         Some(n) => {
             let selections = selections.lock().expect("selections");
-            let selection = selections.get(n).ok_or(TagError::NoPhotos)?;
+            let selection = selections.get(n).ok_or(ApplyError::NoPhotos)?;
             Some((
                 selection.described,
                 selection.in_dive(Span::from(dive), offsets),
@@ -114,7 +113,7 @@ pub(super) fn described(
 pub(super) fn apply_per_photo(
     req: &mut TagRequest,
     outcome: Result<PerPhoto, Refusal>,
-) -> Result<(BTreeMap<String, i32>, Option<Error>), TagError> {
+) -> Result<(BTreeMap<String, i32>, Option<Error>), ApplyError> {
     match outcome {
         Ok(PerPhoto::Values {
             described,
@@ -126,8 +125,8 @@ pub(super) fn apply_per_photo(
             Ok((applied, None))
         }
         Ok(PerPhoto::Unreadable(e)) => Ok((BTreeMap::new(), Some(e))),
-        Err(Refusal::Describe) => Err(TagError::NoPhotos),
-        Err(Refusal::Profile(detail)) => Err(TagError::Source { detail }),
+        Err(Refusal::Describe) => Err(ApplyError::NoPhotos),
+        Err(Refusal::Profile(detail)) => Err(ApplyError::Source { detail }),
     }
 }
 
@@ -150,10 +149,10 @@ pub(super) fn build_request(
     location: Option<LocationTags>,
     units: Units,
     source: &str,
-    described: impl FnOnce(&Dive) -> Result<Option<(u64, Vec<InDive>)>, TagError>,
+    described: impl FnOnce(&Dive) -> Result<Option<(u64, Vec<InDive>)>, ApplyError>,
     profile: impl FnOnce(&str) -> Result<Vec<Sample>, Error>,
     depth_to_altitude: impl FnOnce() -> bool,
-) -> Result<Built, TagError> {
+) -> Result<Built, ApplyError> {
     let mut request = base_request(dive.as_ref(), location, units, source)?;
     let mut applied = BTreeMap::new();
     let mut unreadable = None;
@@ -177,20 +176,6 @@ pub(super) fn with_altitude(req: &mut TagRequest, depth_to_altitude: impl FnOnce
     if depth_to_altitude() {
         req.copy_depth_to_altitude();
     }
-}
-
-/// What Lightroom answered: the photos written, or a refusal as the
-/// screen reads it.
-pub(super) fn applied(answer: Result<usize, ApplyOutcome>) -> Result<TagApplied, TagError> {
-    answer
-        .map(|count| TagApplied { count })
-        .map_err(TagError::from)
-}
-
-/// The answer of the plugin link, or "link lost" when its reply channel
-/// closed without one (the link dropped while Lightroom was writing).
-pub(super) fn heard<T>(received: Result<T, RecvError>) -> Result<T, TagError> {
-    received.map_err(|_| TagError::LinkLost)
 }
 
 #[cfg(test)]
@@ -248,14 +233,17 @@ mod tests {
 
     #[test]
     fn half_a_gps_position_is_refused() {
-        assert!(matches!(check_gps(Some(12.5), None), Err(TagError::BadGps)));
+        assert!(matches!(
+            check_gps(Some(12.5), None),
+            Err(ApplyError::BadGps)
+        ));
         assert!(matches!(
             check_gps(None, Some(-45.25)),
-            Err(TagError::BadGps)
+            Err(ApplyError::BadGps)
         ));
         assert!(matches!(
             check_gps(Some(91.0), Some(0.0)),
-            Err(TagError::BadGps)
+            Err(ApplyError::BadGps)
         ));
         assert!(check_gps(Some(12.5), Some(-45.25)).is_ok());
         assert!(check_gps(None, None).is_ok());
@@ -263,8 +251,14 @@ mod tests {
 
     #[test]
     fn unknown_dive_or_site_is_refused() {
-        assert!(matches!(find_dive(vec![], "x"), Err(TagError::UnknownDive)));
-        assert!(matches!(find_site(vec![], "x"), Err(TagError::UnknownSite)));
+        assert!(matches!(
+            find_dive(vec![], "x"),
+            Err(ApplyError::UnknownDive)
+        ));
+        assert!(matches!(
+            find_site(vec![], "x"),
+            Err(ApplyError::UnknownSite)
+        ));
         // The one the id names; the first when two share it.
         let dives = vec![dive("B", 700), dive("A", 701), dive("A", 702)];
         assert_eq!(find_dive(dives, "A").unwrap().number, Some(701));
@@ -289,7 +283,7 @@ mod tests {
         };
         assert!(matches!(
             location(Some(&half), None, || panic!("sites read")),
-            Err(TagError::BadGps)
+            Err(ApplyError::BadGps)
         ));
         // A whole position: the sites are read, then the site is looked for.
         let edited = LocationChoice::Site {
@@ -299,13 +293,13 @@ mod tests {
         };
         assert!(matches!(
             location(Some(&edited), None, || Err(garbled())),
-            Err(TagError::Source {
+            Err(ApplyError::Source {
                 detail: Error::BadProfile(_)
             })
         ));
         assert!(matches!(
             location(Some(&edited), None, || Ok(vec![site("s2", "Blue Hole")])),
-            Err(TagError::UnknownSite)
+            Err(ApplyError::UnknownSite)
         ));
         let found = location(Some(&edited), None, || Ok(vec![site("s1", "Coral Garden")]));
         assert_eq!(
@@ -329,11 +323,11 @@ mod tests {
             location(Some(&LocationChoice::DiveSite), None, || panic!(
                 "sites read"
             )),
-            Err(TagError::NothingChosen)
+            Err(ApplyError::NothingChosen)
         ));
         assert!(matches!(
             base_request(None, None, Units::default(), "MacDive"),
-            Err(TagError::NothingChosen)
+            Err(ApplyError::NothingChosen)
         ));
         // With a dive: its own site, without reading the others.
         let d = dive("A", 701);
@@ -375,7 +369,7 @@ mod tests {
         let offsets = HashMap::from([("TG-7|A1".to_string(), 240)]);
         assert!(matches!(
             described(&selections, Some(3), &d, &offsets),
-            Err(TagError::NoPhotos)
+            Err(ApplyError::NoPhotos)
         ));
         assert!(matches!(
             described(&selections, None, &d, &offsets),
@@ -394,11 +388,11 @@ mod tests {
         let mut request = TagRequest::default();
         assert!(matches!(
             apply_per_photo(&mut request, Err(Refusal::Describe)),
-            Err(TagError::NoPhotos)
+            Err(ApplyError::NoPhotos)
         ));
         assert!(matches!(
             apply_per_photo(&mut request, Err(Refusal::Profile(garbled()))),
-            Err(TagError::Source {
+            Err(ApplyError::Source {
                 detail: Error::BadProfile(_)
             })
         ));
@@ -456,12 +450,12 @@ mod tests {
             )
         };
         // The screen showed no selection, the profile reads: it must be described.
-        assert!(matches!(build(None, Ok(vec![])), Err(TagError::NoPhotos)));
+        assert!(matches!(build(None, Ok(vec![])), Err(ApplyError::NoPhotos)));
         // Photos shown, but the profile no longer reads.
         let photos = Some((42, vec![photo_in_dive()]));
         assert!(matches!(
             build(photos, Err(garbled())),
-            Err(TagError::Source { .. })
+            Err(ApplyError::Source { .. })
         ));
         // An unknown description: refused by `described` itself.
         let refused = build_request(
@@ -469,11 +463,11 @@ mod tests {
             None,
             Units::default(),
             "MacDive",
-            |_| Err(TagError::NoPhotos),
+            |_| Err(ApplyError::NoPhotos),
             |_| panic!("profile read"),
             || panic!("setting read"),
         );
-        assert!(matches!(refused, Err(TagError::NoPhotos)));
+        assert!(matches!(refused, Err(ApplyError::NoPhotos)));
         // Nothing chosen: refused before anything is read.
         let nothing = build_request(
             None,
@@ -484,7 +478,7 @@ mod tests {
             |_| panic!("profile read"),
             || panic!("setting read"),
         );
-        assert!(matches!(nothing, Err(TagError::NothingChosen)));
+        assert!(matches!(nothing, Err(ApplyError::NothingChosen)));
     }
 
     /// A photo taken 25 minutes into the dive, with no clock offset.
@@ -551,38 +545,6 @@ mod tests {
         assert_eq!(reads.get(), 1);
         assert!(built.request.photos.is_empty());
         assert!(built.applied.is_empty());
-    }
-
-    #[test]
-    fn a_refused_tagging_is_an_error() {
-        assert_eq!(applied(Ok(3)).unwrap().count, 3);
-        let refused = applied(Err(ApplyOutcome::Failed {
-            reason: "busy".into(),
-            detail: None,
-        }));
-        assert!(matches!(
-            refused,
-            Err(TagError::Lightroom { ref reason, detail: None }) if reason == "busy"
-        ));
-        // As the screen reads it: the same shape as Create Collections.
-        assert_eq!(
-            serde_json::to_value(refused.unwrap_err()).unwrap(),
-            serde_json::json!({ "error": "lightroom", "reason": "busy", "detail": null })
-        );
-        assert_eq!(
-            serde_json::to_value(applied(Ok(2)).unwrap()).unwrap(),
-            serde_json::json!({ "count": 2 })
-        );
-    }
-
-    #[test]
-    fn a_lost_link_during_tagging_is_link_lost() {
-        let (reply, answer) = std::sync::mpsc::channel::<Result<usize, ApplyOutcome>>();
-        drop(reply);
-        assert!(matches!(heard(answer.recv()), Err(TagError::LinkLost)));
-        let (reply, answer) = std::sync::mpsc::channel::<Result<usize, ApplyOutcome>>();
-        reply.send(Ok(4)).unwrap();
-        assert!(matches!(heard(answer.recv()), Ok(Ok(4))));
     }
 
     #[test]

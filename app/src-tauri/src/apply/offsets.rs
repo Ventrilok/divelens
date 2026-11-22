@@ -57,6 +57,29 @@ pub(crate) fn should_remember<T>(
     answer.as_ref().err().is_none_or(ApplyOutcome::half_written) && !applied.is_empty()
 }
 
+/// Remembers `applied` in the offsets file of `app` in `dir` when
+/// [`should_remember`] says so, leaving the other cameras as they are; a
+/// file that cannot be saved is logged, never an error (the write is done).
+pub(crate) fn remember_applied<T>(
+    dir: &Path,
+    app: &DiveApp,
+    answer: &Result<T, ApplyOutcome>,
+    applied: &BTreeMap<String, i32>,
+) {
+    if !should_remember(answer, applied) {
+        return;
+    }
+    let mut offsets = Offsets::load(dir, app);
+    offsets.cameras.extend(
+        applied
+            .iter()
+            .map(|(camera, offset)| (camera.clone(), *offset)),
+    );
+    if let Err(e) = offsets.save(dir, app) {
+        log::error!("clock offsets not saved: {e}");
+    }
+}
+
 /// A wall-clock time `YYYY-MM-DDTHH:MM:SS`.
 pub fn parse_time(s: &str) -> Option<NaiveDateTime> {
     NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S").ok()
@@ -142,6 +165,47 @@ mod tests {
         assert!(!should_remember(&written, &none));
         assert!(!should_remember(&refused, &applied));
         assert!(should_remember(&gps_not_written, &applied));
+    }
+
+    #[test]
+    fn offsets_are_saved_only_for_a_write_that_happened() {
+        let dir = std::env::temp_dir().join(format!("divelens-remember-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let app = &divelens_core::macdive::APP;
+        let file = dir.join(app.offsets_file);
+        let applied = BTreeMap::from([("TG-7|A1".to_string(), 240)]);
+        let refused = Err::<usize, _>(ApplyOutcome::Failed {
+            reason: "busy".into(),
+            detail: None,
+        });
+        // Refused: the file is not touched (not even created).
+        remember_applied(&dir, app, &refused, &applied);
+        assert!(!file.exists());
+        // Nothing applied: no file written.
+        remember_applied(&dir, app, &Ok::<usize, ApplyOutcome>(3), &BTreeMap::new());
+        assert!(!file.exists());
+        // Written: saved, the other cameras kept.
+        let mut before = Offsets::default();
+        before.cameras.insert("Nikon|".into(), 60);
+        before.cameras.insert("TG-7|A1".into(), 120);
+        before.save(&dir, app).unwrap();
+        remember_applied(&dir, app, &Ok::<usize, ApplyOutcome>(3), &applied);
+        let saved = Offsets::load(&dir, app);
+        assert_eq!(saved.get("TG-7|A1"), Some(240));
+        assert_eq!(saved.get("Nikon|"), Some(60));
+        // The GPS and altitude missing: the offsets are on the photos.
+        let gps = Err::<usize, _>(ApplyOutcome::Failed {
+            reason: "gpsNotWritten".into(),
+            detail: None,
+        });
+        remember_applied(
+            &dir,
+            app,
+            &gps,
+            &BTreeMap::from([("Nikon|".to_string(), 5)]),
+        );
+        assert_eq!(Offsets::load(&dir, app).get("Nikon|"), Some(5));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

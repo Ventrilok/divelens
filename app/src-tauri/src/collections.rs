@@ -9,10 +9,10 @@ use divelens_core::Dive;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
-use crate::apply::errors::CollectionsError;
-use crate::apply::offsets::{Offsets, should_remember};
+use crate::apply::errors::ApplyError;
+use crate::apply::offsets::Offsets;
 use crate::apply::searches::{Searches, keep_search};
-use crate::apply::{ask, send};
+use crate::apply::{ask, send, write_and_remember};
 use crate::dive_log::{LogId, Writes, open, source_info};
 use crate::files::config_dir;
 use crate::lightroom::{CollectionSet, Command, WrittenCollection};
@@ -35,12 +35,12 @@ pub(crate) async fn find_collection_photos(
     log: LogId,
     search: u64,
     dive_ids: Vec<String>,
-) -> Result<Period, CollectionsError> {
+) -> Result<Period, ApplyError> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<CollectionsState>();
         let number = search;
         if !state.searches.lock().expect("collections").start(number) {
-            return Err(CollectionsError::NoPhotos);
+            return Err(ApplyError::NoPhotos);
         }
         // A search a newer one replaced stops at once.
         let replaced = || {
@@ -53,22 +53,22 @@ pub(crate) async fn find_collection_photos(
         let info = source_info(&app);
         log.check(&info)?;
         let source = open(&app, &info)
-            .map_err(|detail| CollectionsError::Source { detail })?
+            .map_err(|detail| ApplyError::Source { detail })?
             .log;
         let dives: Vec<Dive> = source
             .dives()
-            .map_err(|detail| CollectionsError::Source { detail })?
+            .map_err(|detail| ApplyError::Source { detail })?
             .into_iter()
             .filter(|d| dive_ids.contains(&d.id))
             .collect();
-        let (from, to) = plan::search_days(&dives).ok_or(CollectionsError::NothingChosen)?;
+        let (from, to) = plan::search_days(&dives).ok_or(ApplyError::NothingChosen)?;
         // Which dives get photos depends on the offsets, not known yet: every
         // profile is read. One that does not read fails "Apply" only if it
         // is needed, as before.
         let mut profiles = std::collections::HashMap::new();
         for dive in dives.iter().filter(|d| d.has_profile) {
             if replaced() {
-                return Err(CollectionsError::NoPhotos);
+                return Err(ApplyError::NoPhotos);
             }
             profiles.insert(dive.id.clone(), source.profile(&dive.id));
         }
@@ -79,7 +79,7 @@ pub(crate) async fn find_collection_photos(
         {
             let searches = state.searches.lock().expect("collections");
             if !searches.is_latest(number) {
-                return Err(CollectionsError::NoPhotos);
+                return Err(ApplyError::NoPhotos);
             }
             send(
                 &app,
@@ -90,7 +90,7 @@ pub(crate) async fn find_collection_photos(
                 },
             )?;
         }
-        let found = answer.recv().map_err(|_| CollectionsError::LinkLost)??;
+        let found = answer.recv().map_err(|_| ApplyError::LinkLost)??;
         let offsets = Offsets::load(&config_dir(&app), info.app);
         let session = Session::new(found.search, dives, found.photos, &offsets)
             .read_from(log.clone(), profiles);
@@ -110,9 +110,9 @@ pub(crate) fn collections_preview(
     state: State<CollectionsState>,
     search: u64,
     choices: Choices,
-) -> Result<Preview, CollectionsError> {
+) -> Result<Preview, ApplyError> {
     let searches = state.searches.lock().expect("collections");
-    let session = searches.get(search).ok_or(CollectionsError::NoPhotos)?;
+    let session = searches.get(search).ok_or(ApplyError::NoPhotos)?;
     Ok(session.preview(&choices))
 }
 
@@ -123,11 +123,11 @@ pub(crate) async fn suggest_offsets(
     app: AppHandle,
     search: u64,
     cameras: Vec<String>,
-) -> Result<std::collections::HashMap<String, Option<i32>>, CollectionsError> {
+) -> Result<std::collections::HashMap<String, Option<i32>>, ApplyError> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<CollectionsState>();
         let searches = state.searches.lock().expect("collections");
-        let session = searches.get(search).ok_or(CollectionsError::NoPhotos)?;
+        let session = searches.get(search).ok_or(ApplyError::NoPhotos)?;
         Ok(session.suggest(&cameras))
     })
     .await
@@ -157,7 +157,7 @@ pub(crate) async fn apply_collections(
     log: LogId,
     search: u64,
     choices: Choices,
-) -> Result<CollectionsResult, CollectionsError> {
+) -> Result<CollectionsResult, ApplyError> {
     tauri::async_runtime::spawn_blocking(move || {
         let writes = app.state::<Writes>();
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
@@ -165,10 +165,10 @@ pub(crate) async fn apply_collections(
         let (request, empty_dives, applied) = {
             let state = app.state::<CollectionsState>();
             let searches = state.searches.lock().expect("collections");
-            let session = searches.get(search).ok_or(CollectionsError::NoPhotos)?;
+            let session = searches.get(search).ok_or(ApplyError::NoPhotos)?;
             let mut request = session
                 .write_request(&log, &choices, units)?
-                .map_err(|detail| CollectionsError::Source { detail })?;
+                .map_err(|detail| ApplyError::Source { detail })?;
             let settings = Settings::load(&config_dir(&app));
             request.parent = settings.collections.parent.clone();
             request.group = settings.collections.group_name();
@@ -185,7 +185,7 @@ pub(crate) async fn apply_collections(
             (request, empty, session.applied(&choices))
         };
         if request.groups.is_empty() {
-            return Err(CollectionsError::NothingToWrite);
+            return Err(ApplyError::NothingToWrite);
         }
         let with_depth = request
             .groups
@@ -193,21 +193,17 @@ pub(crate) async fn apply_collections(
             .flat_map(|g| &g.photos)
             .filter(|p| p.photo_depth.is_some())
             .count();
-        let answer = ask(&app, |reply| Command::ApplyCollections { request, reply })
-            .inspect_err(|e| log::warn!("collections not written: {e:?}"))?;
-        // The offsets are on the photos once the first catalog write is
-        // done, even when the GPS and altitude write did not follow.
-        if should_remember(&answer, &applied) {
-            let dir = config_dir(&app);
-            let mut offsets = Offsets::load(&dir, log.app);
-            offsets.cameras.extend(applied);
-            if let Err(e) = offsets.save(&dir, log.app) {
-                log::error!("clock offsets not saved: {e}");
+        let written = write_and_remember(
+            &app,
+            &info,
+            |reply| Command::ApplyCollections { request, reply },
+            &applied,
+            |outcome| log::warn!("collections refused by Lightroom: {outcome:?}"),
+        )
+        .inspect_err(|e| {
+            if matches!(e, ApplyError::NotConnected | ApplyError::LinkLost) {
+                log::warn!("collections not written: {e:?}");
             }
-        }
-        let written = answer.map_err(|outcome| {
-            log::warn!("collections refused by Lightroom: {outcome:?}");
-            CollectionsError::from(outcome)
         })?;
         log::info!(
             "collections written: {} collections, {} photos ({with_depth} with depth)",
@@ -227,9 +223,7 @@ pub(crate) async fn apply_collections(
 
 /// The catalog's collection sets (Settings › Collections).
 #[tauri::command]
-pub(crate) async fn collection_sets(
-    app: AppHandle,
-) -> Result<Vec<CollectionSet>, CollectionsError> {
+pub(crate) async fn collection_sets(app: AppHandle) -> Result<Vec<CollectionSet>, ApplyError> {
     tauri::async_runtime::spawn_blocking(move || {
         Ok(ask(&app, |reply| Command::ListSets { reply })??)
     })
