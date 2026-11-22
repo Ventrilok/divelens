@@ -1,14 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage, t } from "../i18n";
-import {
-  canApplyTag,
-  describeAgain,
-  gpsRefused,
-  readingAfterFailure,
-  selectionChanged,
-  tagBlocker,
-  tagSummary,
-} from "./rules";
+import { canApplyTag, describeAgain, gpsRefused, readingAfterFailure, selectionChanged, tagBlocker, tagSummary } from "./rules";
 import type { Dive } from "../types";
 
 beforeEach(() => setLanguage("en"));
@@ -30,11 +22,7 @@ const ok = {
   gpsError: false,
 };
 
-const dive = (
-  siteId: string | null,
-  siteName: string | null,
-  number: number | null = 12,
-): Dive => ({
+const dive = (siteId: string | null, siteName: string | null, number: number | null = 12): Dive => ({
   id: "d1",
   number,
   start: "2025-12-30T07:25:00",
@@ -44,14 +32,7 @@ const dive = (
   tempHighC: null,
   tempLowC: null,
   rating: null,
-  site: {
-    id: siteId,
-    name: siteName,
-    location: null,
-    country: null,
-    lat: null,
-    lon: null,
-  },
+  site: { id: siteId, name: siteName, location: null, country: null, lat: null, lon: null },
   hasProfile: false,
   invalid: false,
   notes: null,
@@ -63,108 +44,49 @@ describe("tagBlocker", () => {
   });
 
   it("says Lightroom is disconnected first, whatever else is wrong", () => {
-    const all = {
-      ...ok,
-      connected: false,
-      selected: 0,
-      withDive: false,
-      withPlace: false,
-      gpsError: true,
-    };
+    const all = { ...ok, connected: false, selected: 0, withDive: false, withPlace: false, gpsError: true };
     expect(tagBlocker(all)).toBe(t("tag.disconnected"));
   });
 
   it("asks to select photos in Lightroom", () => {
-    expect(
-      tagBlocker({ ...ok, selected: 0, withDive: false, withPlace: false }),
-    ).toBe(t("tag.selectInLr"));
+    expect(tagBlocker({ ...ok, selected: 0, withDive: false, withPlace: false })).toBe(t("tag.selectInLr"));
   });
 
   it("asks to choose something to write", () => {
-    expect(
-      tagBlocker({ ...ok, withDive: false, withPlace: false, chosen: false }),
-    ).toBe(t("tag.chooseSomething"));
+    expect(tagBlocker({ ...ok, withDive: false, withPlace: false, chosen: false })).toBe(t("tag.chooseSomething"));
   });
 
   it("asks to choose a dive", () => {
-    expect(
-      tagBlocker({
-        ...ok,
-        chosen: false,
-        readFailure: "x",
-        profileLoading: true,
-      }),
-    ).toBe(t("tag.chooseDive"));
+    expect(tagBlocker({ ...ok, chosen: false, readFailure: "x", profileLoading: true })).toBe(t("tag.chooseDive"));
   });
 
   it("does not ask for a dive when only the place is written", () => {
-    expect(
-      tagBlocker({ ...ok, withDive: false, chosen: false, needsValues: false }),
-    ).toBeNull();
+    expect(tagBlocker({ ...ok, withDive: false, chosen: false, needsValues: false })).toBeNull();
   });
 
   it("shows the read failure, only when per-photo values are needed", () => {
-    expect(
-      tagBlocker({
-        ...ok,
-        readFailure: "Reading failed",
-        profileLoading: true,
-      }),
-    ).toBe("Reading failed");
-    expect(
-      tagBlocker({ ...ok, needsValues: false, readFailure: "Reading failed" }),
-    ).toBeNull();
+    expect(tagBlocker({ ...ok, readFailure: "Reading failed", profileLoading: true })).toBe("Reading failed");
+    expect(tagBlocker({ ...ok, needsValues: false, readFailure: "Reading failed" })).toBeNull();
   });
 
   it("says the profile is loading", () => {
-    expect(tagBlocker({ ...ok, profileLoading: true, current: false })).toBe(
-      t("detail.profileLoading"),
-    );
+    expect(tagBlocker({ ...ok, profileLoading: true, current: false })).toBe(t("detail.profileLoading"));
   });
 
   it("says the photos are being read, when the selection is not described or counts are stale", () => {
-    expect(tagBlocker({ ...ok, current: false })).toBe(
-      t("tag.perPhoto.reading"),
-    );
-    expect(tagBlocker({ ...ok, freshCounts: false })).toBe(
-      t("tag.perPhoto.reading"),
-    );
-    expect(
-      tagBlocker({
-        ...ok,
-        needsValues: false,
-        current: false,
-        freshCounts: false,
-      }),
-    ).toBeNull();
+    expect(tagBlocker({ ...ok, current: false })).toBe(t("tag.perPhoto.reading"));
+    expect(tagBlocker({ ...ok, freshCounts: false })).toBe(t("tag.perPhoto.reading"));
+    expect(tagBlocker({ ...ok, needsValues: false, current: false, freshCounts: false })).toBeNull();
   });
 
   it("asks to choose a site when the place is neither the dive's nor a picked site", () => {
-    expect(
-      tagBlocker({
-        ...ok,
-        usesDiveSite: false,
-        pickedSite: false,
-        gpsError: true,
-      }),
-    ).toBe(t("tag.chooseSite"));
-    expect(
-      tagBlocker({ ...ok, usesDiveSite: false, pickedSite: true }),
-    ).toBeNull();
-    expect(
-      tagBlocker({ ...ok, withPlace: false, usesDiveSite: false }),
-    ).toBeNull();
+    expect(tagBlocker({ ...ok, usesDiveSite: false, pickedSite: false, gpsError: true })).toBe(t("tag.chooseSite"));
+    expect(tagBlocker({ ...ok, usesDiveSite: false, pickedSite: true })).toBeNull();
+    expect(tagBlocker({ ...ok, withPlace: false, usesDiveSite: false })).toBeNull();
   });
 
   it("refuses a bad GPS position last", () => {
-    expect(
-      tagBlocker({
-        ...ok,
-        usesDiveSite: false,
-        pickedSite: true,
-        gpsError: true,
-      }),
-    ).toBe(t("tag.badGps"));
+    expect(tagBlocker({ ...ok, usesDiveSite: false, pickedSite: true, gpsError: true })).toBe(t("tag.badGps"));
   });
 });
 
@@ -174,43 +96,27 @@ describe("tagSummary", () => {
   });
 
   it("names the dive and the place", () => {
-    expect(tagSummary(null, dive("s", "Reef"), "Reef")).toBe(
-      t("tag.sumDiveAndPlace", { n: "12", site: "Reef" }),
-    );
+    expect(tagSummary(null, dive("s", "Reef"), "Reef")).toBe(t("tag.sumDiveAndPlace", { n: "12", site: "Reef" }));
   });
 
   it("names the dive alone when the place is not written", () => {
-    expect(tagSummary(null, dive("s", "Reef"), null)).toBe(
-      t("tag.sumDive", { n: "12" }),
-    );
-    expect(tagSummary(null, dive("s", "Reef"), undefined)).toBe(
-      t("tag.sumDive", { n: "12" }),
-    );
+    expect(tagSummary(null, dive("s", "Reef"), null)).toBe(t("tag.sumDive", { n: "12" }));
+    expect(tagSummary(null, dive("s", "Reef"), undefined)).toBe(t("tag.sumDive", { n: "12" }));
   });
 
   it("falls back to the dive alone when the dive's site has no name", () => {
     // Known quirk, kept as is: the place is written but the summary does not say so.
-    expect(tagSummary(null, dive("s", null), null)).toBe(
-      t("tag.sumDive", { n: "12" }),
-    );
+    expect(tagSummary(null, dive("s", null), null)).toBe(t("tag.sumDive", { n: "12" }));
   });
 
   it("labels a dive without a number by its site name, then a dash", () => {
-    expect(tagSummary(null, dive("s", "Reef", null), null)).toBe(
-      t("tag.sumDive", { n: "Reef" }),
-    );
-    expect(tagSummary(null, dive(null, null, null), null)).toBe(
-      t("tag.sumDive", { n: "—" }),
-    );
+    expect(tagSummary(null, dive("s", "Reef", null), null)).toBe(t("tag.sumDive", { n: "Reef" }));
+    expect(tagSummary(null, dive(null, null, null), null)).toBe(t("tag.sumDive", { n: "—" }));
   });
 
   it("names the place alone when no dive is written", () => {
-    expect(tagSummary(null, null, "Reef")).toBe(
-      t("tag.sumPlace", { site: "Reef" }),
-    );
-    expect(tagSummary(null, null, undefined)).toBe(
-      t("tag.sumPlace", { site: "" }),
-    );
+    expect(tagSummary(null, null, "Reef")).toBe(t("tag.sumPlace", { site: "Reef" }));
+    expect(tagSummary(null, null, undefined)).toBe(t("tag.sumPlace", { site: "" }));
   });
 });
 
@@ -224,23 +130,9 @@ describe("canApplyTag", () => {
 
 describe("selectionChanged", () => {
   it("recognises a selection that moved on", () => {
-    expect(
-      selectionChanged({
-        error: "lightroom",
-        reason: "selectionChanged",
-        detail: null,
-      }),
-    ).toBe(true);
-    expect(
-      selectionChanged({
-        error: "lightroom",
-        reason: "staleSelection",
-        detail: null,
-      }),
-    ).toBe(true);
-    expect(
-      selectionChanged({ error: "lightroom", reason: "busy", detail: null }),
-    ).toBe(false);
+    expect(selectionChanged({ error: "lightroom", reason: "selectionChanged", detail: null })).toBe(true);
+    expect(selectionChanged({ error: "lightroom", reason: "staleSelection", detail: null })).toBe(true);
+    expect(selectionChanged({ error: "lightroom", reason: "busy", detail: null })).toBe(false);
     expect(selectionChanged({ error: "noPhotos" } as never)).toBe(true);
     expect(selectionChanged({ error: "badGps" } as never)).toBe(false);
   });
@@ -255,12 +147,7 @@ describe("describeAgain", () => {
 
   it("describes it again when the selection moved on, whatever was asked", () => {
     expect(describeAgain({ error: "noPhotos" }, false)).toBe(true);
-    expect(
-      describeAgain(
-        { error: "lightroom", reason: "selectionChanged", detail: null },
-        false,
-      ),
-    ).toBe(true);
+    expect(describeAgain({ error: "lightroom", reason: "selectionChanged", detail: null }, false)).toBe(true);
   });
 
   it("leaves it as it is for a refusal before Lightroom was reached", () => {
@@ -271,11 +158,7 @@ describe("describeAgain", () => {
 
 describe("readingAfterFailure", () => {
   it("ends the reading of the latest description and describes again, once", () => {
-    expect(readingAfterFailure({ error: "noPhotos" }, true)).toEqual({
-      reading: false,
-      message: null,
-      describeAgain: true,
-    });
+    expect(readingAfterFailure({ error: "noPhotos" }, true)).toEqual({ reading: false, message: null, describeAgain: true });
     expect(readingAfterFailure({ error: "noPhotos" }, true, true)).toEqual({
       reading: false,
       message: t("tag.perPhoto.failedNoDetail"),
@@ -289,42 +172,28 @@ describe("readingAfterFailure", () => {
   });
 
   it("ends the reading without a message when the log changed (the app starts the screen again)", () => {
-    expect(readingAfterFailure({ error: "logChanged" }, true)).toEqual({
-      reading: false,
-      message: null,
-      describeAgain: false,
-    });
+    expect(readingAfterFailure({ error: "logChanged" }, true)).toEqual({ reading: false, message: null, describeAgain: false });
   });
 
-  it("ends the reading with the reason for any other failure", () => {
-    expect(readingAfterFailure({ error: "linkLost" }, true)).toEqual({
-      reading: false,
-      message: t("tag.disconnected"),
-      describeAgain: false,
-    });
+  it("ends the reading and leaves the wording of any other failure to the screen", () => {
+    expect(readingAfterFailure({ error: "linkLost" }, true)).toEqual({ reading: false, describeAgain: false });
   });
 });
 
 describe("gpsRefused", () => {
-  const base = {
-    withPlace: true,
-    usesDiveSite: false,
-    siteId: "s1",
-    gpsValid: false,
-  };
-  it("flags an invalid position as soon as another site is written", () => {
+  const base = { withPlace: true, placeKind: "diveSite" as const, diveSiteUsable: false, siteId: "s1", gpsValid: false };
+  it("flags an invalid position as soon as another site is written, whatever the place kind", () => {
     expect(gpsRefused(base)).toBe(true);
+    expect(gpsRefused({ ...base, placeKind: "site" })).toBe(true);
     expect(gpsRefused({ ...base, gpsValid: true })).toBe(false);
   });
   it("does not flag when the dive's site is used, no site is picked or no place is written", () => {
-    expect(gpsRefused({ ...base, usesDiveSite: true })).toBe(false);
+    expect(gpsRefused({ ...base, diveSiteUsable: true })).toBe(false);
     expect(gpsRefused({ ...base, siteId: null })).toBe(false);
     expect(gpsRefused({ ...base, withPlace: false })).toBe(false);
   });
   it("blocks Apply with the bad position text when the dive's site is unusable", () => {
     const gpsError = gpsRefused(base);
-    expect(
-      tagBlocker({ ...ok, usesDiveSite: false, pickedSite: true, gpsError }),
-    ).toBe(t("tag.badGps"));
+    expect(tagBlocker({ ...ok, usesDiveSite: false, pickedSite: true, gpsError })).toBe(t("tag.badGps"));
   });
 });

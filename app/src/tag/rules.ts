@@ -34,26 +34,17 @@ export function tagBlocker(s: TagState): string | null {
   if (s.withDive && !s.chosen) return t("tag.chooseDive");
   if (s.needsValues && s.readFailure) return s.readFailure;
   if (s.profileLoading) return t("detail.profileLoading");
-  if (s.needsValues && (!s.current || !s.freshCounts))
-    return t("tag.perPhoto.reading");
-  if (s.withPlace && !s.usesDiveSite && !s.pickedSite)
-    return t("tag.chooseSite");
+  if (s.needsValues && (!s.current || !s.freshCounts)) return t("tag.perPhoto.reading");
+  if (s.withPlace && !s.usesDiveSite && !s.pickedSite) return t("tag.chooseSite");
   if (s.gpsError) return t("tag.badGps");
   return null;
 }
 
 /** The bar's text: the blocker, else what will be written. */
-export function tagSummary(
-  blocker: string | null,
-  chosen: Dive | null,
-  placeName: string | null | undefined,
-): string {
+export function tagSummary(blocker: string | null, chosen: Dive | null, placeName: string | null | undefined): string {
   if (blocker) return blocker;
-  const diveLabel = chosen
-    ? String(chosen.number ?? chosen.site.name ?? "—")
-    : "";
-  if (chosen && placeName)
-    return t("tag.sumDiveAndPlace", { n: diveLabel, site: placeName });
+  const diveLabel = chosen ? String(chosen.number ?? chosen.site.name ?? "—") : "";
+  if (chosen && placeName) return t("tag.sumDiveAndPlace", { n: diveLabel, site: placeName });
   if (chosen) return t("tag.sumDive", { n: diveLabel });
   return t("tag.sumPlace", { site: placeName ?? "" });
 }
@@ -64,8 +55,7 @@ export function canApplyTag(blocker: string | null, writing: boolean): boolean {
 
 /** Nothing was written because the selection is no longer the one described: it is described again. */
 export function selectionChanged(e: TagError): boolean {
-  if (e.error === "lightroom")
-    return e.reason === "selectionChanged" || e.reason === "staleSelection";
+  if (e.error === "lightroom") return e.reason === "selectionChanged" || e.reason === "staleSelection";
   return e.error === "noPhotos";
 }
 
@@ -77,64 +67,39 @@ export function describeAgain(e: TagError, needsValues: boolean): boolean {
   return selectionChanged(e) || (e.error === "lightroom" && needsValues);
 }
 
-/** Why the selection could not be described; null: nothing to say (a newer description replaced this one, or the log changed). */
-export function describeFailure(e: CollectionsError): string | null {
-  switch (e.error) {
-    case "noPhotos":
-    case "logChanged": // the app reads the log again and starts the screen again
-      return null;
-    case "notConnected":
-    case "linkLost":
-      return t("tag.disconnected");
-    case "lightroom":
-      return e.detail
-        ? t("tag.perPhoto.failed", { detail: e.detail })
-        : t("tag.perPhoto.failedNoDetail");
-    case "source":
-      return t("tag.perPhoto.failed", { detail: e.detail.detail });
-    default:
-      return t("tag.perPhoto.failedNoDetail");
-  }
-}
-
-/** What the screen does when describing the selection failed. */
+/** What the screen does when describing the selection failed; `message` undefined: the screen words the failure. */
 export interface AfterFailure {
   reading: boolean;
-  message: string | null;
+  message?: string | null;
   /** Describe the selection once more (the answer was lost, not the selection). */
   describeAgain: boolean;
 }
 
 /**
- * The state after a failed description of the selection. null: a newer description replaced this one
- * and owns the reading, nothing changes. Otherwise the reading always ends. A lost description
- * (noPhotos) is asked again once per selection (`retried`: already done); the second time it says why.
- * A changed log needs nothing: the app reads it again and starts the screen again.
+ * The state after a failed description of the selection. null: a newer description replaced this one and owns
+ * the reading, nothing changes. Otherwise the reading always ends. A lost description (noPhotos) is asked again
+ * once per selection (`retried`: already done); the second time it says why. A changed log needs nothing: the
+ * app reads it again and starts the screen again.
  */
-export function readingAfterFailure(
-  e: CollectionsError,
-  live: boolean,
-  retried = false,
-): AfterFailure | null {
+export function readingAfterFailure(e: CollectionsError, live: boolean, retried = false): AfterFailure | null {
   if (!live) return null;
+  if (e.error === "logChanged") return { reading: false, message: null, describeAgain: false };
   if (e.error === "noPhotos") {
     return retried
-      ? {
-          reading: false,
-          message: t("tag.perPhoto.failedNoDetail"),
-          describeAgain: false,
-        }
+      ? { reading: false, message: t("tag.perPhoto.failedNoDetail"), describeAgain: false }
       : { reading: false, message: null, describeAgain: true };
   }
-  return { reading: false, message: describeFailure(e), describeAgain: false };
+  return { reading: false, describeAgain: false };
 }
 
 /** The place written is another site, one is picked, and the position typed is not valid: Apply is refused. */
 export function gpsRefused(s: {
   withPlace: boolean;
-  usesDiveSite: boolean;
+  placeKind: "diveSite" | "site";
+  diveSiteUsable: boolean;
   siteId: string | null;
   gpsValid: boolean;
 }): boolean {
-  return s.withPlace && !s.usesDiveSite && s.siteId !== null && !s.gpsValid;
+  const usesDiveSite = s.withPlace && s.placeKind === "diveSite" && s.diveSiteUsable;
+  return s.withPlace && !usesDiveSite && s.siteId !== null && !s.gpsValid;
 }
