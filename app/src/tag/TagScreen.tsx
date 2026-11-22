@@ -473,6 +473,7 @@ export function TagScreen({
                                 note={notes[c.key] || null}
                                 onOffset={(m) => setOffset(c.key, m)}
                                 onSuggest={() => suggest(c.key)}
+                                disabled={writing}
                               />
                             );
                           })}

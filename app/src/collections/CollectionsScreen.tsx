@@ -230,6 +230,7 @@ export function CollectionsScreen({
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [margin, setMargin] = useState(0);
   const [preview, setPreview] = useState<CollectionsPreview | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
   const [run, setRun] = useState<Run>({ state: "idle" });
   const searchedFor = useRef<string | null>(null);
 
@@ -260,6 +261,7 @@ export function CollectionsScreen({
     let live = true;
     setSearch({ state: "searching" });
     setPreview(null);
+    setPreviewFailed(false);
     findCollectionPhotos(logRef(log.source), nextSearchNumber(), diveKey.split(","))
       .then((period) => {
         if (!live) return;
@@ -290,9 +292,14 @@ export function CollectionsScreen({
   useEffect(() => {
     if (search.state !== "ready") return;
     const n = ++asked.current;
+    setPreviewFailed(false);
     collectionsPreview(search.period.search, choices)
       .then((p) => n === asked.current && setPreview(p))
-      .catch(() => n === asked.current && setPreview(null));
+      .catch(() => {
+        if (n !== asked.current) return;
+        setPreview(null);
+        setPreviewFailed(true);
+      });
   }, [choices, search]);
 
   useEffect(() => {
@@ -385,7 +392,7 @@ export function CollectionsScreen({
   const total = preview?.total ?? 0;
   const withPhotos = preview?.dives.filter((d) => d.photos > 0).length ?? 0;
 
-  const blocker = collectionsBlocker({ connected: lr.connected, search, parentMissing, parent, preview });
+  const blocker = collectionsBlocker({ connected: lr.connected, search, parentMissing, parent, preview, previewFailed });
 
   const place = placeLabel(settings.collections, t("settings.root"));
 
@@ -462,6 +469,7 @@ export function CollectionsScreen({
                       onOffset={(m) => setOffset(c.key, m)}
                       onIgnore={(on) => setIgnoredCamera(c.key, on)}
                       onSuggest={() => suggest([c.key])}
+                      disabled={writing}
                     />
                   );
                 })}

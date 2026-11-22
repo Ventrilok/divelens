@@ -17,11 +17,14 @@ export function collectionsBlocker(i: {
   parentMissing: boolean;
   parent: string[];
   preview: CollectionsPreview | null;
+  /** The counts were asked for and failed: not the same as not arrived yet. */
+  previewFailed?: boolean;
 }): string | null {
   if (!i.connected) return t("coll.disconnected");
   if (i.search.state === "searching") return t("coll.searching");
   if (i.search.state === "failed") return i.search.message;
   if (i.parentMissing) return t("coll.parentMissing", { path: i.parent.join(" › ") });
+  if (i.previewFailed) return t("coll.previewFailed");
   if (i.preview && i.preview.total === 0) return t("coll.err.nothingToWrite");
   return null;
 }
