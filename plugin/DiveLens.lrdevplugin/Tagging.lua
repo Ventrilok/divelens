@@ -106,6 +106,22 @@ local DIVE_IDENTITY = { "Source", "StartDate", "DiveId" }
 --- photo, in metres, as text: the altitude marker (Metadata.lua, spec F7).
 Tagging.MARKER = "WrittenAltitude"
 
+--- Every reason the plug-in gives in an "applyFailed" message, for both
+--- features. A declaration only: the app's own list (APPLY_REASONS in
+--- lightroom.rs) and its texts (apply/failure.ts) are checked against it by
+--- tests/apply_contract.rs.
+Tagging.REASONS = {
+    "error",
+    "busy",
+    "badRequest",
+    "gpsNotWritten",
+    "noSelection",
+    "selectionChanged",
+    "staleSelection",
+    "staleSearch",
+    "parentNotFound",
+}
+
 --- DiveLens fields "Tag Selection" and "Create Collections" read on each
 --- photo before writing a dive (see retagChanges, photoWrites): the dive
 --- identity, then the photo's own values, then the altitude marker.

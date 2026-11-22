@@ -41,6 +41,19 @@ pub const LINK_FILE: &str = "lightroom-link.json";
 /// Version of the message set; both sides must agree.
 pub const PROTOCOL: u32 = 6;
 
+/// Every reason the plug-in gives in an `applyFailed` message.
+pub const APPLY_REASONS: &[&str] = &[
+    "error",
+    "busy",
+    "badRequest",
+    "gpsNotWritten",
+    "noSelection",
+    "selectionChanged",
+    "staleSelection",
+    "staleSearch",
+    "parentNotFound",
+];
+
 /// Content of the link file.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -2,7 +2,7 @@
 // kept apart from the screen so that they can be tested.
 
 import { t } from "../i18n";
-import type { CollectionsError, Dive, TagError } from "../types";
+import type { ApplyError, Dive } from "../types";
 
 /** What the screen knows when it decides whether Apply is allowed. */
 export interface TagState {
@@ -54,7 +54,7 @@ export function canApplyTag(blocker: string | null, writing: boolean): boolean {
 }
 
 /** Nothing was written because the selection is no longer the one described: it is described again. */
-export function selectionChanged(e: TagError): boolean {
+export function selectionChanged(e: ApplyError): boolean {
   if (e.error === "lightroom") return e.reason === "selectionChanged" || e.reason === "staleSelection";
   return e.error === "noPhotos";
 }
@@ -63,7 +63,7 @@ export function selectionChanged(e: TagError): boolean {
  * The selection is described again after a failed Apply: when the selection moved on, or when Lightroom
  * answered while per-photo values were asked (the offsets applied may now be the remembered ones).
  */
-export function describeAgain(e: TagError, needsValues: boolean): boolean {
+export function describeAgain(e: ApplyError, needsValues: boolean): boolean {
   return selectionChanged(e) || (e.error === "lightroom" && needsValues);
 }
 
@@ -81,7 +81,7 @@ export interface AfterFailure {
  * once per selection (`retried`: already done); the second time it says why. A changed log needs nothing: the
  * app reads it again and starts the screen again.
  */
-export function readingAfterFailure(e: CollectionsError, live: boolean, retried = false): AfterFailure | null {
+export function readingAfterFailure(e: ApplyError, live: boolean, retried = false): AfterFailure | null {
   if (!live) return null;
   if (e.error === "logChanged") return { reading: false, message: null, describeAgain: false };
   if (e.error === "noPhotos") {

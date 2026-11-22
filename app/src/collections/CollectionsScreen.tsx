@@ -10,15 +10,17 @@ import { clampMargin, clampOffset, initialOffsets, MARGIN_STEP_MIN, MAX_MARGIN_M
 import { placeLabel, setExists } from "./collectionPlace";
 import { barText, canApplyCollections, collectionsBlocker, writesNote, type Search } from "./rules";
 import { logRef, nextSearchNumber } from "../diveLog";
-import { CameraCard } from "../apply/CameraCard";
+import { CameraClock } from "../apply/CameraClock";
+import { applyFailure, searchFailure } from "../apply/failure";
+import { ProgressBar } from "../apply/ProgressBar";
 import { Icon } from "../ui/Icon";
 import { Steps } from "../ui/Steps";
 import { formatDay, formatRange, formatRowSpan } from "../ui/format";
 import { formatInt, t, tn } from "../i18n";
 import type {
+  ApplyError,
   Camera,
   CollectionChoices,
-  CollectionsError,
   CollectionsPreview,
   CollectionsResult,
   Dive,
@@ -35,60 +37,6 @@ type Run =
   | { state: "writing"; done: number; total: number }
   | { state: "done"; result: CollectionsResult; choices: CollectionChoices; cameras: Camera[] }
   | { state: "failed"; message: string };
-
-/** Why the photos could not be looked for in Lightroom: nothing is written by a search. */
-export function searchFailure(e: CollectionsError): string {
-  switch (e.error) {
-    case "notConnected":
-      return t("coll.search.err.notConnected");
-    case "linkLost":
-      return t("coll.search.err.linkLost");
-    case "nothingToWrite":
-      return t("coll.err.nothingToWrite");
-    case "nothingChosen":
-      return t("coll.search.err.divesGone");
-    case "logChanged":
-      return t("log.changed");
-    case "lightroom":
-      if (e.reason === "busy") return t("coll.search.err.busy");
-      return e.detail ? t("coll.search.err.lightroom", { detail: e.detail }) : t("coll.search.err.generic");
-    case "source":
-      return t("coll.search.err.source", { detail: e.detail.detail });
-    case "noPhotos":
-      return t("coll.search.err.generic");
-  }
-}
-
-export function failure(e: CollectionsError): string {
-  switch (e.error) {
-    case "notConnected":
-      return t("coll.err.notConnected");
-    case "linkLost":
-      return t("coll.err.linkLost");
-    case "noPhotos":
-      return t("coll.err.noPhotos");
-    case "nothingToWrite":
-      return t("coll.err.nothingToWrite");
-    case "nothingChosen":
-      return t("coll.err.nothingChosen");
-    case "logChanged":
-      // Not seen: the app reads the log again and says why on step 1.
-      return t("log.changedNothingWritten");
-    case "lightroom":
-      if (e.reason === "busy") return t("coll.err.busy");
-      // Written but for the GPS and altitude: Undo, then apply again.
-      if (e.reason === "gpsNotWritten")
-        return e.detail ? t("coll.err.gpsNotWrittenDetail", { detail: e.detail }) : t("coll.err.gpsNotWritten");
-      if (e.reason === "staleSearch") return t("coll.err.noPhotos");
-      if (e.reason === "parentNotFound") return t("coll.parentMissing", { path: e.detail ?? "" });
-      // Its detail is internal ("bad group"): never shown.
-      if (e.reason === "badRequest") return t("coll.err.badRequest");
-      // A reason this version does not know: never the code.
-      return e.detail ? t("coll.err.other", { detail: e.detail }) : t("coll.err.lightroom");
-    case "source":
-      return t("coll.err.source", { detail: e.detail.detail });
-  }
-}
 
 /** The entries of `o` whose key is in `keys`. */
 function pick(o: Record<string, number>, keys: Set<string>): Record<string, number> {
@@ -276,7 +224,7 @@ export function CollectionsScreen({
         if (!keep) setNotes({});
         setSearch({ state: "ready", period });
       })
-      .catch((e: CollectionsError) => live && setSearch({ state: "failed", message: searchFailure(e) }));
+      .catch((e: ApplyError) => live && setSearch({ state: "failed", message: searchFailure(e, "collections") }));
     return () => {
       live = false;
     };
@@ -362,8 +310,8 @@ export function CollectionsScreen({
     setRun({ state: "writing", done: 0, total: preview.total });
     applyCollections(logRef(log.source), period.search, choices)
       .then((result) => setRun({ state: "done", result, choices, cameras: cams }))
-      .catch((e: CollectionsError) => {
-        setRun({ state: "failed", message: failure(e) });
+      .catch((e: ApplyError) => {
+        setRun({ state: "failed", message: applyFailure(e, "collections") });
         if (e.error === "noPhotos" || (e.error === "lightroom" && e.reason === "staleSearch")) setAgain((n) => n + 1);
       });
   };
@@ -447,33 +395,21 @@ export function CollectionsScreen({
             {cameras.length === 0 ? (
               <p className="muted">{t("coll.noPhotos")}</p>
             ) : (
-              <div className="cams">
-                {cameras.map((c) => {
-                  const inDives = camCounts.get(c.key)?.inDives ?? 0;
-                  const outside = camCounts.get(c.key)?.outside ?? 0;
-                  return (
-                    <CameraCard
-                      key={c.key}
-                      camera={c}
-                      offset={offsets[c.key] ?? 0}
-                      ignored={ignored.has(c.key)}
-                      remembered={c.remembered !== null && offsets[c.key] === c.remembered && !touched.has(c.key)}
-                      inDives={inDives}
-                      outside={outside}
-                      gauge={
-                        inDives === 0
-                          ? t("coll.noneInDives")
-                          : t("coll.inDives", { n: formatInt(inDives), out: formatInt(outside) })
-                      }
-                      note={notes[c.key] || null}
-                      onOffset={(m) => setOffset(c.key, m)}
-                      onIgnore={(on) => setIgnoredCamera(c.key, on)}
-                      onSuggest={() => suggest([c.key])}
-                      disabled={writing}
-                    />
-                  );
-                })}
-              </div>
+              <CameraClock
+                cameras={cameras}
+                offsets={offsets}
+                touched={touched}
+                notes={notes}
+                counts={(key) => camCounts.get(key)}
+                gauge={(inDives, outside) =>
+                  inDives === 0 ? t("coll.noneInDives") : t("coll.inDives", { n: formatInt(inDives), out: formatInt(outside) })
+                }
+                ignored={ignored}
+                onChange={setOffset}
+                onIgnore={setIgnoredCamera}
+                onSuggest={(key) => suggest([key])}
+                disabled={writing}
+              />
             )}
           </section>
 
@@ -573,23 +509,7 @@ export function CollectionsScreen({
 
       <div className="card selection-bar apply-bar">
         {writing ? (
-          <div className="apply-progress">
-            <div className="apply-progress-text">
-              <span className="strong">{t("tag.writing")}</span>
-              {run.done > 0 && <span className="muted">{t("tag.progress", { done: run.done, total: run.total })}</span>}
-            </div>
-            <div
-              className="bar"
-              role="progressbar"
-              aria-label={t("tag.writing")}
-              aria-valuemin={0}
-              aria-valuemax={run.total}
-              aria-valuenow={run.done}
-            >
-              <div className="bar-fill" style={{ width: `${run.total > 0 ? (100 * run.done) / run.total : 0}%` }} />
-            </div>
-            <span className="muted small">{t("tag.writingHint")}</span>
-          </div>
+          <ProgressBar done={run.done} total={run.total} label={t("tag.writing")} />
         ) : (
           <div className="selection-text">
             <span className="small">{barText(blocker, place)}</span>

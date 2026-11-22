@@ -196,7 +196,11 @@ export interface TagApplied {
   count: number;
 }
 
-export type TagError =
+/**
+ * Why a Tag Selection or Create Collections command failed (app/src-tauri/src/apply/): the same
+ * shape for both screens.
+ */
+export type ApplyError =
   | {
       error:
         | "nothingChosen"
@@ -206,8 +210,9 @@ export type TagError =
         | "unknownDive"
         | "unknownSite"
         | "logChanged"
-        /** The selection shown must be described again (its per-photo values). */
-        | "noPhotos";
+        /** Tag: the selection shown must be described again (its per-photo values). Collections: the search is gone. */
+        | "noPhotos"
+        | "nothingToWrite";
     }
   | { error: "source"; detail: ReaderError }
   | {
@@ -216,7 +221,17 @@ export type TagError =
        * "gpsNotWritten": all written but the GPS and altitude (the plugin's second write did not happen);
        * "selectionChanged" / "staleSelection": nothing written, the selection is no longer the one described.
        */
-      reason: "noSelection" | "busy" | "badRequest" | "gpsNotWritten" | "selectionChanged" | "staleSelection" | "error" | string;
+      reason:
+        | "noSelection"
+        | "busy"
+        | "badRequest"
+        | "gpsNotWritten"
+        | "selectionChanged"
+        | "staleSelection"
+        | "staleSearch"
+        | "parentNotFound"
+        | "error"
+        | string;
       detail: string | null;
     };
 
@@ -281,11 +296,6 @@ export interface CollectionsResult {
   withDepth: number;
   emptyDives: string[];
 }
-
-export type CollectionsError =
-  | { error: "nothingChosen" | "notConnected" | "linkLost" | "noPhotos" | "nothingToWrite" | "logChanged" }
-  | { error: "source"; detail: ReaderError }
-  | { error: "lightroom"; reason: string; detail: string | null };
 
 // --- Settings (app/src-tauri/src/settings.rs, settings/file.rs) -------------------------------
 
