@@ -61,7 +61,7 @@ export const importSettings = (path: string) => invoke<ImportCheck>("import_sett
 /** Calls `handler` whenever the settings change (here or in the app's back end). */
 export const onSettingsChanged = (handler: (s: Settings) => void): Promise<UnlistenFn> =>
   listen<Settings>("settings-changed", (e) => handler(e.payload));
-/** The catalog's collection sets; rejects with a ApplyError. */
+/** The catalog's collection sets; rejects with an ApplyError. */
 export const collectionSets = () => invoke<CollectionSet[]>("collection_sets");
 export const lightroomStatus = () => invoke<LightroomStatus>("lightroom_status");
 /** Whether Lightroom is being written to (the dive log cannot change meanwhile). */
@@ -78,14 +78,14 @@ export const onLightroomStatus = (handler: (s: LightroomStatus) => void): Promis
 export const onShowScreen = (handler: (screen: string) => void): Promise<UnlistenFn> =>
   listen<string>("show-screen", (e) => handler(e.payload));
 
-/** Tags the photos selected in Lightroom with data of `log`; rejects with a ApplyError. */
+/** Tags the photos selected in Lightroom with data of `log`; rejects with an ApplyError. */
 export const tagSelection = (log: LogRef, choice: TagChoice) =>
   onLog(invoke<TagApplied>("tag_selection", { log, choice }), true);
 
 /**
  * Describes the photos selected in Lightroom now, with the offsets
  * remembered for the application of `log`; `search` numbers it, higher than
- * any asked for before. Rejects with a ApplyError.
+ * any asked for before. Rejects with an ApplyError.
  */
 export const findSelectionPhotos = (log: LogRef, search: number) =>
   onLog(invoke<SelectionPhotos>("find_selection_photos", { log, search }));
@@ -108,7 +108,7 @@ export const onSelectionPreview = (handler: (p: SelectionPreview) => void): Prom
 
 /**
  * Finds in Lightroom the photos of the period of dives of `log`; `search`
- * numbers it, higher than any search asked for before. Rejects with a ApplyError.
+ * numbers it, higher than any search asked for before. Rejects with an ApplyError.
  */
 export const findCollectionPhotos = (log: LogRef, search: number, diveIds: string[]) =>
   onLog(invoke<Period>("find_collection_photos", { log, search, diveIds }));
@@ -118,7 +118,7 @@ export const collectionsPreview = (search: number, choices: CollectionChoices) =
 /** Suggested offset (minutes) per camera key of photo search `search`; null when no offset fits. */
 export const suggestOffsets = (search: number, cameras: string[]) =>
   invoke<Record<string, number | null>>("suggest_offsets", { search, cameras });
-/** Writes the dives found with photo search `search`, which must come from `log`; rejects with a ApplyError. */
+/** Writes the dives found with photo search `search`, which must come from `log`; rejects with an ApplyError. */
 export const applyCollections = (log: LogRef, search: number, choices: CollectionChoices) =>
   onLog(invoke<CollectionsResult>("apply_collections", { log, search, choices }), true);
 

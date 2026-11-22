@@ -28,7 +28,7 @@ const writeErrors: ApplyError[] = [
 ];
 
 /** A code is a word of the program (unknownDive, badRequest...); plain words like "busy" are also English. */
-function codesOf(e: ApplyError | ApplyError): string[] {
+function codesOf(e: ApplyError): string[] {
   return (e.error === "lightroom" ? [e.error, e.reason] : [e.error]).filter((c) => /[A-Z]/.test(c));
 }
 
