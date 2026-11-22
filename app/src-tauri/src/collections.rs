@@ -10,12 +10,12 @@ use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 use crate::apply::errors::CollectionsError;
-use crate::apply::offsets::Offsets;
+use crate::apply::offsets::{Offsets, should_remember};
 use crate::apply::searches::{Searches, keep_search};
 use crate::apply::{ask, send};
 use crate::dive_log::{LogId, Writes, open, source_info};
 use crate::files::config_dir;
-use crate::lightroom::{ApplyOutcome, CollectionSet, Command, WrittenCollection};
+use crate::lightroom::{CollectionSet, Command, WrittenCollection};
 use crate::settings::{Settings, units_in_use};
 use plan::{Choices, Period, Preview, Session};
 
@@ -162,7 +162,7 @@ pub(crate) async fn apply_collections(
         let writes = app.state::<Writes>();
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
         let units = units_in_use(&app, &info);
-        let (request, empty_dives) = {
+        let (request, empty_dives, applied) = {
             let state = app.state::<CollectionsState>();
             let searches = state.searches.lock().expect("collections");
             let session = searches.get(search).ok_or(CollectionsError::NoPhotos)?;
@@ -182,7 +182,7 @@ pub(crate) async fn apply_collections(
                 .filter(|d| d.photos == 0)
                 .map(|d| d.id.clone())
                 .collect();
-            (request, empty)
+            (request, empty, session.applied(&choices))
         };
         if request.groups.is_empty() {
             return Err(CollectionsError::NothingToWrite);
@@ -197,18 +197,10 @@ pub(crate) async fn apply_collections(
             .inspect_err(|e| log::warn!("collections not written: {e:?}"))?;
         // The offsets are on the photos once the first catalog write is
         // done, even when the GPS and altitude write did not follow.
-        if answer.as_ref().err().is_none_or(ApplyOutcome::half_written) {
+        if should_remember(&answer, &applied) {
             let dir = config_dir(&app);
             let mut offsets = Offsets::load(&dir, log.app);
-            if let Some(session) = app
-                .state::<CollectionsState>()
-                .searches
-                .lock()
-                .expect("collections")
-                .get(search)
-            {
-                session.remember(&choices, &mut offsets);
-            }
+            offsets.cameras.extend(applied);
             if let Err(e) = offsets.save(&dir, log.app) {
                 log::error!("clock offsets not saved: {e}");
             }

@@ -2,7 +2,7 @@
 // kept apart from the screen so that they can be tested.
 
 import { t } from "../i18n";
-import type { ApplyOutcome, Dive, TagError } from "../types";
+import type { Dive, TagError } from "../types";
 
 /** What the screen knows when it decides whether Apply is allowed. */
 export interface TagState {
@@ -54,7 +54,15 @@ export function canApplyTag(blocker: string | null, writing: boolean): boolean {
 }
 
 /** Nothing was written because the selection is no longer the one described: it is described again. */
-export function selectionChanged(e: ApplyOutcome | TagError): boolean {
-  if ("outcome" in e) return e.outcome === "failed" && (e.reason === "selectionChanged" || e.reason === "staleSelection");
+export function selectionChanged(e: TagError): boolean {
+  if (e.error === "lightroom") return e.reason === "selectionChanged" || e.reason === "staleSelection";
   return e.error === "noPhotos";
+}
+
+/**
+ * The selection is described again after a failed Apply: when the selection moved on, or when Lightroom
+ * answered while per-photo values were asked (the offsets applied may now be the remembered ones).
+ */
+export function describeAgain(e: TagError, needsValues: boolean): boolean {
+  return selectionChanged(e) || (e.error === "lightroom" && needsValues);
 }

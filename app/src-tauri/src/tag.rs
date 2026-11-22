@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
 use crate::apply::errors::CollectionsError;
-use crate::apply::offsets::Offsets;
+use crate::apply::offsets::{Offsets, should_remember};
 use crate::apply::searches::{Searches, keep_search};
 use crate::apply::send;
 use crate::dive_log::{LogChanged, LogId, SourceInfo, Writes, open, source_info};
@@ -57,7 +57,9 @@ pub(crate) struct TagChoice {
     offsets: std::collections::HashMap<String, i32>,
 }
 
-/// Why Tag Selection wrote nothing before reaching Lightroom, or lost track.
+/// Why Tag Selection did not finish: it stopped before reaching Lightroom, lost
+/// track of the write, or Lightroom answered with a refusal or a failure (also
+/// `gpsNotWritten`: everything written but the GPS and altitude).
 #[derive(Debug, Serialize)]
 #[serde(tag = "error", rename_all = "camelCase")]
 pub(crate) enum TagError {
@@ -77,12 +79,36 @@ pub(crate) enum TagError {
     Source {
         detail: Error,
     },
+    /// Lightroom refused or failed; `reason` as in [`ApplyOutcome::Failed`].
+    #[serde(rename_all = "camelCase")]
+    Lightroom {
+        reason: String,
+        detail: Option<String>,
+    },
 }
 
 impl From<LogChanged> for TagError {
     fn from(_: LogChanged) -> Self {
         Self::LogChanged
     }
+}
+
+impl From<ApplyOutcome> for TagError {
+    fn from(outcome: ApplyOutcome) -> Self {
+        match outcome {
+            ApplyOutcome::Failed { reason, detail } => Self::Lightroom { reason, detail },
+            ApplyOutcome::Applied { .. } => Self::Lightroom {
+                reason: "error".into(),
+                detail: Some("unexpected answer".into()),
+            },
+        }
+    }
+}
+
+/// What "Tag Selection › Apply" wrote: the number of photos tagged.
+#[derive(Debug, Serialize)]
+pub(crate) struct TagApplied {
+    count: usize,
 }
 
 /// Tag Selection's descriptions of the Lightroom selection: the latest one
@@ -113,32 +139,30 @@ fn tag_request(
         None => None,
     };
     let location = rules::location(choice.location.as_ref(), dive.as_ref(), || source.sites())?;
-    let mut request = rules::base_request(dive.as_ref(), location, units, info.app.name)?;
-    let mut applied = std::collections::BTreeMap::new();
-    // Per-photo values (spec F8): when the dive has a profile, on the photos
-    // of the selection shown taken during the dive, with the offsets shown.
-    // A profile that cannot be read leaves the dive data alone.
-    if let Some(dive) = dive.filter(|d| d.has_profile) {
-        let described = rules::described(
-            &app.state::<TagState>().selections,
-            choice.search,
-            &dive,
-            &choice.offsets,
-        )?;
-        // The profile of the configured log, read now; only when needed.
-        let outcome = selection::per_photo(&dive, described, units, || source.profile(&dive.id));
-        let (offsets, unreadable) = rules::apply_per_photo(&mut request, outcome, || {
-            Settings::load(&config_dir(app)).depth_to_altitude
-        })?;
-        if let Some(e) = unreadable {
-            log::warn!(
-                "profile of dive {} not read, dive data without per-photo values: {e:?}",
-                dive.id
-            );
-        }
-        applied = offsets;
+    let dive_id = dive.as_ref().map(|d| d.id.clone());
+    let built = rules::build_request(
+        dive,
+        location,
+        units,
+        info.app.name,
+        |dive| {
+            rules::described(
+                &app.state::<TagState>().selections,
+                choice.search,
+                dive,
+                &choice.offsets,
+            )
+        },
+        |id| source.profile(id),
+        || Settings::load(&config_dir(app)).depth_to_altitude,
+    )?;
+    if let Some(e) = built.unreadable {
+        log::warn!(
+            "profile of dive {} not read, dive data without per-photo values: {e:?}",
+            dive_id.unwrap_or_default()
+        );
     }
-    Ok((request, applied))
+    Ok((built.request, built.applied))
 }
 
 /// Tags the photos selected in Lightroom (at the moment Lightroom gets the
@@ -154,7 +178,7 @@ pub(crate) async fn tag_selection(
     app: AppHandle,
     log: LogId,
     choice: TagChoice,
-) -> Result<ApplyOutcome, TagError> {
+) -> Result<TagApplied, TagError> {
     tauri::async_runtime::spawn_blocking(move || {
         let writes = app.state::<Writes>();
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
@@ -176,8 +200,8 @@ pub(crate) async fn tag_selection(
         if sent.is_err() {
             return Err(TagError::NotConnected);
         }
-        let outcome = outcome.recv().map_err(|_| TagError::LinkLost)?;
-        if rules::remember_offsets(&outcome, &applied) {
+        let answer = rules::heard(outcome.recv())?;
+        if should_remember(&answer, &applied) {
             let dir = config_dir(&app);
             let mut offsets = Offsets::load(&dir, info.app);
             selection::remember(&applied, &mut offsets);
@@ -185,13 +209,13 @@ pub(crate) async fn tag_selection(
                 log::error!("clock offsets not saved: {e}");
             }
         }
-        match &outcome {
-            ApplyOutcome::Applied { count } => {
+        match &answer {
+            Ok(count) => {
                 log::info!("selection tagged: {count} photos, per-photo values on {with_values}")
             }
-            ApplyOutcome::Failed { .. } => log::warn!("selection not tagged: {outcome:?}"),
+            Err(outcome) => log::warn!("selection not tagged: {outcome:?}"),
         }
-        Ok(outcome)
+        rules::applied(answer)
     })
     .await
     .expect("tagging task failed")

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage, t } from "../i18n";
-import { canApplyTag, selectionChanged, tagBlocker, tagSummary } from "./rules";
+import { canApplyTag, describeAgain, selectionChanged, tagBlocker, tagSummary } from "./rules";
 import type { Dive } from "../types";
 
 beforeEach(() => setLanguage("en"));
@@ -130,11 +130,28 @@ describe("canApplyTag", () => {
 
 describe("selectionChanged", () => {
   it("recognises a selection that moved on", () => {
-    expect(selectionChanged({ outcome: "failed", reason: "selectionChanged" } as never)).toBe(true);
-    expect(selectionChanged({ outcome: "failed", reason: "staleSelection" } as never)).toBe(true);
-    expect(selectionChanged({ outcome: "failed", reason: "busy" } as never)).toBe(false);
-    expect(selectionChanged({ outcome: "applied", count: 2 })).toBe(false);
+    expect(selectionChanged({ error: "lightroom", reason: "selectionChanged", detail: null })).toBe(true);
+    expect(selectionChanged({ error: "lightroom", reason: "staleSelection", detail: null })).toBe(true);
+    expect(selectionChanged({ error: "lightroom", reason: "busy", detail: null })).toBe(false);
     expect(selectionChanged({ error: "noPhotos" } as never)).toBe(true);
     expect(selectionChanged({ error: "badGps" } as never)).toBe(false);
+  });
+});
+
+describe("describeAgain", () => {
+  it("describes the selection again after a Lightroom answer when per-photo values were asked", () => {
+    const busy = { error: "lightroom", reason: "busy", detail: null } as const;
+    expect(describeAgain(busy, true)).toBe(true);
+    expect(describeAgain(busy, false)).toBe(false);
+  });
+
+  it("describes it again when the selection moved on, whatever was asked", () => {
+    expect(describeAgain({ error: "noPhotos" }, false)).toBe(true);
+    expect(describeAgain({ error: "lightroom", reason: "selectionChanged", detail: null }, false)).toBe(true);
+  });
+
+  it("leaves it as it is for a refusal before Lightroom was reached", () => {
+    expect(describeAgain({ error: "badGps" }, true)).toBe(false);
+    expect(describeAgain({ error: "notConnected" }, true)).toBe(false);
   });
 });

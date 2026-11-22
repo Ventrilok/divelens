@@ -2,7 +2,7 @@
 //! chosen dives, their cameras, live counts and the request to write.
 //! Nothing here talks to Lightroom; the collections commands (`collections.rs`) do.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use chrono::{Duration, NaiveDateTime};
 use divelens_core::collections::{self as matching, Placement, Span};
@@ -324,22 +324,22 @@ impl Session {
         })
     }
 
-    /// Offsets to remember after a successful write: those of the cameras
-    /// with at least one photo written (the offset was applied to them).
-    pub fn remember(&self, choices: &Choices, offsets: &mut Offsets) {
+    /// The offset applied to each camera with at least one photo written
+    /// (the offset was applied to it), by camera key: what is remembered
+    /// once Lightroom wrote.
+    pub fn applied(&self, choices: &Choices) -> BTreeMap<String, i32> {
         let mut written = vec![false; self.cameras.len()];
         for (p, _, placement) in self.placements(choices) {
             if placement.is_some() {
                 written[p.camera] = true;
             }
         }
-        for (i, camera) in self.cameras.iter().enumerate() {
-            if written[i] {
-                offsets
-                    .cameras
-                    .insert(camera.key.clone(), self.offset(choices, i));
-            }
-        }
+        self.cameras
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| written[*i])
+            .map(|(i, camera)| (camera.key.clone(), self.offset(choices, i)))
+            .collect()
     }
 }
 
@@ -637,11 +637,26 @@ mod tests {
         offsets.cameras.insert("Nikon|".into(), 60);
         let mut c = choices(0);
         c.offsets.insert("GoPro|".into(), 600); // puts no GoPro photo in a dive
-        s.remember(&c, &mut offsets);
+        let applied = s.applied(&c);
+        offsets.cameras.extend(applied);
         assert_eq!(offsets.get("TG-7|A1"), Some(240));
         assert_eq!(offsets.get("GoPro|"), None, "nothing written");
         assert_eq!(offsets.get("iPhone|Z9"), None, "ignored");
         assert_eq!(offsets.get("Nikon|"), Some(60), "other cameras kept");
+    }
+
+    #[test]
+    fn offsets_are_not_saved_when_none_was_applied() {
+        use crate::lightroom::ApplyOutcome;
+        let s = session(&Offsets::default());
+        let mut c = choices(0);
+        c.ignored = s.cameras.iter().map(|camera| camera.key.clone()).collect();
+        let applied = s.applied(&c);
+        assert!(applied.is_empty());
+        // Lightroom wrote, but no camera had an offset applied: the offsets
+        // file is left as it is.
+        let written = Ok::<usize, ApplyOutcome>(0);
+        assert!(!crate::apply::offsets::should_remember(&written, &applied));
     }
 
     #[test]

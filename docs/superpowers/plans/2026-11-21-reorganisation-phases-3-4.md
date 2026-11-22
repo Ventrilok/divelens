@@ -136,7 +136,7 @@ Chaque PR part de `main` à jour, après fusion de la précédente (pas d'empile
 - Produces: `TagError::Lightroom { reason: String, detail: Option<String> }` (même forme sérialisée que `CollectionsError::Lightroom` : `{ "error": "lightroom", "reason", "detail" }`).
 - Produces: `tag_selection(...) -> Result<TagApplied, TagError>`, `TagApplied { count: usize }` sérialisé `{ "count": n }`. Un refus de Lightroom (`ApplyOutcome::Failed`) devient `Err(TagError::Lightroom { reason, detail })`.
 - Produces: `Command::Apply { request, reply: mpsc::Sender<Result<usize, ApplyOutcome>> }`, sur le modèle de `Command::ApplyCollections` (traduction interne à `lightroom.rs`, aucun message vers le plug-in ne change).
-- Produces: `crate::apply::offsets::should_remember(outcome: &ApplyOutcome, applied: &BTreeMap<String, i32>) -> bool` (l'actuelle `rules::remember_offsets`, déplacée ici), utilisée par les deux commandes. Pour Collections, `applied` vient d'une nouvelle `Session::applied(&choices) -> BTreeMap<String, i32>` (les décalages des appareils dont au moins une photo a été écrite : ce que `Session::remember` enregistre aujourd'hui), passée à `should_remember`.
+- Produces: `crate::apply::offsets::should_remember<T>(answer: &Result<T, ApplyOutcome>, applied: &BTreeMap<String, i32>) -> bool` (l'actuelle `rules::remember_offsets`, déplacée ici), utilisée par les deux commandes. Pour Collections, `applied` vient d'une nouvelle `Session::applied(&choices) -> BTreeMap<String, i32>` (les décalages des appareils dont au moins une photo a été écrite : ce que `Session::remember` enregistre aujourd'hui), passée à `should_remember`.
 - Produces: `TagRequest::copy_depth_to_altitude` appelé pour Tag hors de la branche « valeurs par photo », comme pour Collections.
 
 - [ ] **Step 1: Tests** :
@@ -226,10 +226,10 @@ Chaque PR part de `main` à jour, après fusion de la précédente (pas d'empile
 - Modify: `app/src-tauri/src/apply/errors.rs` (`CollectionsError` → `ApplyError`, qui reçoit `BadGps`, `UnknownDive`, `UnknownSite` de `TagError`)
 - Modify: `app/src-tauri/src/apply.rs` (nouvelle `write_and_remember`)
 - Modify: `app/src-tauri/src/tag.rs`, `tag/rules.rs`, `collections.rs`, `collections/plan.rs`, `lib.rs`
-- Test: tests existants (`tag/rules.rs`, `collections/plan.rs`, `lightroom.rs`, `tests/commands.rs`) inchangés hors renommage
+- Test: tests existants (`tag/rules.rs`, `collections/plan.rs`, `lightroom.rs`, `tests/commands.rs`) inchangés hors renommage. Les tests des étapes propres à Tag que la fusion remplace (`rules::heard` → la réception commune `apply::ask` / `write_and_remember`, qui donne `LinkLost` ; `rules::applied` → `ApplyError::from(ApplyOutcome)`) passent à l'étape fusionnée avec leurs assertions inchangées : c'est un déplacement, comme les renommages. La lecture, l'ajout et l'écriture des décalages dans `write_and_remember` forment une étape pure, testée sur un dossier temporaire : écrit → fichier enregistré ; refusé → fichier intact ; aucun décalage appliqué → aucun fichier écrit.
 
 **Interfaces:**
-- Consumes: `should_remember` (Task 3).
+- Consumes: `should_remember<T>(answer: &Result<T, ApplyOutcome>, applied: &BTreeMap<String, i32>) -> bool` (Task 3).
 - Produces: `ApplyError` sérialisé exactement comme les deux types actuels (`{ "error": "<camelCase>" , ... }`).
 - Produces: `apply::write_and_remember<T>(app: &AppHandle, info: &SourceInfo, command: impl FnOnce(mpsc::Sender<Result<T, ApplyOutcome>>) -> Command, applied: &BTreeMap<String, i32>) -> Result<T, ApplyError>` : envoie, attend, mémorise les décalages selon `should_remember`, journalise.
 
