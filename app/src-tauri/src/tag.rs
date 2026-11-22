@@ -8,19 +8,17 @@ pub(crate) mod selection;
 use std::sync::Mutex;
 use std::sync::mpsc;
 
-use divelens_core::Error;
 use divelens_core::tags::TagRequest;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
-use crate::apply::errors::CollectionsError;
-use crate::apply::offsets::{Offsets, should_remember};
+use crate::apply::errors::ApplyError;
+use crate::apply::offsets::Offsets;
 use crate::apply::searches::{Searches, keep_search};
-use crate::apply::send;
-use crate::dive_log::{LogChanged, LogId, SourceInfo, Writes, open, source_info};
+use crate::apply::{send, write_and_remember};
+use crate::dive_log::{LogId, SourceInfo, Writes, open, source_info};
 use crate::files::config_dir;
-use crate::lightroom::events::Lightroom;
-use crate::lightroom::{ApplyOutcome, Command};
+use crate::lightroom::Command;
 use crate::settings::{Settings, units_in_use};
 use selection::{DiveSpan, Selection, SelectionPhotos, TagPreview};
 
@@ -57,58 +55,16 @@ pub(crate) struct TagChoice {
     offsets: std::collections::HashMap<String, i32>,
 }
 
-/// Why Tag Selection did not finish: it stopped before reaching Lightroom, lost
-/// track of the write, or Lightroom answered with a refusal or a failure (also
-/// `gpsNotWritten`: everything written but the GPS and altitude).
-#[derive(Debug, Serialize)]
-#[serde(tag = "error", rename_all = "camelCase")]
-pub(crate) enum TagError {
-    NothingChosen,
-    NotConnected,
-    /// The link dropped while Lightroom was writing: the result is unknown.
-    LinkLost,
-    BadGps,
-    UnknownDive,
-    UnknownSite,
-    /// The screen shows another dive log than the configured one.
-    LogChanged,
-    /// The dive has a profile but the selection the screen shows is no
-    /// longer kept (a newer description replaced it, the link restarted):
-    /// it must be described again.
-    NoPhotos,
-    Source {
-        detail: Error,
-    },
-    /// Lightroom refused or failed; `reason` as in [`ApplyOutcome::Failed`].
-    #[serde(rename_all = "camelCase")]
-    Lightroom {
-        reason: String,
-        detail: Option<String>,
-    },
-}
-
-impl From<LogChanged> for TagError {
-    fn from(_: LogChanged) -> Self {
-        Self::LogChanged
-    }
-}
-
-impl From<ApplyOutcome> for TagError {
-    fn from(outcome: ApplyOutcome) -> Self {
-        match outcome {
-            ApplyOutcome::Failed { reason, detail } => Self::Lightroom { reason, detail },
-            ApplyOutcome::Applied { .. } => Self::Lightroom {
-                reason: "error".into(),
-                detail: Some("unexpected answer".into()),
-            },
-        }
-    }
-}
-
 /// What "Tag Selection › Apply" wrote: the number of photos tagged.
 #[derive(Debug, Serialize)]
 pub(crate) struct TagApplied {
     count: usize,
+}
+
+impl From<usize> for TagApplied {
+    fn from(count: usize) -> Self {
+        Self { count }
+    }
 }
 
 /// Tag Selection's descriptions of the Lightroom selection: the latest one
@@ -124,16 +80,16 @@ fn tag_request(
     app: &AppHandle,
     info: &SourceInfo,
     choice: &TagChoice,
-) -> Result<(TagRequest, std::collections::BTreeMap<String, i32>), TagError> {
+) -> Result<(TagRequest, std::collections::BTreeMap<String, i32>), ApplyError> {
     let source = open(app, info)
-        .map_err(|detail| TagError::Source { detail })?
+        .map_err(|detail| ApplyError::Source { detail })?
         .log;
     let units = units_in_use(app, info);
     let dive = match &choice.dive_id {
         Some(id) => {
             let dives = source
                 .dives()
-                .map_err(|detail| TagError::Source { detail })?;
+                .map_err(|detail| ApplyError::Source { detail })?;
             Some(rules::find_dive(dives, id)?)
         }
         None => None,
@@ -178,44 +134,24 @@ pub(crate) async fn tag_selection(
     app: AppHandle,
     log: LogId,
     choice: TagChoice,
-) -> Result<TagApplied, TagError> {
+) -> Result<TagApplied, ApplyError> {
     tauri::async_runtime::spawn_blocking(move || {
         let writes = app.state::<Writes>();
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
         let (request, applied) = tag_request(&app, &info, &choice)?;
         let with_values = request.photos.len();
-        let state = app.state::<Lightroom>();
-        if !state.status.lock().expect("lightroom state").connected {
-            return Err(TagError::NotConnected);
-        }
-        let (reply, outcome) = mpsc::channel();
-        let sent = state
-            .commands
-            .lock()
-            .expect("lightroom commands")
-            .send(Command::Apply {
+        let count = write_and_remember(
+            &app,
+            &info,
+            |reply| Command::Apply {
                 request: Box::new(request),
                 reply,
-            });
-        if sent.is_err() {
-            return Err(TagError::NotConnected);
-        }
-        let answer = rules::heard(outcome.recv())?;
-        if should_remember(&answer, &applied) {
-            let dir = config_dir(&app);
-            let mut offsets = Offsets::load(&dir, info.app);
-            selection::remember(&applied, &mut offsets);
-            if let Err(e) = offsets.save(&dir, info.app) {
-                log::error!("clock offsets not saved: {e}");
-            }
-        }
-        match &answer {
-            Ok(count) => {
-                log::info!("selection tagged: {count} photos, per-photo values on {with_values}")
-            }
-            Err(outcome) => log::warn!("selection not tagged: {outcome:?}"),
-        }
-        rules::applied(answer)
+            },
+            &applied,
+            |outcome| log::warn!("selection not tagged: {outcome:?}"),
+        )?;
+        log::info!("selection tagged: {count} photos, per-photo values on {with_values}");
+        Ok(TagApplied::from(count))
     })
     .await
     .expect("tagging task failed")
@@ -231,11 +167,11 @@ pub(crate) async fn find_selection_photos(
     app: AppHandle,
     log: LogId,
     search: u64,
-) -> Result<SelectionPhotos, CollectionsError> {
+) -> Result<SelectionPhotos, ApplyError> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<TagState>();
         if !state.selections.lock().expect("selections").start(search) {
-            return Err(CollectionsError::NoPhotos);
+            return Err(ApplyError::NoPhotos);
         }
         let info = source_info(&app);
         log.check(&info)?;
@@ -245,11 +181,11 @@ pub(crate) async fn find_selection_photos(
         {
             let selections = state.selections.lock().expect("selections");
             if !selections.is_latest(search) {
-                return Err(CollectionsError::NoPhotos);
+                return Err(ApplyError::NoPhotos);
             }
             send(&app, Command::DescribeSelection { reply })?;
         }
-        let found = answer.recv().map_err(|_| CollectionsError::LinkLost)??;
+        let found = answer.recv().map_err(|_| ApplyError::LinkLost)??;
         let offsets = Offsets::load(&config_dir(&app), info.app);
         let selection = Selection::new(found.search, found.photos, &offsets);
         let shown = selection.shown(search);
@@ -274,9 +210,9 @@ pub(crate) fn tag_preview(
     search: u64,
     dive: Option<DiveSpan>,
     offsets: std::collections::HashMap<String, i32>,
-) -> Result<TagPreview, CollectionsError> {
+) -> Result<TagPreview, ApplyError> {
     let selections = state.selections.lock().expect("selections");
-    let selection = selections.get(search).ok_or(CollectionsError::NoPhotos)?;
+    let selection = selections.get(search).ok_or(ApplyError::NoPhotos)?;
     let span = dive.as_ref().and_then(DiveSpan::span);
     Ok(selection.preview(span, &offsets))
 }
@@ -289,12 +225,12 @@ pub(crate) async fn suggest_tag_offsets(
     search: u64,
     dive: DiveSpan,
     cameras: Vec<String>,
-) -> Result<std::collections::HashMap<String, Option<i32>>, CollectionsError> {
+) -> Result<std::collections::HashMap<String, Option<i32>>, ApplyError> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<TagState>();
         let selections = state.selections.lock().expect("selections");
-        let selection = selections.get(search).ok_or(CollectionsError::NoPhotos)?;
-        let span = dive.span().ok_or(CollectionsError::NothingChosen)?;
+        let selection = selections.get(search).ok_or(ApplyError::NoPhotos)?;
+        let span = dive.span().ok_or(ApplyError::NothingChosen)?;
         Ok(selection.suggest(span, &cameras))
     })
     .await

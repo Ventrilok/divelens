@@ -224,13 +224,6 @@ pub fn applied_offsets(photos: &[InDive]) -> BTreeMap<String, i32> {
         .collect()
 }
 
-/// Remembers `applied` in `offsets`, leaving the other cameras as they are.
-pub fn remember(applied: &BTreeMap<String, i32>, offsets: &mut Offsets) {
-    for (camera, offset) in applied {
-        offsets.cameras.insert(camera.clone(), *offset);
-    }
-}
-
 /// What Tag Selection writes per photo, for a dive with a profile.
 #[derive(Debug)]
 pub enum PerPhoto {
@@ -502,18 +495,19 @@ mod tests {
         let mut remembered = Offsets::default();
         remembered.cameras.insert("Nikon|".into(), 60);
         remembered.cameras.insert("TG-7|A1".into(), 120);
-        remember(&applied, &mut remembered);
+        let dir = std::env::temp_dir().join(format!("divelens-selection-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let ss = &divelens_core::subsurface::APP;
+        let md = &divelens_core::macdive::APP;
+        remembered.save(&dir, ss).unwrap();
+        crate::apply::offsets::remember_applied(&dir, ss, &Ok::<usize, _>(1), &applied);
+        let remembered = Offsets::load(&dir, ss);
         assert_eq!(remembered.get("TG-7|A1"), Some(240));
         assert_eq!(remembered.get("GoPro|"), None);
         assert_eq!(remembered.get("Nikon|"), Some(60), "other cameras kept");
 
         // Saved in the application's own file, the one Create Collections
         // reads: another application does not see it.
-        let dir = std::env::temp_dir().join(format!("divelens-selection-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        let ss = &divelens_core::subsurface::APP;
-        let md = &divelens_core::macdive::APP;
-        remembered.save(&dir, ss).unwrap();
         assert_eq!(Offsets::load(&dir, ss).get("TG-7|A1"), Some(240));
         assert_eq!(Offsets::load(&dir, md).get("TG-7|A1"), None);
         let again = selection(&Offsets::load(&dir, ss)).shown(1);

@@ -5,7 +5,7 @@ use chrono::NaiveDateTime;
 use divelens_core::collections::{self as matching, Span};
 use serde::Serialize;
 
-use super::errors::CollectionsError;
+use super::errors::ApplyError;
 use super::offsets::{Offsets, camera_key, parse_time};
 use crate::dive_log::{LogId, SourceInfo};
 use crate::lightroom::FoundPhoto;
@@ -208,14 +208,14 @@ pub(crate) fn keep_search<S>(
     log: &LogId,
     configured: &SourceInfo,
     session: S,
-) -> Result<(), CollectionsError> {
+) -> Result<(), ApplyError> {
     log.check(configured)?;
     if !searches
         .lock()
         .expect("collections")
         .finish(number, session)
     {
-        return Err(CollectionsError::NoPhotos);
+        return Err(ApplyError::NoPhotos);
     }
     Ok(())
 }
@@ -247,14 +247,14 @@ mod tests {
         // The log changed in Settings while Lightroom searched.
         let n = start();
         let kept = keep_search(&searches, n, &a.id(), &b, session());
-        assert!(matches!(kept, Err(CollectionsError::LogChanged)));
+        assert!(matches!(kept, Err(ApplyError::LogChanged)));
         assert!(searches.lock().unwrap().get(n).is_none());
 
         // A newer search started meanwhile: the older one is dropped.
         let older = start();
         let newer = start();
         let kept = keep_search(&searches, older, &a.id(), &a, session());
-        assert!(matches!(kept, Err(CollectionsError::NoPhotos)));
+        assert!(matches!(kept, Err(ApplyError::NoPhotos)));
         assert!(keep_search(&searches, newer, &a.id(), &a, session()).is_ok());
         assert!(searches.lock().unwrap().get(newer).is_some());
         assert!(searches.lock().unwrap().get(older).is_none());
@@ -274,14 +274,14 @@ mod tests {
         // selection: its remembered offsets belong to the previous log.
         assert!(selections.lock().unwrap().start(1));
         let kept = keep_search(&selections, 1, &a.id(), &b, described());
-        assert!(matches!(kept, Err(CollectionsError::LogChanged)));
+        assert!(matches!(kept, Err(ApplyError::LogChanged)));
         assert!(selections.lock().unwrap().get(1).is_none());
         // The selection changed again meanwhile: only the newer one counts,
         // for the counts, "Suggest" and "Apply".
         assert!(selections.lock().unwrap().start(2));
         assert!(selections.lock().unwrap().start(3));
         let kept = keep_search(&selections, 2, &a.id(), &a, described());
-        assert!(matches!(kept, Err(CollectionsError::NoPhotos)));
+        assert!(matches!(kept, Err(ApplyError::NoPhotos)));
         assert!(keep_search(&selections, 3, &a.id(), &a, described()).is_ok());
         assert!(selections.lock().unwrap().get(2).is_none());
         assert_eq!(selections.lock().unwrap().get(3).unwrap().described, 3);

@@ -251,12 +251,6 @@ impl Pending {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "outcome", rename_all = "camelCase")]
 pub enum ApplyOutcome {
-    /// Written on `count` photos, in one Undo step: the GPS and altitude in
-    /// a second catalog write right after the first (spec section 3). Only
-    /// tests build it now: an answer is `Ok(count)`, a refusal this enum's
-    /// `Failed`.
-    #[cfg_attr(not(test), allow(dead_code))]
-    Applied { count: usize },
     /// Nothing written. `reason`: `noSelection`, `busy` (Lightroom kept the
     /// catalog busy), `badRequest`, `staleSearch` (the photos were found in
     /// an earlier link session), `parentNotFound` (the collection set chosen
@@ -1108,7 +1102,7 @@ mod tests {
         let outcome = outcome_rx.recv().unwrap().unwrap_err();
         assert!(outcome.half_written());
         // `ApplyOutcome`'s own JSON, no longer sent to a screen: Tag Selection's
-        // screen reads `TagError::Lightroom` (tag/rules.rs).
+        // screen reads `ApplyError::Lightroom` (apply/errors.rs).
         assert_eq!(
             serde_json::to_value(&outcome).unwrap(),
             serde_json::json!({ "outcome": "failed", "reason": "gpsNotWritten", "detail": "aborted" })
@@ -1125,7 +1119,6 @@ mod tests {
         for reason in ["busy", "error", "noSelection", "staleSearch", "badRequest"] {
             assert!(!failed(reason).half_written(), "{reason}");
         }
-        assert!(!ApplyOutcome::Applied { count: 3 }.half_written());
     }
 
     #[test]
