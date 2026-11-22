@@ -73,7 +73,7 @@ function siteLine(site: Site): string {
 }
 
 /** Why the selection could not be described; null: a newer description replaced this one. */
-function describeFailure(e: CollectionsError): string | null {
+export function describeFailure(e: CollectionsError): string | null {
   switch (e.error) {
     case "noPhotos":
     case "logChanged": // the app reads the log again and starts the screen again
@@ -82,15 +82,15 @@ function describeFailure(e: CollectionsError): string | null {
     case "linkLost":
       return t("tag.disconnected");
     case "lightroom":
-      return t("tag.perPhoto.failed", { detail: e.detail ?? e.reason });
+      return e.detail ? t("tag.perPhoto.failed", { detail: e.detail }) : t("tag.perPhoto.failedNoDetail");
     case "source":
       return t("tag.perPhoto.failed", { detail: e.detail.detail });
     default:
-      return t("tag.perPhoto.failed", { detail: e.error });
+      return t("tag.perPhoto.failedNoDetail");
   }
 }
 
-function failure(e: TagError): string {
+export function failure(e: TagError): string {
   if (selectionChanged(e)) return t("tag.err.selectionChanged");
   const key = e.error === "lightroom" ? e.reason : e.error;
   switch (key) {
@@ -107,10 +107,22 @@ function failure(e: TagError): string {
       return t("tag.err.linkLost");
     case "notConnected":
       return t("tag.err.notConnected");
-    default: {
-      const detail = e.error === "lightroom" ? (e.detail ?? e.reason) : JSON.stringify(e);
-      return t("tag.err.other", { detail });
-    }
+    case "nothingChosen":
+      return t("tag.err.nothingChosen");
+    case "badGps":
+      return t("tag.err.badGps");
+    case "unknownDive":
+      return t("tag.err.unknownDive");
+    case "unknownSite":
+      return t("tag.err.unknownSite");
+    case "logChanged":
+      return t("log.changedNothingWritten");
+    case "badRequest":
+      return t("tag.err.badRequest");
+    default:
+      if (e.error === "source") return t("tag.err.source", { detail: e.detail.detail });
+      // A reason this version does not know: say what it can, never the code.
+      return e.error === "lightroom" && e.detail ? t("tag.err.other", { detail: e.detail }) : t("tag.err.lightroom");
   }
 }
 

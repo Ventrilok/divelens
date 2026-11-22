@@ -36,7 +36,30 @@ type Run =
   | { state: "done"; result: CollectionsResult; choices: CollectionChoices; cameras: Camera[] }
   | { state: "failed"; message: string };
 
-function failure(e: CollectionsError): string {
+/** Why the photos could not be looked for in Lightroom: nothing is written by a search. */
+export function searchFailure(e: CollectionsError): string {
+  switch (e.error) {
+    case "notConnected":
+      return t("coll.search.err.notConnected");
+    case "linkLost":
+      return t("coll.search.err.linkLost");
+    case "nothingToWrite":
+      return t("coll.err.nothingToWrite");
+    case "nothingChosen":
+      return t("coll.err.nothingChosen");
+    case "logChanged":
+      return t("log.changed");
+    case "lightroom":
+      if (e.reason === "busy") return t("coll.search.err.busy");
+      return e.detail ? t("coll.search.err.lightroom", { detail: e.detail }) : t("coll.search.err.generic");
+    case "source":
+      return t("coll.search.err.source", { detail: e.detail.detail });
+    case "noPhotos":
+      return t("coll.search.err.generic");
+  }
+}
+
+export function failure(e: CollectionsError): string {
   switch (e.error) {
     case "notConnected":
       return t("coll.err.notConnected");
@@ -248,7 +271,7 @@ export function CollectionsScreen({
         if (!keep) setNotes({});
         setSearch({ state: "ready", period });
       })
-      .catch((e: CollectionsError) => live && setSearch({ state: "failed", message: failure(e) }));
+      .catch((e: CollectionsError) => live && setSearch({ state: "failed", message: searchFailure(e) }));
     return () => {
       live = false;
     };
