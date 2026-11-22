@@ -46,7 +46,7 @@ export function searchFailure(e: CollectionsError): string {
     case "nothingToWrite":
       return t("coll.err.nothingToWrite");
     case "nothingChosen":
-      return t("coll.err.nothingChosen");
+      return t("coll.search.err.divesGone");
     case "logChanged":
       return t("log.changed");
     case "lightroom":
@@ -81,9 +81,12 @@ export function failure(e: CollectionsError): string {
         return e.detail ? t("coll.err.gpsNotWrittenDetail", { detail: e.detail }) : t("coll.err.gpsNotWritten");
       if (e.reason === "staleSearch") return t("coll.err.noPhotos");
       if (e.reason === "parentNotFound") return t("coll.parentMissing", { path: e.detail ?? "" });
-      return t("coll.err.other", { detail: e.detail ?? e.reason });
+      // Its detail is internal ("bad group"): never shown.
+      if (e.reason === "badRequest") return t("coll.err.badRequest");
+      // A reason this version does not know: never the code.
+      return e.detail ? t("coll.err.other", { detail: e.detail }) : t("coll.err.lightroom");
     case "source":
-      return t("coll.err.other", { detail: e.detail.detail });
+      return t("coll.err.source", { detail: e.detail.detail });
   }
 }
 

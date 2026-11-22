@@ -64,6 +64,25 @@ describe.each(["en", "fr"] as const)("Tag Selection failure texts (%s)", (lang) 
     if (e.error === "lightroom" && e.detail === null && e.reason !== "busy") expect(text).not.toContain(e.reason);
   });
 
+  const nothingWritten = lang === "en" ? "Nothing was written" : "Rien n'a été écrit";
+  const undo = lang === "en" ? "Undo Tag Selection (Dive Lens)" : "Annuler Tagger la sélection (Dive Lens)";
+
+  it("gpsNotWritten and linkLost say what was written, never that nothing was", () => {
+    for (const detail of [DETAIL, null]) {
+      const text = failure({ error: "lightroom", reason: "gpsNotWritten", detail });
+      expect(text).not.toContain(nothingWritten);
+      expect(text).toContain(undo);
+    }
+    expect(failure({ error: "linkLost" })).not.toContain(nothingWritten);
+  });
+
+  it("every other write failure says that nothing was written", () => {
+    const others = writeErrors.filter(
+      (e) => e.error !== "linkLost" && !(e.error === "lightroom" && e.reason === "gpsNotWritten"),
+    );
+    for (const e of others) expect(failure(e), JSON.stringify(e)).toContain(nothingWritten);
+  });
+
   it("read: a newer description replaced this one", () => {
     expect(describeFailure({ error: "noPhotos" })).toBeNull();
     expect(describeFailure({ error: "logChanged" })).toBeNull();
