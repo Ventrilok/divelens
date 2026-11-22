@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage, t } from "../i18n";
-import { canApplyTag, describeAgain, selectionChanged, tagBlocker, tagSummary } from "./rules";
+import { canApplyTag, describeAgain, gpsRefused, readingAfterFailure, selectionChanged, tagBlocker, tagSummary } from "./rules";
 import type { Dive } from "../types";
 
 beforeEach(() => setLanguage("en"));
@@ -153,5 +153,47 @@ describe("describeAgain", () => {
   it("leaves it as it is for a refusal before Lightroom was reached", () => {
     expect(describeAgain({ error: "badGps" }, true)).toBe(false);
     expect(describeAgain({ error: "notConnected" }, true)).toBe(false);
+  });
+});
+
+describe("readingAfterFailure", () => {
+  it("ends the reading of the latest description and describes again, once", () => {
+    expect(readingAfterFailure({ error: "noPhotos" }, true)).toEqual({ reading: false, message: null, describeAgain: true });
+    expect(readingAfterFailure({ error: "noPhotos" }, true, true)).toEqual({
+      reading: false,
+      message: t("tag.perPhoto.failedNoDetail"),
+      describeAgain: false,
+    });
+  });
+
+  it("changes nothing when a newer description replaced this one", () => {
+    expect(readingAfterFailure({ error: "noPhotos" }, false)).toBeNull();
+    expect(readingAfterFailure({ error: "linkLost" }, false)).toBeNull();
+  });
+
+  it("ends the reading without a message when the log changed (the app starts the screen again)", () => {
+    expect(readingAfterFailure({ error: "logChanged" }, true)).toEqual({ reading: false, message: null, describeAgain: false });
+  });
+
+  it("ends the reading and leaves the wording of any other failure to the screen", () => {
+    expect(readingAfterFailure({ error: "linkLost" }, true)).toEqual({ reading: false, describeAgain: false });
+  });
+});
+
+describe("gpsRefused", () => {
+  const base = { withPlace: true, placeKind: "diveSite" as const, diveSiteUsable: false, siteId: "s1", gpsValid: false };
+  it("flags an invalid position as soon as another site is written, whatever the place kind", () => {
+    expect(gpsRefused(base)).toBe(true);
+    expect(gpsRefused({ ...base, placeKind: "site" })).toBe(true);
+    expect(gpsRefused({ ...base, gpsValid: true })).toBe(false);
+  });
+  it("does not flag when the dive's site is used, no site is picked or no place is written", () => {
+    expect(gpsRefused({ ...base, diveSiteUsable: true })).toBe(false);
+    expect(gpsRefused({ ...base, siteId: null })).toBe(false);
+    expect(gpsRefused({ ...base, withPlace: false })).toBe(false);
+  });
+  it("blocks Apply with the bad position text when the dive's site is unusable", () => {
+    const gpsError = gpsRefused(base);
+    expect(tagBlocker({ ...ok, usesDiveSite: false, pickedSite: true, gpsError })).toBe(t("tag.badGps"));
   });
 });

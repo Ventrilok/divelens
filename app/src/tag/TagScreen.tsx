@@ -34,7 +34,7 @@ import { useDiveBrowser } from "../dives/useDiveBrowser";
 import type { Sort } from "../dives/filters";
 import { formatInt, t, tn } from "../i18n";
 import { gpsInput } from "./sites";
-import { canApplyTag, describeAgain, selectionChanged, tagBlocker, tagSummary } from "./rules";
+import { canApplyTag, describeAgain, gpsRefused, readingAfterFailure, selectionChanged, tagBlocker, tagSummary } from "./rules";
 import type {
   CollectionsError,
   Dive,
@@ -197,6 +197,8 @@ export function TagScreen({
   const [reading, setReading] = useState(false);
   const [readFailure, setReadFailure] = useState<string | null>(null);
   const [again, setAgain] = useState(0);
+  // The selection version already described again after a lost description: at most once each.
+  const retried = useRef<number | null>(null);
   const [offsets, setOffsets] = useState<Record<string, number>>({});
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState<Record<string, string>>({});
@@ -225,10 +227,14 @@ export function TagScreen({
         setReading(false);
       })
       .catch((e: CollectionsError) => {
-        const message = live ? describeFailure(e) : null;
-        if (!message) return;
-        setReadFailure(message);
-        setReading(false);
+        const after = readingAfterFailure(e, live, retried.current === version);
+        if (!after) return;
+        setReadFailure(after.message !== undefined ? after.message : describeFailure(e));
+        setReading(after.reading);
+        if (after.describeAgain) {
+          retried.current = version;
+          setAgain((n) => n + 1);
+        }
       });
     return () => {
       live = false;
@@ -291,7 +297,7 @@ export function TagScreen({
   const usesDiveSite = withPlace && placeKind === "diveSite" && diveSiteUsable;
   const pickedSite = sites.find((s) => s.id === pick.siteId) ?? null;
   const gps = gpsInput(pick.lat, pick.lon);
-  const gpsError = withPlace && placeKind === "site" && pick.siteId !== null && gps === undefined;
+  const gpsError = gpsRefused({ withPlace, placeKind, diveSiteUsable, siteId: pick.siteId, gpsValid: gps !== undefined });
 
   // Without a usable dive site, the location can only be another site; the
   // dive's site comes back by itself once a dive with a site is chosen.
@@ -467,6 +473,7 @@ export function TagScreen({
                                 note={notes[c.key] || null}
                                 onOffset={(m) => setOffset(c.key, m)}
                                 onSuggest={() => suggest(c.key)}
+                                disabled={writing}
                               />
                             );
                           })}

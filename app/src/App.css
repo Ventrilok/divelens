@@ -65,6 +65,7 @@ button { font: inherit; }
 .btn-g:hover { background: var(--btn); color: var(--text); }
 .inp { min-height: 40px; padding: 0 12px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--line-strong); color: var(--text); font: inherit; }
 .inp:focus-visible, .btn:focus-visible, .chip button:focus-visible, .nav:focus-visible, .list-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.inp:disabled { opacity: 0.5; cursor: not-allowed; }
 .inp-num { width: 90px; }
 /* Dropdowns: drawn like the other fields on macOS and Windows; the open list
    stays the system's menu. */
@@ -282,6 +283,7 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .cam-c { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .slider { flex: 1 1 200px; display: flex; flex-direction: column; gap: 2px; }
 .slider input { width: 100%; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.slider input:disabled { opacity: 0.5; cursor: not-allowed; }
 .slider input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .slider-scale { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .off-field { width: 92px; text-align: center; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -290,7 +292,8 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .step:hover:not(:disabled) { background: var(--btn-hover); }
 .step:disabled { opacity: 0.5; cursor: not-allowed; }
 .mini { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 10px; border-radius: 8px; background: transparent; border: 1px solid transparent; color: var(--text-3); font-weight: 600; font-size: 13px; cursor: pointer; }
-.mini:hover { background: var(--btn); color: var(--text); }
+.mini:hover:not(:disabled) { background: var(--btn); color: var(--text); }
+.mini:disabled { opacity: 0.5; cursor: not-allowed; }
 .step:focus-visible, .mini:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .cam-f { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-3); }
 .cam-f .bar { flex: 1; height: 5px; }

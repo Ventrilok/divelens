@@ -10,7 +10,17 @@ import type { Camera } from "../types";
 import { Icon } from "../ui/Icon";
 
 /** Offset typed to the minute; arrows add or remove a minute. */
-function OffsetField({ offset, label, onOffset }: { offset: number; label: string; onOffset: (min: number) => void }) {
+function OffsetField({
+  offset,
+  label,
+  onOffset,
+  disabled,
+}: {
+  offset: number;
+  label: string;
+  onOffset: (min: number) => void;
+  disabled: boolean;
+}) {
   const [text, setText] = useState(offsetField(offset));
   const [editing, setEditing] = useState(false);
   useEffect(() => {
@@ -28,6 +38,7 @@ function OffsetField({ offset, label, onOffset }: { offset: number; label: strin
       className="inp off-field"
       aria-label={label}
       aria-invalid={bad}
+      disabled={disabled}
       value={text}
       onFocus={() => setEditing(true)}
       onChange={(e) => setText(e.target.value)}
@@ -61,6 +72,7 @@ export function CameraCard({
   onSuggest,
   ignored = false,
   onIgnore,
+  disabled = false,
 }: {
   camera: Camera;
   offset: number;
@@ -78,6 +90,8 @@ export function CameraCard({
   ignored?: boolean;
   /** Without it, the camera cannot be ignored. */
   onIgnore?: (ignored: boolean) => void;
+  /** Frozen while the screen writes: nothing on the card can be changed. */
+  disabled?: boolean;
 }) {
   const warn = !ignored && inDives === 0;
   const name = camera.model ?? t("coll.unknownCamera");
@@ -101,7 +115,7 @@ export function CameraCard({
         </div>
         {onIgnore && (
           <label className="ign">
-            <input type="checkbox" checked={ignored} onChange={(e) => onIgnore(e.target.checked)} />
+            <input type="checkbox" checked={ignored} disabled={disabled} onChange={(e) => onIgnore(e.target.checked)} />
             {t("coll.ignore")}
           </label>
         )}
@@ -120,6 +134,7 @@ export function CameraCard({
                 value={Math.max(-SLIDER_RANGE_MIN, Math.min(SLIDER_RANGE_MIN, offset))}
                 aria-label={t("coll.offset", { camera: name })}
                 aria-valuetext={offsetField(offset)}
+                disabled={disabled}
                 onChange={(e) => onOffset(Number(e.target.value))}
               />
               <div className="slider-scale" aria-hidden="true">
@@ -128,8 +143,8 @@ export function CameraCard({
                 <span>+14 h</span>
               </div>
             </div>
-            <OffsetField offset={offset} label={t("coll.offsetField", { camera: name })} onOffset={onOffset} />
-            <button type="button" className="mini" onClick={onSuggest}>
+            <OffsetField offset={offset} label={t("coll.offsetField", { camera: name })} onOffset={onOffset} disabled={disabled} />
+            <button type="button" className="mini" onClick={onSuggest} disabled={disabled}>
               <Icon name="spark" size={15} />
               {t("coll.suggest")}
             </button>

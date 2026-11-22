@@ -21,6 +21,32 @@ describe("collectionsBlocker", () => {
     expect(collectionsBlocker({ ...ok, preview: null })).toBeNull();
   });
 
+  it("says the photos are no longer available when the counts failed, in both languages", () => {
+    const failed = { ...ok, preview: null, previewFailed: true };
+    expect(collectionsBlocker(failed)).toBe(t("coll.previewFailed"));
+    expect(t("coll.previewFailed")).not.toBe("");
+    setLanguage("fr");
+    expect(collectionsBlocker(failed)).toBe(t("coll.previewFailed"));
+    expect(t("coll.previewFailed")).not.toBe("");
+    expect(t("coll.previewFailed")).not.toBe("coll.previewFailed");
+  });
+
+  it("says the photos are being searched when the search restarts after a failed preview", () => {
+    expect(collectionsBlocker({ ...ok, search: { state: "searching" }, preview: null, previewFailed: true })).toBe(
+      t("coll.searching"),
+    );
+  });
+
+  it("keeps the earlier blockers before a failed preview", () => {
+    expect(collectionsBlocker({ ...ok, preview: null, previewFailed: true, parentMissing: true })).toBe(
+      t("coll.parentMissing", { path: ok.parent.join(" › ") }),
+    );
+  });
+
+  it("stays silent while the counts have simply not arrived", () => {
+    expect(collectionsBlocker({ ...ok, preview: null, previewFailed: false })).toBeNull();
+  });
+
   it("says Lightroom is disconnected first", () => {
     const all = { ...ok, connected: false, search: { state: "searching" }, parentMissing: true, preview: preview(0) };
     expect(collectionsBlocker(all as never)).toBe(t("coll.disconnected"));

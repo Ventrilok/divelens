@@ -2,7 +2,7 @@
 // kept apart from the screen so that they can be tested.
 
 import { t } from "../i18n";
-import type { Dive, TagError } from "../types";
+import type { CollectionsError, Dive, TagError } from "../types";
 
 /** What the screen knows when it decides whether Apply is allowed. */
 export interface TagState {
@@ -65,4 +65,41 @@ export function selectionChanged(e: TagError): boolean {
  */
 export function describeAgain(e: TagError, needsValues: boolean): boolean {
   return selectionChanged(e) || (e.error === "lightroom" && needsValues);
+}
+
+/** What the screen does when describing the selection failed; `message` undefined: the screen words the failure. */
+export interface AfterFailure {
+  reading: boolean;
+  message?: string | null;
+  /** Describe the selection once more (the answer was lost, not the selection). */
+  describeAgain: boolean;
+}
+
+/**
+ * The state after a failed description of the selection. null: a newer description replaced this one and owns
+ * the reading, nothing changes. Otherwise the reading always ends. A lost description (noPhotos) is asked again
+ * once per selection (`retried`: already done); the second time it says why. A changed log needs nothing: the
+ * app reads it again and starts the screen again.
+ */
+export function readingAfterFailure(e: CollectionsError, live: boolean, retried = false): AfterFailure | null {
+  if (!live) return null;
+  if (e.error === "logChanged") return { reading: false, message: null, describeAgain: false };
+  if (e.error === "noPhotos") {
+    return retried
+      ? { reading: false, message: t("tag.perPhoto.failedNoDetail"), describeAgain: false }
+      : { reading: false, message: null, describeAgain: true };
+  }
+  return { reading: false, describeAgain: false };
+}
+
+/** The place written is another site, one is picked, and the position typed is not valid: Apply is refused. */
+export function gpsRefused(s: {
+  withPlace: boolean;
+  placeKind: "diveSite" | "site";
+  diveSiteUsable: boolean;
+  siteId: string | null;
+  gpsValid: boolean;
+}): boolean {
+  const usesDiveSite = s.withPlace && s.placeKind === "diveSite" && s.diveSiteUsable;
+  return s.withPlace && !usesDiveSite && s.siteId !== null && !s.gpsValid;
 }
