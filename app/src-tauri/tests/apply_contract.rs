@@ -73,17 +73,31 @@ fn plugin_and_app_know_the_same_reasons() {
 #[test]
 fn every_reason_has_a_text() {
     let failure = repo_file("app/src/apply/failure.ts");
+    // Only the switch on the plug-in's reason in `applyFailure`: from its
+    // `switch (e.reason)` line to the closing brace at the same indent.
+    let mut lines = failure.lines();
+    let anchor = lines
+        .by_ref()
+        .find(|l| l.trim() == "switch (e.reason) {")
+        .expect("`switch (e.reason) {` not found in app/src/apply/failure.ts");
+    let indent = &anchor[..anchor.len() - anchor.trim_start().len()];
+    let closing = format!("{indent}}}");
+    let switch: Vec<&str> = lines.take_while(|l| l.trim_end() != closing).collect();
+    assert!(
+        !switch.is_empty(),
+        "the switch on e.reason in failure.ts is empty"
+    );
     let missing: Vec<&str> = divelens_lib::APPLY_REASONS
         .iter()
         .copied()
         .filter(|reason| {
             let wanted = format!("case \"{reason}\"");
-            !failure.lines().any(|l| l.trim().starts_with(&wanted))
+            !switch.iter().any(|l| l.trim().starts_with(&wanted))
         })
         .collect();
     assert!(
         missing.is_empty(),
-        "app/src/apply/failure.ts has no `case \"<reason>\"` for: {missing:?}"
+        "the switch on e.reason in app/src/apply/failure.ts has no `case \"<reason>\"` for: {missing:?}"
     );
 }
 
@@ -109,9 +123,19 @@ fn the_undo_names_match() {
     for (source, key, i18n_key) in [
         ("ApplyTags.lua", "TagSelection", "tag.err.gpsNotWritten"),
         (
+            "ApplyTags.lua",
+            "TagSelection",
+            "tag.err.gpsNotWrittenDetail",
+        ),
+        (
             "ApplyCollections.lua",
             "CreateCollections",
             "coll.err.gpsNotWritten",
+        ),
+        (
+            "ApplyCollections.lua",
+            "CreateCollections",
+            "coll.err.gpsNotWrittenDetail",
         ),
     ] {
         let (english, french) = undo_names(&plugin_file(source), key);
