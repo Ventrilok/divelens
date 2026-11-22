@@ -36,7 +36,30 @@ type Run =
   | { state: "done"; result: CollectionsResult; choices: CollectionChoices; cameras: Camera[] }
   | { state: "failed"; message: string };
 
-function failure(e: CollectionsError): string {
+/** Why the photos could not be looked for in Lightroom: nothing is written by a search. */
+export function searchFailure(e: CollectionsError): string {
+  switch (e.error) {
+    case "notConnected":
+      return t("coll.search.err.notConnected");
+    case "linkLost":
+      return t("coll.search.err.linkLost");
+    case "nothingToWrite":
+      return t("coll.err.nothingToWrite");
+    case "nothingChosen":
+      return t("coll.search.err.divesGone");
+    case "logChanged":
+      return t("log.changed");
+    case "lightroom":
+      if (e.reason === "busy") return t("coll.search.err.busy");
+      return e.detail ? t("coll.search.err.lightroom", { detail: e.detail }) : t("coll.search.err.generic");
+    case "source":
+      return t("coll.search.err.source", { detail: e.detail.detail });
+    case "noPhotos":
+      return t("coll.search.err.generic");
+  }
+}
+
+export function failure(e: CollectionsError): string {
   switch (e.error) {
     case "notConnected":
       return t("coll.err.notConnected");
@@ -58,9 +81,12 @@ function failure(e: CollectionsError): string {
         return e.detail ? t("coll.err.gpsNotWrittenDetail", { detail: e.detail }) : t("coll.err.gpsNotWritten");
       if (e.reason === "staleSearch") return t("coll.err.noPhotos");
       if (e.reason === "parentNotFound") return t("coll.parentMissing", { path: e.detail ?? "" });
-      return t("coll.err.other", { detail: e.detail ?? e.reason });
+      // Its detail is internal ("bad group"): never shown.
+      if (e.reason === "badRequest") return t("coll.err.badRequest");
+      // A reason this version does not know: never the code.
+      return e.detail ? t("coll.err.other", { detail: e.detail }) : t("coll.err.lightroom");
     case "source":
-      return t("coll.err.other", { detail: e.detail.detail });
+      return t("coll.err.source", { detail: e.detail.detail });
   }
 }
 
@@ -248,7 +274,7 @@ export function CollectionsScreen({
         if (!keep) setNotes({});
         setSearch({ state: "ready", period });
       })
-      .catch((e: CollectionsError) => live && setSearch({ state: "failed", message: failure(e) }));
+      .catch((e: CollectionsError) => live && setSearch({ state: "failed", message: searchFailure(e) }));
     return () => {
       live = false;
     };
