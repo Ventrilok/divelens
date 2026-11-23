@@ -1,4 +1,3 @@
-import { applyChange, revertChange } from "./settings/save";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   appInfo,
@@ -17,6 +16,7 @@ import {
   updateSettings,
   updateStatus,
 } from "./api";
+import { revertChange } from "./settings/save";
 import { unitsInUse } from "./collections/collectionPlace";
 import { latestOnly, logChangedNotice, logWatch, sameLogSetting } from "./diveLog";
 import { profiles } from "./dives/profiles";
@@ -77,6 +77,12 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   }, []);
   const [state, setState] = useState<LogState>({ status: "loading" });
   const [settings, setSettings] = useState<Settings>(initialSettings);
+  // What the settings file holds: the screen may show a change not saved yet.
+  const savedSettings = useRef(initialSettings);
+  const showSaved = useCallback((s: Settings) => {
+    savedSettings.current = s;
+    setSettings(s);
+  }, []);
   // Why the last change of settings was not made (a ChangeError), or null.
   const [saveError, setSaveError] = useState<unknown>(null);
   const [info, setInfo] = useState<AppInfo | null>(null);
@@ -134,7 +140,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
     onLogChanged((applied) => {
       setLogNotice((current) => logChangedNotice(current, applied));
       load();
-      getSettings().then(setSettings);
+      getSettings().then(showSaved);
     });
   }, [load]);
   const notice = logNotice && t(logNotice);
@@ -160,7 +166,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   // Settings changed elsewhere (back end) reach this window too.
   useEffect(() => {
     appInfo().then(setInfo);
-    const stop = onSettingsChanged(setSettings);
+    const stop = onSettingsChanged(showSaved);
     return () => {
       stop.then((f) => f());
     };
@@ -170,24 +176,19 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   setLanguage(settings.language);
 
   const change = useCallback((patch: Partial<Settings>) => {
-    // Shown at once; if saving fails, the previous value comes back (a new
-    // dive log is read once its location is saved, not before).
-    let previous: Partial<Settings> = {};
-    setSettings((s) => {
-      const applied = applyChange(s, patch);
-      previous = applied.previous;
-      return applied.next;
-    });
+    // Shown at once (a new dive log is read once its location is saved, not
+    // before); if saving fails, the last saved value comes back.
+    if (!patch.source) setSettings((s) => ({ ...s, ...patch }));
     updateSettings(patch)
       .then((s) => {
-        setSettings(s);
+        showSaved(s);
         setSaveError(null);
       })
       .catch((e: unknown) => {
-        setSettings((s) => revertChange(s, patch, previous));
+        setSettings((s) => revertChange(s, patch, savedSettings.current));
         setSaveError(e);
       });
-  }, []);
+  }, [showSaved]);
 
   const sort: Sort = settings.diveSort ?? "recent";
   const onSort = useCallback((s: Sort) => change({ diveSort: s }), [change]);
