@@ -103,21 +103,19 @@ fn every_reason_has_a_text() {
 
 #[test]
 fn the_undo_names_match() {
-    let i18n = repo_file("app/src/i18n.ts");
-    // The i18n has an English block, then a French one: the first and the
-    // last line of a key are the English and the French text.
-    let line_of = |key: &str, french: bool| -> String {
+    // Each language's texts are in a file of their own.
+    const ENGLISH: &str = "app/src/i18n/en.ts";
+    const FRENCH: &str = "app/src/i18n/fr.ts";
+    let english_texts = repo_file(ENGLISH);
+    let french_texts = repo_file(FRENCH);
+    // The line that holds the text of `key` in one language's file.
+    let line_of = |texts: &str, file: &str, key: &str| -> String {
         let prefix = format!("\"{key}\":");
-        let mut found = i18n
+        texts
             .lines()
             .map(str::trim)
-            .filter(|l| l.starts_with(&prefix));
-        let line = if french {
-            found.next_back()
-        } else {
-            found.next()
-        };
-        line.unwrap_or_else(|| panic!("no text {key} in app/src/i18n.ts"))
+            .find(|l| l.starts_with(&prefix))
+            .unwrap_or_else(|| panic!("no text {key} in {file}"))
             .to_string()
     };
     for (source, key, i18n_key) in [
@@ -144,11 +142,11 @@ fn the_undo_names_match() {
             "empty Undo name for {key}"
         );
         assert!(
-            line_of(i18n_key, false).contains(&english),
+            line_of(&english_texts, ENGLISH, i18n_key).contains(&english),
             "{i18n_key} (English) does not name the Undo \"{english}\" of {source}"
         );
         assert!(
-            line_of(i18n_key, true).contains(&french),
+            line_of(&french_texts, FRENCH, i18n_key).contains(&french),
             "{i18n_key} (French) does not name the Undo \"{french}\" of {source}"
         );
     }
