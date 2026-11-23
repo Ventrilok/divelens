@@ -48,7 +48,7 @@
 | A7 Option altitude lue par Tag seulement avec valeurs par photo | Aligné : lue au même endroit pour les deux, résultat identique (sans valeur par photo, rien à copier) | Task 3 |
 | A8 Décalages mémorisés selon deux règles | Aligné sur la règle de Tag : écrit ou à moitié écrit, et au moins un décalage appliqué | Task 3 |
 | A9 Deux types d'erreur pour Tag | Aligné : l'écriture de Tag renvoie ses refus de Lightroom comme Collections (en erreur) | Task 3 |
-| A10 Verrous empoisonnés | Phase 4 (n°13) | Task 12 |
+| A10 Verrous empoisonnés | Sans objet (décision du propriétaire, 2026-11-23) : la version publiée s'arrête net sur une panne interne, aucun verrou n'y est jamais empoisonné | Task 12, abandonnée |
 | A11 Trois traducteurs, code brut dans Tag (n°1) | Textes lisibles en Task 4 ; un seul traducteur en Task 9 | Tasks 4, 9 |
 | A12 Tag bloqué sur « Lecture de la sélection… » | Corrigé (accepté par le propriétaire le 2026-11-21) | Task 5 |
 | A13 GPS invalide abandonné en silence | Corrigé (accepté) | Task 5 |
@@ -72,9 +72,9 @@
 | 3e | `refactor/one-catalog-write` | 7 | fusion (plug-in) |
 | 3f | `refactor/one-apply-engine` | 8 | fusion (moteur) |
 | 3g | `refactor/one-apply-interface` | 9, 10 | fusion (interface) + test n°5 |
-| — | — | recette | contrôles 1 à 18 sur macOS |
+| — | — | recette | regroupée avec la recette finale (Task 13), décision du propriétaire du 2026-11-23 |
 | 4a | `fix/settings-revert-on-failure` | 11 | correction n°4 |
-| 4b | `fix/recover-after-internal-failure` | 12 | correction n°13 |
+| 4b | — | 12 | abandonnée, sans objet (voir Task 12) |
 | — | — | 13 | recette, puis version |
 
 Le choix du spec « phase 3 en deux pull requests » devient plusieurs PR plus petites, par surface ; le principe tient : toutes les corrections avant les fusions, jamais mélangées dans une même PR.
@@ -292,6 +292,8 @@ Sur le modèle de `the_plugin_speaks_the_same_protocol` (lecture de texte ligne 
 - [ ] **Step 5: Commit** `fix(app): show the previous setting when saving it fails`
 
 ### Task 12: L'app se rétablit partout après une panne interne (n°13, A10)
+
+> **Abandonnée le 2026-11-23, décision du propriétaire.** La version publiée est construite avec `panic = "abort"` (`[profile.release]` du `Cargo.toml` racine) : une panne interne ferme l'app tout entière, aucun verrou n'est donc jamais empoisonné chez le plongeur, et cette correction n'agirait que dans les builds de développement. Faire survivre l'app publiée à une panne interne serait un autre changement, non prévu.
 
 **Files:**
 - Create: `app/src-tauri/src/locks.rs`
