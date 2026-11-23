@@ -1,3 +1,4 @@
+import { applyChange, revertChange } from "./settings/save";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   appInfo,
@@ -169,15 +170,23 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   setLanguage(settings.language);
 
   const change = useCallback((patch: Partial<Settings>) => {
-    // A new dive log is read once its location is saved, not before (the
-    // back end reads the saved settings).
-    if (!patch.source) setSettings((s) => ({ ...s, ...patch }));
+    // Shown at once; if saving fails, the previous value comes back (a new
+    // dive log is read once its location is saved, not before).
+    let previous: Partial<Settings> = {};
+    setSettings((s) => {
+      const applied = applyChange(s, patch);
+      previous = applied.previous;
+      return applied.next;
+    });
     updateSettings(patch)
       .then((s) => {
         setSettings(s);
         setSaveError(null);
       })
-      .catch((e: unknown) => setSaveError(e));
+      .catch((e: unknown) => {
+        setSettings((s) => revertChange(s, patch, previous));
+        setSaveError(e);
+      });
   }, []);
 
   const sort: Sort = settings.diveSort ?? "recent";
