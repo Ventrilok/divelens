@@ -3,7 +3,8 @@ The Lightroom photo selection, for the DiveLens app. The plugin pushes the
 current selection whenever it changes, with its first thumbnails, and
 describes it photo by photo when the app asks (Tag Selection's per-photo
 values). The link task (Link.lua) calls push and sendThumbnails on its
-ticks, and describe on a "describeSelection" message.
+ticks, describe on a "describeSelection" message and count on a
+"countPhotos" message (the size of the whole catalog).
 
 Part of DiveLens, GPL-3.0-or-later.
 ]]
@@ -136,6 +137,12 @@ function Selection.describe(s, message)
     s.described = { id = message.id, set = set }
     Log.debug("selection described: %d photos", #list)
     Selection.sendPhotos(s, message.id, list)
+end
+
+-- The number of photos in the whole catalog, for the app's status bar.
+function Selection.count(s, message)
+    local count = #LrApplication.activeCatalog():getAllPhotos()
+    Send.toApp(s, { type = "catalogSize", id = message.id, count = count })
 end
 
 return Selection

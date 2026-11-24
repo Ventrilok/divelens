@@ -349,3 +349,51 @@ Branche `feat/catalogue-size`, titre `feat(link): report the number of photos in
 - [ ] `main` contient les Tasks 1 à 7, CI verte sur macOS et Windows.
 - [ ] `git diff <main avant la Task 2>..main -- app/src/**/*.tsx` est vide : aucun écran n'a changé.
 - [ ] Noter dans une annexe à ce fichier (« Notes pour les phases 2 à 4 ») tout ce que l'exécution a appris : écarts trouvés par `plugin_options.rs`, noms définitifs, limites rencontrées. Le plan des phases 2 à 4 s'écrit à partir de la note de conception et de cette annexe.
+
+---
+
+## Notes pour les phases 2 à 4
+
+Écrites à la fin de la phase 1 (2026-11-24), à partir de l'exécution et de ses relectures. Le plan des phases 2 à 4 part de la note de conception, de la spécification réécrite et de cette annexe.
+
+### Ce que la phase 1 a livré, avec les noms définitifs
+
+- `core/src/tags.rs` : `Kept { dive, place, gps, collections }`, `LocationTags::keep`, `CollectionsRequest::keep(kept, other_site)`, `TagRequest::keep(kept)`, `is_empty` sur les deux, `CollectionPlace { name, parent, group }`, `TagRequest.collection`, `CollectionGroup` aux trois champs facultatifs.
+- `app/src-tauri/src/apply/options.rs` : `WriteOptions { dive, altitude: Option<bool>, place, gps, collections }` (`altitude: None` = le réglage décide ; le parcours enverra toujours `Some`).
+- `app/src-tauri/src/apply/site.rs` : `another_site`, `check_gps`, `find_site`, pour les deux chemins.
+- Commandes : `tag_selection` prend `TagChoice.options` ; `apply_collections` prend `options` et `otherSite` ; `refresh_catalog_size` (sans attente) ; le statut Lightroom porte `catalogPhotos`.
+- Réponses : `TagApplied.collection` (la collection de la sélection) ; `CollectionsResult.collections` ne liste que les groupes nommés.
+- Plug-in : `Tagging.planCollection`, `selectionCollection`, `namesCollections`, `divePhotos` ; `CatalogWrite.holder` ; `Selection.count`. Protocole 7.
+- `tests/plugin_options.rs` : toutes les combinaisons d'options, pour chaque chemin, comparées à la liste exacte de ce qui est écrit et effacé.
+
+### Décisions prises en route
+
+- Sans aucune collection demandée, le plug-in ne cherche aucun ensemble de collections : un ensemble introuvable ne bloque « Appliquer » que si « Créer les collections » est cochée.
+- Chemin « sélection », « Détails de la plongée » décochée : les décalages des appareils qui ont une photo dans la plongée restent mémorisés ; la courbe n'est pas lue. Une description de sélection que l'app n'a plus fait refuser « Appliquer », comme avec la case cochée.
+- Chemin « catalogue », avec des options : les courbes sont lues comme aujourd'hui (une courbe illisible fait échouer « Appliquer », même « Détails de la plongée » décochée).
+- `otherSite` sans `options` est appliqué, tout coché.
+- Sans option envoyée, les deux commandes prennent exactement le chemin d'avant la phase 1. La phase 3 supprime ce chemin avec les anciens écrans, et avec lui la lecture du réglage d'altitude.
+
+### À traiter dans le plan des phases 2 à 4
+
+- **Récapitulatif (étape 5)** : avec des options, un groupe auquel il ne reste rien à écrire est retiré de la demande sans apparaître ni dans `collections` ni dans `empty_dives`. Le récapitulatif en a besoin. Avec « Créer les collections » décochée, aucune collection n'est renvoyée : l'écran ne doit pas afficher de nom vide.
+- **`gpsNotWritten`** : la réponse du plug-in perd alors le résultat des collections (les deux chemins). À corriger avant que le récapitulatif n'en dépende.
+- **Chemin « sélection », plongée décochée** : la demande ne porte plus le numéro de la sélection décrite ; le plug-in ne vérifie donc plus que la sélection est celle dont viennent les décalages mémorisés. À décider avec l'écran de l'étape 4.
+- **Sites lus pour rien** : avec « Autre site » et ni lieu ni GPS cochés, le carnet est quand même lu et peut refuser « site inconnu ». L'écran grisera sans doute le choix du site dans ce cas.
+- **Textes** : le refus « La sélection a changé… vérifiez les données par photo » s'affichera à l'étape 4, où ces données ne sont pas visibles ; « Appliquer grisé pendant la lecture de la sélection » concerne maintenant l'étape 3. Deux textes à soumettre au propriétaire.
+- **Rangement** : `lightroom.rs` a grossi (environ 400 lignes, surtout des tests) : le découper avant d'y ajouter ; `tag/rules.rs` et `collections.rs` deviendront un seul module « parcours ».
+- **Petits tests à ajouter** : un groupe retiré pendant qu'un autre reste ; une réponse `collectionsApplied` avec un groupe sans nom lue côté Rust ; la commande `refresh_catalog_size` elle-même ; renommer `tag_request_another_site_is_not_applied_here` et `unknown_dive_or_site_is_refused` ; reformuler l'ancienne assertion `{ collection = "x" }` de `plugin_collections.rs`, qui passe désormais pour une autre raison ; `another_site_alone_means_everything_ticked` avec le réglage d'altitude désactivé.
+- **Faire des décisions testées de deux gardes d'enveloppe** : `collectionWrites` pourrait dire quels groupes créent une collection, au lieu du test `g.collection and #group.photos > 0` dans `ApplyCollections.lua` et de son équivalent dans `ApplyTags.lua`.
+
+### À vérifier dans Lightroom (phase 4, vérifications et recette)
+
+- Chemin « sélection » avec collection : la collection existante est complétée, sans doublon, et annoncée « complétée » ; les noms sont comparés exactement.
+- Première utilisation de l'ensemble « Dive Lens » dans un catalogue, sur les deux chemins : sa création est une étape d'annulation à part ; si l'écriture est ensuite refusée, l'ensemble vide reste. À dire dans le guide.
+- « GPS » seul coché : la première écriture ne change rien, puis l'écriture du GPS ; un seul « Annuler » doit tout défaire.
+- Taille du catalogue : affichée, égale à « Toutes les photos » de Lightroom, recomptée au retour sur l'étape 1.
+- Un plug-in resté en protocole 6 face à l'app en 7 : état « redémarrez Lightroom ».
+- Windows : « Annuler » unique, toujours en attente.
+
+### Données d'exemple
+
+Les tests ajoutés en phase 1 utilisent un site inventé. La spécification et ce plan citent encore l'exemple des maquettes (« 707 - Maaya Thila ») : le propriétaire dira s'il faut le remplacer.

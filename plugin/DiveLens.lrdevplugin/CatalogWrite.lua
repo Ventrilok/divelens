@@ -153,6 +153,46 @@ function CatalogWrite.apply(s, id, job)
     job.log(result, second)
 end
 
+-- Where a collection goes, looked up (and its group set created when
+-- needed) before the write: `place` = { parent = set names from the root,
+-- group = set name or nil } (Tagging.planCollections, planCollection).
+-- Returns `holder` (what lists the collections already there) and
+-- `container` (what Lightroom's create functions take: nil for the
+-- catalog's root), or nil after calling `fail(reason, detail)`.
+function CatalogWrite.holder(catalog, place, fail)
+    local holder = Tagging.findSet(catalog, place.parent)
+    if not holder then
+        fail("parentNotFound", table.concat(place.parent, " › "))
+        return nil
+    end
+    local container = #place.parent > 0 and holder or nil
+
+    -- The group set is created on its own the first time: a set created
+    -- inside a write cannot be used before that write ends.
+    if place.group then
+        local set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
+        if not set then
+            local ok, status = LrTasks.pcall(function()
+                return catalog:withWriteAccessDo(place.group, function()
+                    catalog:createCollectionSet(place.group, container, true)
+                end, { timeout = CatalogWrite.WRITE_TIMEOUT })
+            end)
+            local reason, detail = Tagging.writeFailure(ok, status)
+            if reason then
+                fail(reason, detail)
+                return nil
+            end
+            set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
+            if not set then
+                fail("error", "collection set not created")
+                return nil
+            end
+        end
+        holder, container = set, set
+    end
+    return holder, container
+end
+
 function CatalogWrite.logSecondWrite(later, second)
     if #later == 0 then
         Log.info("no GPS or altitude to write: no second write")

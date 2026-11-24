@@ -310,9 +310,9 @@ impl Session {
             .zip(photos)
             .filter(|(_, photos)| !photos.is_empty())
             .map(|(dive, photos)| CollectionGroup {
-                collection: matching::collection_name(dive),
-                dive: DiveTags::new(dive, units, source),
-                location: LocationTags::new(&dive.site, None, None),
+                collection: Some(matching::collection_name(dive)),
+                dive: Some(DiveTags::new(dive, units, source)),
+                location: Some(LocationTags::new(&dive.site, None, None)),
                 photos,
             })
             .collect();
@@ -515,10 +515,15 @@ mod tests {
         let names: Vec<_> = request
             .groups
             .iter()
-            .map(|g| g.collection.as_str())
+            .map(|g| g.collection.as_deref().unwrap())
             .collect();
         assert_eq!(names, ["701 - Site 701", "702 - Site 702"]);
-        assert!(request.groups.iter().all(|g| g.dive.source == "Subsurface"));
+        assert!(
+            request
+                .groups
+                .iter()
+                .all(|g| g.dive.as_ref().unwrap().source == "Subsurface")
+        );
         let a = &request.groups[0];
         let by_id = |id: &str| a.photos.iter().find(|p| p.id == id).unwrap();
         // TG-7 photo 1: 05:05 + 4 h = 09:05, 300 s into the dive.
@@ -571,7 +576,10 @@ mod tests {
         let photo = a.photos.iter().find(|p| p.id == "1").unwrap();
         assert_eq!(photo.photo_depth.as_deref(), Some("3.0 m"));
         assert!(
-            request.groups.iter().all(|g| g.dive.source == "Subsurface"),
+            request
+                .groups
+                .iter()
+                .all(|g| g.dive.as_ref().unwrap().source == "Subsurface"),
             "the application the dives were read from"
         );
     }
@@ -627,7 +635,7 @@ mod tests {
         assert_eq!(request.groups.len(), 1);
         assert_eq!(request.groups[0].photos[0].id, "4");
         assert_eq!(request.groups[0].photos[0].photo_depth, None);
-        assert_eq!(request.groups[0].dive.source, "MacDive");
+        assert_eq!(request.groups[0].dive.as_ref().unwrap().source, "MacDive");
     }
 
     #[test]
@@ -695,7 +703,7 @@ mod tests {
         let written: Vec<_> = request
             .groups
             .iter()
-            .map(|g| g.collection.as_str())
+            .map(|g| g.collection.as_deref().unwrap())
             .collect();
         assert_eq!(
             written,

@@ -130,9 +130,9 @@ fn large_collections_request_is_framed_quickly() {
         parent: Vec::new(),
         group: None,
         groups: vec![CollectionGroup {
-            collection: "700 - Coral Garden".into(),
-            dive: DiveTags::new(&dive, Units::default(), "Subsurface"),
-            location: LocationTags::new(&dive.site, None, None),
+            collection: Some("700 - Coral Garden".into()),
+            dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
+            location: Some(LocationTags::new(&dive.site, None, None)),
             photos,
         }],
     };
@@ -159,5 +159,17 @@ fn large_collections_request_is_framed_quickly() {
         started.elapsed().as_secs_f64() < 2.0,
         "{:?}",
         started.elapsed()
+    );
+}
+
+#[test]
+fn the_link_knows_the_count_message() {
+    let link = std::fs::read_to_string(common::plugin_dir().join("Link.lua")).unwrap();
+    // Line by line: a Windows checkout may end lines with CRLF.
+    assert!(
+        link.lines()
+            .map(str::trim)
+            .any(|l| l == "countPhotos = Selection.count,"),
+        "Link.lua must dispatch countPhotos to Selection.count"
     );
 }

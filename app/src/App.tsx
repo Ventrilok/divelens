@@ -38,6 +38,7 @@ const offline: LightroomStatus = {
   lightroomVersion: null,
   pluginVersion: null,
   selected: 0,
+  catalogPhotos: null,
   selectionVersion: 0,
   selectionFrom: null,
   selectionTo: null,

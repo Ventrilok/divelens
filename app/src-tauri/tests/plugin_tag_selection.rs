@@ -364,6 +364,101 @@ fn dive_values_reach_the_plugin_by_name_with_real_values() {
     );
 }
 
+fn lua_value(code: &str) -> String {
+    let lua = lua();
+    lua.load(code)
+        .eval::<String>()
+        .unwrap_or_else(|e| panic!("{e}"))
+}
+
+#[test]
+fn a_request_with_only_a_collection_is_planned() {
+    let out = lua_value(
+        r#"
+        local Json = require "Json"
+        local Tagging = require "Tagging"
+        local request = Json.decode('{"collection":{"name":"101 - Three Arches Reef","parent":[]},"dive":null,"location":null}')
+        local changes, why = Tagging.plan(request, function(iso) return iso end)
+        return tostring(changes and #changes) .. "/" .. tostring(why)
+        "#,
+    );
+    assert_eq!(out, "0/nil");
+}
+
+#[test]
+fn a_request_with_nothing_is_still_refused() {
+    let out = lua_value(
+        r#"
+        local Tagging = require "Tagging"
+        local changes, why = Tagging.plan({}, function(iso) return iso end)
+        return tostring(changes) .. "/" .. tostring(why)
+        "#,
+    );
+    assert_eq!(out, "nil/nothing to write");
+}
+
+#[test]
+fn a_request_with_only_a_null_collection_is_refused() {
+    // JSON null decodes to the plug-in's null marker, not to a missing key:
+    // it still counts as no collection.
+    let out = lua_value(
+        r#"
+        local Json = require "Json"
+        local Tagging = require "Tagging"
+        local request = Json.decode('{"collection":null}')
+        local changes, why = Tagging.plan(request, function(iso) return iso end)
+        return tostring(changes) .. "/" .. tostring(why)
+        "#,
+    );
+    assert_eq!(out, "nil/nothing to write");
+}
+
+#[test]
+fn the_collection_of_a_request_is_checked() {
+    let lua = lua();
+    run(
+        &lua,
+        r##"
+        local Json = require "Json"
+        local Tagging = require "Tagging"
+        local function plan(json) return Tagging.planCollection(Json.decode(json)) end
+        assert(plan('{}') == nil and select("#", plan('{}')) == 1)
+        assert(plan('{"collection":null}') == nil)
+        local c, why = plan('{"collection":{"name":"","parent":[]}}')
+        assert(c == nil and why == "bad collection", tostring(why))
+        c, why = plan('{"collection":{"name":5,"parent":[]}}')
+        assert(c == nil and why == "bad collection")
+        c, why = plan('{"collection":{"name":"A","parent":[3]}}')
+        assert(c == nil and why == "bad collection")
+        c, why = plan('{"collection":{"name":"A","parent":[""]}}')
+        assert(c == nil and why == "bad collection")
+        c = plan('{"collection":{"name":"101 - Three Arches Reef","parent":["Voyages"],"group":"Dive Lens"}}')
+        assert(c.name == "101 - Three Arches Reef" and c.group == "Dive Lens")
+        assert(#c.parent == 1 and c.parent[1] == "Voyages")
+        c = plan('{"collection":{"name":"A","parent":[],"group":""}}')
+        assert(c.group == nil and #c.parent == 0)
+        c = plan('{"collection":{"name":"A","parent":null,"group":null}}')
+        assert(c.group == nil and #c.parent == 0)
+        "##,
+    );
+}
+
+#[test]
+fn a_collection_already_there_is_completed_not_created() {
+    let lua = lua();
+    run(
+        &lua,
+        r#"
+        local Tagging = require "Tagging"
+        local name = "101 - Three Arches Reef"
+        local r = Tagging.selectionCollection(name, 5, { [name] = true })
+        assert(r.collection == name and r.count == 5 and r.created == false)
+        assert(Tagging.selectionCollection(name, 5, {}).created == true)
+        assert(Tagging.selectionCollection(name, 0, {}).created == false)
+        "#,
+    );
+}
+
 /// What `lua` returns, a JSON text (Json.encode), as a value to compare.
 #[test]
 fn apply_reply_says_why_nothing_or_part_was_written() {
@@ -503,6 +598,7 @@ fn tag_writes_keeps_photo_order_and_counts() {
     let request = TagRequest {
         dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
         location: Some(LocationTags::new(&dive.site, None, None)),
+        collection: None,
         selection: Some(12),
         photos: vec![PhotoTags::new(
             "p1".into(),

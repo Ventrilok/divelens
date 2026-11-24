@@ -14,11 +14,12 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::apply::errors::ApplyError;
 use crate::apply::offsets::Offsets;
+use crate::apply::options::WriteOptions;
 use crate::apply::searches::{Searches, keep_search};
 use crate::apply::{send, write_and_remember};
 use crate::dive_log::{LogId, SourceInfo, Writes, open, source_info};
 use crate::files::config_dir;
-use crate::lightroom::Command;
+use crate::lightroom::{Command, WrittenCollection};
 use crate::settings::{Settings, units_in_use};
 use selection::{DiveSpan, Selection, SelectionPhotos, TagPreview};
 
@@ -53,17 +54,30 @@ pub(crate) struct TagChoice {
     /// The clock offsets shown, in minutes by camera key.
     #[serde(default)]
     offsets: std::collections::HashMap<String, i32>,
+    /// What the diver ticked. `None` (the current screens): everything the
+    /// choice names is written, the altitude follows the setting. With
+    /// options, `dive_id` is the chosen dive even when its details are
+    /// unticked (it gives the site and the collection's name); `None` there
+    /// is "no dive".
+    #[serde(default)]
+    options: Option<WriteOptions>,
 }
 
-/// What "Tag Selection › Apply" wrote: the number of photos tagged.
+/// What "Tag Selection › Apply" wrote: the number of photos tagged, and the
+/// collection the selection was put in, if one was written.
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct TagApplied {
     count: usize,
+    collection: Option<WrittenCollection>,
 }
 
 impl From<usize> for TagApplied {
     fn from(count: usize) -> Self {
-        Self { count }
+        Self {
+            count,
+            collection: None,
+        }
     }
 }
 
@@ -96,6 +110,16 @@ fn tag_request(
     };
     let location = rules::location(choice.location.as_ref(), dive.as_ref(), || source.sites())?;
     let dive_id = dive.as_ref().map(|d| d.id.clone());
+    let ticked = choice.options.map(|options| rules::Ticked {
+        kept: options.kept(),
+        collection: rules::collection_place(options.collections, dive.as_ref(), || {
+            let place = Settings::load(&config_dir(app)).collections;
+            let group = place.group_name();
+            (place.parent, group)
+        }),
+    });
+    // The setting is read only when the altitude follows it, and last.
+    let depth_to_altitude = || Settings::load(&config_dir(app)).depth_to_altitude;
     let built = rules::build_request(
         dive,
         location,
@@ -110,7 +134,11 @@ fn tag_request(
             )
         },
         |id| source.profile(id),
-        || Settings::load(&config_dir(app)).depth_to_altitude,
+        || match choice.options {
+            None => depth_to_altitude(),
+            Some(options) => options.copies_altitude(depth_to_altitude),
+        },
+        ticked,
     )?;
     if let Some(e) = built.unreadable {
         log::warn!(
@@ -140,7 +168,7 @@ pub(crate) async fn tag_selection(
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
         let (request, applied) = tag_request(&app, &info, &choice)?;
         let with_values = request.photos.len();
-        let count = write_and_remember(
+        let written = write_and_remember(
             &app,
             &info,
             |reply| Command::Apply {
@@ -150,8 +178,12 @@ pub(crate) async fn tag_selection(
             &applied,
             |outcome| log::warn!("selection not tagged: {outcome:?}"),
         )?;
+        let count = written.count;
         log::info!("selection tagged: {count} photos, per-photo values on {with_values}");
-        Ok(TagApplied::from(count))
+        Ok(TagApplied {
+            count,
+            collection: written.collection,
+        })
     })
     .await
     .expect("tagging task failed")

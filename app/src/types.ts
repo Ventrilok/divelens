@@ -135,6 +135,8 @@ export interface LightroomStatus {
   pluginVersion: string | null;
   /** Photos selected in Lightroom; 0 when nothing is selected. */
   selected: number;
+  /** Photos in the whole catalog; null until Lightroom has answered. */
+  catalogPhotos: number | null;
   /** Changes with each new selection; thumbnails carry it. */
   selectionVersion: number;
   /** Earliest and latest capture times, wall-clock "YYYY-MM-DDTHH:MM:SS". */
@@ -153,14 +155,32 @@ export interface SelectionPreview {
   thumbnails: (string | null)[];
 }
 
+/** Where a location written comes from: the chosen dive's site, or another site of the log with its position possibly edited. */
+export type LocationChoice = { kind: "diveSite" } | { kind: "site"; siteId: string; lat: number | null; lon: number | null };
+
 /** What Tag Selection writes (app/src-tauri/src/tag.rs, TagChoice). */
 export interface TagChoice {
   diveId: string | null;
-  location: { kind: "diveSite" } | { kind: "site"; siteId: string; lat: number | null; lon: number | null } | null;
+  location: LocationChoice | null;
   /** The description of the selection shown (SelectionPhotos.search): needed for a dive with a profile. */
   search: number | null;
   /** Clock offsets shown, in minutes by camera key. */
   offsets: Record<string, number>;
+  /**
+   * What is ticked. Absent: today's behaviour (everything the choice names; the altitude follows
+   * the setting). With options, diveId is the chosen dive even when its details are unticked.
+   */
+  options?: WriteOptions;
+}
+
+/** What the diver ticked to write when tagging the selection (app/src-tauri/src/apply/options.rs). */
+export interface WriteOptions {
+  dive: boolean;
+  /** null: the "depth copied to altitude" setting decides. */
+  altitude: boolean | null;
+  place: boolean;
+  gps: boolean;
+  collections: boolean;
 }
 
 /** The photos selected in Lightroom, described for Tag Selection's per-photo values (app/src-tauri/src/tag/selection.rs). */
@@ -194,6 +214,8 @@ export interface TagPreview {
 /** What Tag Selection wrote: the number of photos tagged. */
 export interface TagApplied {
   count: number;
+  /** The collection the selection was put in; null when none was written. */
+  collection: WrittenCollection | null;
 }
 
 /**
@@ -285,12 +307,14 @@ export interface CollectionsPreview {
 }
 
 export interface WrittenCollection {
-  collection: string;
+  /** null for a group written without a collection. */
+  collection: string | null;
   count: number;
   created: boolean;
 }
 
 export interface CollectionsResult {
+  /** The collections written: the groups that have a name. */
   collections: WrittenCollection[];
   photos: number;
   withDepth: number;

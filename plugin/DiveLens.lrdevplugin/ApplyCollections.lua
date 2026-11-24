@@ -10,7 +10,6 @@ Part of DiveLens, GPL-3.0-or-later.
 ]]
 
 local LrApplication = import "LrApplication"
-local LrTasks = import "LrTasks"
 
 local CatalogWrite = require "CatalogWrite"
 local Json = require "Json"
@@ -72,40 +71,27 @@ function ApplyCollections.run(s, message)
     if not (s.search and s.search.id == message.search) then return fail("staleSearch") end
     local catalog = LrApplication.activeCatalog()
 
+    -- Where the collections go is looked up only when a group makes one
+    -- (Tagging.namesCollections): a missing set blocks nothing otherwise.
     -- "holder" lists what is already there; "container" is what Lightroom's
     -- create functions take (nil for the catalog's root).
-    local holder = Tagging.findSet(catalog, place.parent)
-    if not holder then return fail("parentNotFound", table.concat(place.parent, " › ")) end
-    local container = #place.parent > 0 and holder or nil
-
-    -- The group set is created on its own the first time: a set created
-    -- inside a write cannot be used before that write ends.
-    if place.group then
-        local set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
-        if not set then
-            local ok, status = LrTasks.pcall(function()
-                return catalog:withWriteAccessDo(place.group, function()
-                    catalog:createCollectionSet(place.group, container, true)
-                end, { timeout = CatalogWrite.WRITE_TIMEOUT })
-            end)
-            local reason, detail = Tagging.writeFailure(ok, status)
-            if reason then return fail(reason, detail) end
-            set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
-            if not set then return fail("error", "collection set not created") end
-        end
-        holder, container = set, set
-    end
+    local holder, container
     local existing = {}
-    for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
+    if Tagging.namesCollections(groups) then
+        holder, container = CatalogWrite.holder(catalog, place, fail)
+        if not holder then return end
+        for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
+    end
 
     -- The photos found, in the catalog.
-    local total, found = Tagging.resolvePhotos(groups, s.search.photos)
+    local total = Tagging.resolvePhotos(groups, s.search.photos)
     CatalogWrite.apply(s, id, {
         catalog = catalog,
         undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)",
         total = total,
         fail = fail,
-        before = function(cat) return CatalogWrite.photosBefore(cat, found) end,
+        -- Only the photos of groups writing a dive: the others clear nothing.
+        before = function(cat) return CatalogWrite.photosBefore(cat, Tagging.divePhotos(groups)) end,
         writeFirst = function(cat, before, advance)
             local planned = Tagging.collectionWrites(groups, before, existing)
             for gi, g in ipairs(groups) do
@@ -115,7 +101,7 @@ function ApplyCollections.run(s, message)
                     if step.photo then CatalogWrite.write(step.photo, step.changes) end
                     advance()
                 end
-                if #group.photos > 0 then
+                if g.collection and #group.photos > 0 then
                     local collection = cat:createCollection(g.collection, container, true)
                     collection:addPhotos(group.photos)
                 end

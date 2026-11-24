@@ -39,7 +39,7 @@ use crate::settings::{Legacy, LogLevel};
 /// Name of the link file, written by the plugin in the app's settings folder.
 pub const LINK_FILE: &str = "lightroom-link.json";
 /// Version of the message set; both sides must agree.
-pub const PROTOCOL: u32 = 6;
+pub const PROTOCOL: u32 = 7;
 
 /// Every reason the plug-in gives in an `applyFailed` message.
 pub const APPLY_REASONS: &[&str] = &[
@@ -88,6 +88,9 @@ pub struct Status {
     pub plugin_version: Option<String>,
     /// Number of photos selected in Lightroom (0 when nothing is selected).
     pub selected: usize,
+    /// Number of photos in the whole catalog; `None` until the plugin has
+    /// answered (and whenever the link is down).
+    pub catalog_photos: Option<u64>,
     /// Changes with every new selection; thumbnails carry it.
     pub selection_version: u64,
     /// Earliest and latest capture times of the selection, wall-clock
@@ -164,11 +167,21 @@ pub struct PhotoSearch {
     pub photos: Vec<FoundPhoto>,
 }
 
-/// One collection written by "Create Collections".
+/// What "Tag Selection" answers once the plugin applied it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagWritten {
+    /// The number of photos written.
+    pub count: usize,
+    /// The collection the selection went in, when the request asked for one.
+    pub collection: Option<WrittenCollection>,
+}
+
+/// One collection written by "Create Collections" or "Tag Selection".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WrittenCollection {
-    pub collection: String,
+    /// None for a group written without a collection.
+    pub collection: Option<String>,
     pub count: usize,
     /// The collection did not exist before.
     pub created: bool,
@@ -210,9 +223,9 @@ pub enum Command {
     /// Tag the photos selected in Lightroom at the time the plugin gets it.
     Apply {
         request: Box<TagRequest>,
-        /// The number of photos written, or Lightroom's refusal or failure
-        /// (including `gpsNotWritten`: written, but for the GPS and altitude).
-        reply: Sender<Result<usize, ApplyOutcome>>,
+        /// What was written, or Lightroom's refusal or failure (including
+        /// `gpsNotWritten`: written, but for the GPS and altitude).
+        reply: Sender<Result<TagWritten, ApplyOutcome>>,
     },
     /// Every photo of the catalog captured between two days (`YYYY-MM-DD`,
     /// inclusive).
@@ -236,16 +249,23 @@ pub enum Command {
     ListSets {
         reply: Sender<Result<Vec<CollectionSet>, ApplyOutcome>>,
     },
+    /// The number of photos in the whole catalog; the answer also lands in
+    /// the status (`catalog_photos`).
+    CountPhotos {
+        reply: Sender<Result<u64, ApplyOutcome>>,
+    },
     /// What the plugin writes in its log from now on; no answer.
     SetLogLevel(LogLevel),
 }
 
 /// A request waiting for the plugin's answer.
 enum Pending {
-    Apply(Sender<Result<usize, ApplyOutcome>>),
+    Apply(Sender<Result<TagWritten, ApplyOutcome>>),
     Find(Sender<Result<PhotoSearch, ApplyOutcome>>, Vec<FoundPhoto>),
     Collections(Sender<Result<Vec<WrittenCollection>, ApplyOutcome>>),
     Sets(Sender<Result<Vec<CollectionSet>, ApplyOutcome>>),
+    /// A catalog size request; `None` when the app asked by itself.
+    Count(Option<Sender<Result<u64, ApplyOutcome>>>),
 }
 
 impl Pending {
@@ -256,6 +276,11 @@ impl Pending {
             Pending::Find(reply, _) => drop(reply.send(Err(outcome))),
             Pending::Collections(reply) => drop(reply.send(Err(outcome))),
             Pending::Sets(reply) => drop(reply.send(Err(outcome))),
+            Pending::Count(reply) => {
+                if let Some(reply) = reply {
+                    drop(reply.send(Err(outcome)));
+                }
+            }
         }
     }
 }
@@ -327,6 +352,8 @@ enum FromPlugin {
     Applied {
         id: u64,
         count: usize,
+        #[serde(default)]
+        collection: Option<WrittenCollection>,
     },
     ApplyFailed {
         id: u64,
@@ -346,6 +373,10 @@ enum FromPlugin {
     Sets {
         id: u64,
         sets: Vec<CollectionSet>,
+    },
+    CatalogSize {
+        id: u64,
+        count: u64,
     },
     #[serde(other)]
     Unknown,
@@ -379,6 +410,9 @@ enum ToPlugin<'a> {
         request: &'a CollectionsRequest,
     },
     ListSets {
+        id: u64,
+    },
+    CountPhotos {
         id: u64,
     },
     LogLevel {
@@ -551,6 +585,13 @@ fn session(
                         if let Some(legacy) = legacy {
                             on_event(Event::Legacy(legacy));
                         }
+                        // The catalog size is asked for at once; nothing
+                        // waits for the answer.
+                        let id = next_id();
+                        if send_line(outgoing, &ToPlugin::CountPhotos { id }).is_err() {
+                            return End::Lost;
+                        }
+                        pending.insert(id, Pending::Count(None));
                     }
                     FromPlugin::Selection {
                         count,
@@ -583,9 +624,13 @@ fn session(
                     FromPlugin::Progress { done, total } => {
                         on_event(Event::Progress { done, total });
                     }
-                    FromPlugin::Applied { id, count } => match pending.remove(&id) {
+                    FromPlugin::Applied {
+                        id,
+                        count,
+                        collection,
+                    } => match pending.remove(&id) {
                         Some(Pending::Apply(reply)) => {
-                            let _ = reply.send(Ok(count));
+                            let _ = reply.send(Ok(TagWritten { count, collection }));
                         }
                         Some(other) => other.fail(ApplyOutcome::Failed {
                             reason: "error".into(),
@@ -619,6 +664,16 @@ fn session(
                             let _ = reply.send(Ok(sets));
                         }
                     }
+                    FromPlugin::CatalogSize { id, count } => {
+                        // An answer nobody asked for (unknown id) is ignored.
+                        if let Some(Pending::Count(reply)) = pending.remove(&id) {
+                            status.catalog_photos = Some(count);
+                            on_event(Event::Status(status.clone()));
+                            if let Some(reply) = reply {
+                                let _ = reply.send(Ok(count));
+                            }
+                        }
+                    }
                     FromPlugin::Bye => return End::Bye,
                     FromPlugin::Error { reason } => refusal = Some(reason),
                     _ => {}
@@ -631,7 +686,10 @@ fn session(
         if !status.connected && started.elapsed() > timing.hello {
             return End::NoHello(refusal);
         }
-        let silence = if pending.is_empty() {
+        // The catalog count is quick and nobody waits on it: it never
+        // stretches the silence the link puts up with.
+        let busy = pending.values().any(|p| !matches!(p, Pending::Count(_)));
+        let silence = if !busy {
             timing.silence
         } else {
             timing.silence_busy
@@ -655,6 +713,7 @@ fn session(
                     ToPlugin::ApplyCollections { id, request }
                 }
                 Command::ListSets { .. } => ToPlugin::ListSets { id },
+                Command::CountPhotos { .. } => ToPlugin::CountPhotos { id },
                 Command::SetLogLevel(level) => ToPlugin::LogLevel { level: *level },
             };
             if send_line(outgoing, &message).is_err() {
@@ -667,6 +726,7 @@ fn session(
                 }
                 Command::ApplyCollections { reply, .. } => Pending::Collections(reply),
                 Command::ListSets { reply } => Pending::Sets(reply),
+                Command::CountPhotos { reply } => Pending::Count(Some(reply)),
                 Command::SetLogLevel(_) => continue,
             };
             pending.insert(id, waiting);
@@ -704,6 +764,19 @@ mod tests {
     where
         F: FnOnce(&mut dyn Iterator<Item = String>, &mut TcpStream) + Send + 'static,
     {
+        // The app asks for the catalogue size after every hello: scripts
+        // that are not about it never see that line.
+        fake_plugin_seeing_everything(move |lines, to_app| {
+            let mut lines = lines.filter(|l| !l.contains(r#""type":"countPhotos""#));
+            script(&mut lines, to_app);
+        })
+    }
+
+    /// Same, but `script` receives every line, `countPhotos` included.
+    fn fake_plugin_seeing_everything<F>(script: F) -> (LinkFile, thread::JoinHandle<()>)
+    where
+        F: FnOnce(&mut dyn Iterator<Item = String>, &mut TcpStream) + Send + 'static,
+    {
         let receive = TcpListener::bind("127.0.0.1:0").unwrap();
         let send = TcpListener::bind("127.0.0.1:0").unwrap();
         let link = LinkFile {
@@ -731,7 +804,7 @@ mod tests {
         stream.write_all(text.as_bytes()).unwrap();
     }
 
-    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":6,"type":"hello"}"#;
+    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":7,"type":"hello"}"#;
 
     #[test]
     fn dropped_requests_stop_their_callers_waiting() {
@@ -762,7 +835,7 @@ mod tests {
 
     #[test]
     fn connects_follows_selection_and_ends_on_bye() {
-        let (link, plugin) = fake_plugin(|lines, to_app| {
+        let (link, plugin) = fake_plugin_seeing_everything(|lines, to_app| {
             let hello: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
             assert_eq!(hello["type"], "hello");
             assert_eq!(hello["token"], "secret");
@@ -782,6 +855,9 @@ mod tests {
                 to_app,
                 "{\"type\":\"show\",\"screen\":\"tag\"}\n{\"type\":\"future\"}\n",
             );
+            // After an accepted hello: the size request, then the pings.
+            let count: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
+            assert_eq!(count["type"], "countPhotos");
             let ping: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
             assert_eq!(ping["type"], "ping");
             write(to_app, "{\"type\":\"pong\"}\n{\"type\":\"bye\"}\n");
@@ -817,6 +893,208 @@ mod tests {
                 Event::Status(Status::default()),
             ]
         );
+    }
+
+    /// Runs a session whose plug-in is `script` (every line visible, hello
+    /// answered by the script); returns the events and how it ended.
+    fn events_of(
+        script: impl FnOnce(&mut dyn Iterator<Item = String>, &mut TcpStream) + Send + 'static,
+    ) -> (Vec<Event>, End) {
+        let (link, plugin) = fake_plugin_seeing_everything(script);
+        let mut events = Vec::new();
+        let end = run_session(&link, "0.1.0", fast(), &idle(), &mut |e| events.push(e));
+        plugin.join().unwrap();
+        (events, end)
+    }
+
+    /// Hello, then the count request the app makes by itself; answers it
+    /// with `answer(id)` when given.
+    fn hello_and_count(
+        lines: &mut dyn Iterator<Item = String>,
+        to_app: &mut TcpStream,
+        answer: Option<&dyn Fn(u64) -> String>,
+    ) {
+        lines.next().unwrap(); // hello
+        write(to_app, &format!("{HELLO}\n"));
+        let count: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
+        assert_eq!(count["type"], "countPhotos");
+        if let Some(answer) = answer {
+            write(to_app, &(answer(count["id"].as_u64().unwrap()) + "\n"));
+        }
+    }
+
+    fn size_answer(count: u64) -> impl Fn(u64) -> String {
+        move |id| format!(r#"{{"type":"catalogSize","id":{id},"count":{count}}}"#)
+    }
+
+    #[test]
+    fn the_catalogue_size_is_asked_after_hello() {
+        let (events, end) = events_of(|lines, to_app| {
+            hello_and_count(lines, to_app, Some(&size_answer(48000)));
+            thread::sleep(Duration::from_millis(100));
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        assert_eq!(end, End::Bye);
+        let sizes: Vec<_> = events
+            .iter()
+            .filter_map(|e| match e {
+                Event::Status(s) => Some(s.catalog_photos),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sizes, [None, Some(48000), None]);
+    }
+
+    #[test]
+    fn the_catalogue_size_is_forgotten_when_the_link_drops() {
+        let (events, _) = events_of(|lines, to_app| {
+            hello_and_count(lines, to_app, Some(&size_answer(48000)));
+            thread::sleep(Duration::from_millis(100));
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        assert_eq!(events.last(), Some(&Event::Status(Status::default())));
+        assert_eq!(Status::default().catalog_photos, None);
+    }
+
+    #[test]
+    fn an_empty_catalogue_counts_zero() {
+        let (events, _) = events_of(|lines, to_app| {
+            hello_and_count(lines, to_app, Some(&size_answer(0)));
+            thread::sleep(Duration::from_millis(100));
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        assert!(events.iter().any(|e| matches!(
+            e,
+            Event::Status(s) if s.connected && s.catalog_photos == Some(0)
+        )));
+    }
+
+    #[test]
+    fn a_catalogue_size_nobody_asked_for_is_ignored() {
+        let (events, _) = events_of(|lines, to_app| {
+            hello_and_count(lines, to_app, Some(&|id| size_answer(5)(id + 1000)));
+            thread::sleep(Duration::from_millis(100));
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        assert!(events.iter().all(|e| match e {
+            Event::Status(s) => s.catalog_photos.is_none(),
+            _ => true,
+        }));
+    }
+
+    #[test]
+    fn a_plugin_that_never_answers_leaves_the_size_unknown() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (outcome_tx, outcome_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin_seeing_everything(move |lines, to_app| {
+            hello_and_count(lines, to_app, None);
+            // The count is still unanswered: other requests are served.
+            let (reply, outcome) = std::sync::mpsc::channel();
+            commands
+                .send(Command::Apply {
+                    request: Box::new(request()),
+                    reply,
+                })
+                .unwrap();
+            let apply = next_request(lines);
+            assert_eq!(apply["type"], "apply");
+            let id = apply["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!("{{\"type\":\"applied\",\"id\":{id},\"count\":2}}\n"),
+            );
+            outcome_tx.send(outcome.recv().unwrap()).unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        let mut events = Vec::new();
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |e| events.push(e));
+        plugin.join().unwrap();
+        assert_eq!(end, End::Bye);
+        assert_eq!(outcome_rx.recv().unwrap().unwrap().count, 2);
+        assert!(events.iter().all(|e| match e {
+            Event::Status(s) => s.catalog_photos.is_none(),
+            _ => true,
+        }));
+    }
+
+    #[test]
+    fn a_malformed_size_is_ignored() {
+        let (events, end) = events_of(|lines, to_app| {
+            hello_and_count(
+                lines,
+                to_app,
+                Some(&|id| format!(r#"{{"type":"catalogSize","id":{id},"count":"many"}}"#)),
+            );
+            thread::sleep(Duration::from_millis(100));
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        // The session went on until the plug-in's bye.
+        assert_eq!(end, End::Bye);
+        assert!(events.iter().all(|e| match e {
+            Event::Status(s) => s.catalog_photos.is_none(),
+            _ => true,
+        }));
+    }
+
+    #[test]
+    fn refreshing_the_size_does_not_wait_for_the_plugin() {
+        // What `refresh_catalog_size` does: hand the request over and drop
+        // the reply channel. A plug-in that never answers (pongs only) must
+        // not disturb the link, and other requests are served.
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (outcome_tx, outcome_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin_seeing_everything(move |lines, to_app| {
+            hello_and_count(lines, to_app, Some(&size_answer(10)));
+            let (reply, _) = std::sync::mpsc::channel();
+            commands.send(Command::CountPhotos { reply }).unwrap();
+            let again = next_request(lines);
+            assert_eq!(again["type"], "countPhotos");
+            // Never answered: pings are, as Lightroom would.
+            write(to_app, "{\"type\":\"pong\"}\n");
+            let (reply, outcome) = std::sync::mpsc::channel();
+            commands
+                .send(Command::Apply {
+                    request: Box::new(request()),
+                    reply,
+                })
+                .unwrap();
+            let apply = next_request(lines);
+            let id = apply["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!("{{\"type\":\"applied\",\"id\":{id},\"count\":1}}\n"),
+            );
+            outcome_tx.send(outcome.recv().unwrap()).unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        let mut events = Vec::new();
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |e| events.push(e));
+        plugin.join().unwrap();
+        assert_eq!(end, End::Bye);
+        assert_eq!(outcome_rx.recv().unwrap().unwrap().count, 1);
+    }
+
+    #[test]
+    fn the_catalogue_size_can_be_asked_again() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin_seeing_everything(move |lines, to_app| {
+            hello_and_count(lines, to_app, Some(&size_answer(10)));
+            let (reply, size) = std::sync::mpsc::channel();
+            commands.send(Command::CountPhotos { reply }).unwrap();
+            let again = next_request(lines);
+            assert_eq!(again["type"], "countPhotos");
+            let id = again["id"].as_u64().unwrap();
+            write(to_app, &(size_answer(11)(id) + "\n"));
+            assert_eq!(size.recv().unwrap().unwrap(), 11);
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        let mut events = Vec::new();
+        run_session(&link, "0.1.0", fast(), &inbox, &mut |e| events.push(e));
+        plugin.join().unwrap();
+        assert!(events.iter().any(|e| matches!(
+            e,
+            Event::Status(s) if s.catalog_photos == Some(11)
+        )));
     }
 
     #[test]
@@ -1035,7 +1313,7 @@ mod tests {
         lines: &mut dyn Iterator<Item = String>,
         to_app: &mut TcpStream,
         commands: &Sender<Command>,
-    ) -> Receiver<Result<usize, ApplyOutcome>> {
+    ) -> Receiver<Result<TagWritten, ApplyOutcome>> {
         lines.next().unwrap(); // hello
         write(to_app, &format!("{HELLO}\n"));
         let ping: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
@@ -1087,7 +1365,13 @@ mod tests {
         plugin.join().unwrap();
         assert_eq!(end, End::Bye);
         let outcome = outcome_rx.recv().unwrap();
-        assert_eq!(outcome, Ok(120));
+        assert_eq!(
+            outcome,
+            Ok(TagWritten {
+                count: 120,
+                collection: None
+            })
+        );
         assert!(events.contains(&Event::Progress {
             done: 50,
             total: 120
@@ -1176,6 +1460,39 @@ mod tests {
     }
 
     #[test]
+    fn apply_answer_carries_the_collection_when_there_is_one() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (outcome_tx, outcome_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin(move |lines, to_app| {
+            let outcome = connect_and_apply(lines, to_app, &commands);
+            let apply = next_request(lines);
+            let id = apply["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"applied\",\"id\":{id},\"count\":5,\"collection\":{{\"collection\":\"101 - Three Arches Reef\",\"count\":5,\"created\":true}}}}\n"
+                ),
+            );
+            outcome_tx.send(outcome.recv().unwrap()).unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {});
+        plugin.join().unwrap();
+        assert_eq!(end, End::Bye);
+        assert_eq!(
+            outcome_rx.recv().unwrap(),
+            Ok(TagWritten {
+                count: 5,
+                collection: Some(WrittenCollection {
+                    collection: Some("101 - Three Arches Reef".into()),
+                    count: 5,
+                    created: true,
+                })
+            })
+        );
+    }
+
+    #[test]
     fn requests_made_while_disconnected_are_never_sent() {
         let (commands, inbox) = std::sync::mpsc::channel();
         let (reply, outcome) = std::sync::mpsc::channel();
@@ -1185,10 +1502,13 @@ mod tests {
                 reply,
             })
             .unwrap();
-        let (link, plugin) = fake_plugin(|lines, to_app| {
+        let (link, plugin) = fake_plugin_seeing_everything(|lines, to_app| {
             lines.next().unwrap();
             write(to_app, &format!("{HELLO}\n"));
-            // Only pings may follow, then the session ends.
+            // The size request, then only pings (the queued request was
+            // dropped), then the session ends.
+            let count = lines.next().unwrap();
+            assert!(count.contains("countPhotos"), "unexpected: {count}");
             for line in lines.take(3) {
                 assert!(line.contains("ping"), "unexpected: {line}");
             }
@@ -1286,7 +1606,7 @@ mod tests {
         assert_eq!(
             written,
             Ok(vec![WrittenCollection {
-                collection: "700 - Coral Garden".into(),
+                collection: Some("700 - Coral Garden".into()),
                 count: 1,
                 created: true,
             }])
@@ -1301,7 +1621,7 @@ mod tests {
             lines.next().unwrap();
             write(
                 to_app,
-                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":6,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
+                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":7,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
             );
             write(to_app, "\n");
             lines.next().unwrap(); // first ping: the app is connected
@@ -1367,6 +1687,32 @@ mod tests {
         assert_eq!(
             run_session(&link, "0.1.0", fast(), &idle(), &mut |_| {}),
             End::Unreachable
+        );
+    }
+
+    #[test]
+    fn a_plugin_with_an_older_protocol_is_refused() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (reply, _sets) = std::sync::mpsc::channel();
+        commands.send(Command::ListSets { reply }).unwrap();
+        let (link, plugin) = fake_plugin_seeing_everything(|lines, to_app| {
+            lines.next().unwrap();
+            write(
+                to_app,
+                &format!("{}\n", HELLO.replace("\"protocol\":7", "\"protocol\":6")),
+            );
+            // Nothing more is sent to it, though a request is waiting.
+            assert_eq!(lines.next(), None);
+        });
+        let mut events = Vec::new();
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |e| events.push(e));
+        plugin.join().unwrap();
+        assert_eq!(end, End::Protocol(6));
+        // Never connected (and the plug-in saw no line after its hello).
+        assert!(
+            events
+                .iter()
+                .all(|e| !matches!(e, Event::Status(s) if s.connected))
         );
     }
 
