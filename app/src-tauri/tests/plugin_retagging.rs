@@ -225,9 +225,9 @@ fn filing(
         parent: Vec::new(),
         group: None,
         groups: vec![CollectionGroup {
-            collection: "700 - Coral Garden".into(),
-            dive: DiveTags::new(dive, units, source),
-            location: LocationTags::new(&dive.site, None, None),
+            collection: Some("700 - Coral Garden".into()),
+            dive: Some(DiveTags::new(dive, units, source)),
+            location: Some(LocationTags::new(&dive.site, None, None)),
             photos: vec![PhotoTags::new("1".into(), point, 240, units)],
         }],
     };

@@ -130,9 +130,9 @@ fn large_collections_request_is_framed_quickly() {
         parent: Vec::new(),
         group: None,
         groups: vec![CollectionGroup {
-            collection: "700 - Coral Garden".into(),
-            dive: DiveTags::new(&dive, Units::default(), "Subsurface"),
-            location: LocationTags::new(&dive.site, None, None),
+            collection: Some("700 - Coral Garden".into()),
+            dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
+            location: Some(LocationTags::new(&dive.site, None, None)),
             photos,
         }],
     };

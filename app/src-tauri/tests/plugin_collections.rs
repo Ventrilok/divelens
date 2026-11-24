@@ -21,9 +21,9 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
         parent: vec!["Trips".into(), "2026".into()],
         group: Some("Dive Lens".into()),
         groups: vec![CollectionGroup {
-            collection: "700 - Coral Garden".into(),
-            dive: DiveTags::new(&dive, Units::default(), "Subsurface"),
-            location: LocationTags::new(&dive.site, None, None),
+            collection: Some("700 - Coral Garden".into()),
+            dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
+            location: Some(LocationTags::new(&dive.site, None, None)),
             photos: vec![
                 PhotoTags::new("11".into(), Some(point), 241, Units::default()),
                 PhotoTags::new("12".into(), None, -30, Units::default()),
@@ -104,9 +104,9 @@ fn collections_write_gps_and_altitude_in_a_write_of_their_own() {
             parent: Vec::new(),
             group: Some("Dive Lens".into()),
             groups: vec![CollectionGroup {
-                collection: "700 - Coral Garden".into(),
-                dive: DiveTags::new(&dive, Units::default(), "Subsurface"),
-                location: LocationTags::new(site, None, None),
+                collection: Some("700 - Coral Garden".into()),
+                dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
+                location: Some(LocationTags::new(site, None, None)),
                 photos: vec![
                     PhotoTags::new("11".into(), Some(point), 241, Units::default()),
                     PhotoTags::new("12".into(), None, -30, Units::default()),
@@ -223,9 +223,9 @@ fn collection_writes_step_every_requested_photo() {
         temp_c: Some(25.0),
     };
     let group = |collection: &str, photos: Vec<PhotoTags>| CollectionGroup {
-        collection: collection.into(),
-        dive: DiveTags::new(&dive, Units::default(), "Subsurface"),
-        location: LocationTags::new(&dive.site, None, None),
+        collection: Some(collection.into()),
+        dive: Some(DiveTags::new(&dive, Units::default(), "Subsurface")),
+        location: Some(LocationTags::new(&dive.site, None, None)),
         photos,
     };
     let request = CollectionsRequest {

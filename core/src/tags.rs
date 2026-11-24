@@ -114,11 +114,71 @@ pub struct PhotoTags {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionGroup {
-    /// Collection name, inside the request's collection set.
-    pub collection: String,
-    pub dive: DiveTags,
-    pub location: LocationTags,
+    /// Collection name, inside the request's collection set; `None`: the
+    /// diver unticked the collections, the photos are tagged only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection: Option<String>,
+    /// `None`: the diver unticked the dive details.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dive: Option<DiveTags>,
+    /// `None`: nothing of the place or GPS is written.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub location: Option<LocationTags>,
     pub photos: Vec<PhotoTags>,
+}
+
+/// The parts of a write request the diver left ticked.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Kept {
+    /// Dive details and per-photo values (depth, temperature, time, altitude).
+    pub dive: bool,
+    /// Country, city and location name.
+    pub place: bool,
+    /// Latitude and longitude.
+    pub gps: bool,
+    pub collections: bool,
+}
+
+impl Kept {
+    pub const ALL: Kept = Kept {
+        dive: true,
+        place: true,
+        gps: true,
+        collections: true,
+    };
+}
+
+impl LocationTags {
+    /// Keeps the ticked half: the place names, the GPS position, or both.
+    /// `None` when no value is left.
+    pub fn keep(mut self, place: bool, gps: bool) -> Option<LocationTags> {
+        if !place {
+            self.country = None;
+            self.city = None;
+            self.location = None;
+        }
+        if !gps {
+            self.lat = None;
+            self.lon = None;
+        }
+        let empty = self.country.is_none()
+            && self.city.is_none()
+            && self.location.is_none()
+            && self.lat.is_none()
+            && self.lon.is_none();
+        (!empty).then_some(self)
+    }
+}
+
+impl PhotoTags {
+    /// Drops the values that come from the dive (the id and clock offset stay).
+    fn clear_dive_values(&mut self) {
+        self.photo_depth = None;
+        self.photo_temp = None;
+        self.photo_elapsed = None;
+        self.gps_altitude = None;
+        self.depth_m = None;
+    }
 }
 
 /// Everything one "Create Collections › Apply" writes, in one Undo step.
@@ -137,6 +197,31 @@ pub struct CollectionsRequest {
 }
 
 impl CollectionsRequest {
+    /// Removes what is not ticked. `other_site`, when the diver picked
+    /// another site, replaces every group's location first (not the
+    /// collection names). A group left with nothing is dropped.
+    pub fn keep(&mut self, kept: Kept, other_site: Option<&LocationTags>) {
+        for g in &mut self.groups {
+            if let Some(site) = other_site {
+                g.location = Some(site.clone());
+            }
+            g.location = g.location.take().and_then(|l| l.keep(kept.place, kept.gps));
+            if !kept.dive {
+                g.dive = None;
+                g.photos.iter_mut().for_each(PhotoTags::clear_dive_values);
+            }
+            if !kept.collections {
+                g.collection = None;
+            }
+        }
+        self.groups
+            .retain(|g| g.dive.is_some() || g.location.is_some() || g.collection.is_some());
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.groups.is_empty()
+    }
+
     /// Copies each photo's depth to its GPS altitude, negative (spec F7).
     /// Photos without a depth get no altitude (see `PhotoTags::gps_altitude`).
     pub fn copy_depth_to_altitude(&mut self) {
@@ -145,6 +230,24 @@ impl CollectionsRequest {
 }
 
 impl TagRequest {
+    /// Removes what is not ticked (`kept.collections` does not concern
+    /// this request yet).
+    pub fn keep(&mut self, kept: Kept) {
+        self.location = self
+            .location
+            .take()
+            .and_then(|l| l.keep(kept.place, kept.gps));
+        if !kept.dive {
+            self.dive = None;
+            self.selection = None;
+            self.photos.clear();
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.dive.is_none() && self.location.is_none()
+    }
+
     /// Copies the depth of each photo taken during the dive to its GPS
     /// altitude, negative (spec F7), as Create Collections does.
     pub fn copy_depth_to_altitude(&mut self) {
@@ -419,9 +522,9 @@ mod tests {
             parent: Vec::new(),
             group: None,
             groups: vec![CollectionGroup {
-                collection: "700 - Coral Garden".into(),
-                dive: DiveTags::new(&dive(), Units::default(), "MacDive"),
-                location: LocationTags::new(&dive().site, None, None),
+                collection: Some("700 - Coral Garden".into()),
+                dive: Some(DiveTags::new(&dive(), Units::default(), "MacDive")),
+                location: Some(LocationTags::new(&dive().site, None, None)),
                 photos: vec![
                     PhotoTags::new("1".into(), Some(point), 0, Units::default()),
                     PhotoTags::new("2".into(), None, 0, Units::default()),
@@ -451,5 +554,193 @@ mod tests {
         assert!(!valid_gps(90.5, 0.0));
         assert!(!valid_gps(0.0, -180.1));
         assert!(!valid_gps(f64::NAN, 0.0));
+    }
+
+    fn full_location(site: &str) -> LocationTags {
+        LocationTags {
+            country: Some("Maldives".into()),
+            city: Some("Ari".into()),
+            location: Some(site.into()),
+            lat: Some(4.09),
+            lon: Some(72.86),
+        }
+    }
+
+    fn sample_photo(id: &str, depth: Option<f64>) -> PhotoTags {
+        let point = depth.map(|d| PhotoPoint {
+            elapsed_s: 60,
+            depth_m: d,
+            temp_c: Some(26.0),
+        });
+        let mut photo = PhotoTags::new(id.into(), point, 0, Units::default());
+        photo.gps_altitude = depth.map(altitude);
+        photo
+    }
+
+    fn sample_collections_request() -> CollectionsRequest {
+        let group = |name: &str, site: &str| CollectionGroup {
+            collection: Some(name.into()),
+            dive: Some(DiveTags::new(&dive(), Units::default(), "MacDive")),
+            location: Some(full_location(site)),
+            photos: vec![sample_photo("1", Some(18.4)), sample_photo("2", None)],
+        };
+        CollectionsRequest {
+            search: 1,
+            parent: Vec::new(),
+            group: None,
+            groups: vec![
+                group("1 - Maaya Thila", "Maaya Thila"),
+                group("2 - Fish Head", "Fish Head"),
+            ],
+        }
+    }
+
+    fn sample_tag_request() -> TagRequest {
+        TagRequest {
+            dive: Some(DiveTags::new(&dive(), Units::default(), "MacDive")),
+            location: Some(full_location("Maaya Thila")),
+            selection: Some(7),
+            photos: vec![sample_photo("1", Some(18.4))],
+        }
+    }
+
+    #[test]
+    fn location_keeps_only_the_ticked_half() {
+        let l = full_location("Maaya Thila");
+        let place = l.clone().keep(true, false).unwrap();
+        assert_eq!(
+            (place.country.as_deref(), place.lat),
+            (Some("Maldives"), None)
+        );
+        let gps = l.clone().keep(false, true).unwrap();
+        assert_eq!(
+            (gps.country, gps.city, gps.location, gps.lat),
+            (None, None, None, Some(4.09))
+        );
+        assert!(l.clone().keep(false, false).is_none());
+        let no_gps = LocationTags {
+            lat: None,
+            lon: None,
+            ..l
+        };
+        assert!(no_gps.keep(false, true).is_none());
+    }
+
+    #[test]
+    fn keep_all_changes_nothing() {
+        let mut r = sample_collections_request();
+        let before = serde_json::to_value(&r).unwrap();
+        r.keep(Kept::ALL, None);
+        assert_eq!(serde_json::to_value(&r).unwrap(), before);
+    }
+
+    #[test]
+    fn every_combination_keeps_only_what_is_ticked() {
+        for bits in 0u8..16 {
+            let kept = Kept {
+                dive: bits & 1 != 0,
+                place: bits & 2 != 0,
+                gps: bits & 4 != 0,
+                collections: bits & 8 != 0,
+            };
+            let mut r = sample_collections_request();
+            r.keep(kept, None);
+            if bits == 0 {
+                assert!(r.is_empty());
+                continue;
+            }
+            assert_eq!(r.groups.len(), 2);
+            for g in &r.groups {
+                assert_eq!(g.dive.is_some(), kept.dive);
+                assert_eq!(g.collection.is_some(), kept.collections);
+                assert_eq!(
+                    g.location.as_ref().is_some_and(|l| l.country.is_some()),
+                    kept.place
+                );
+                assert_eq!(
+                    g.location.as_ref().is_some_and(|l| l.lat.is_some()),
+                    kept.gps
+                );
+                assert_eq!(
+                    g.photos
+                        .iter()
+                        .any(|p| p.photo_depth.is_some() || p.gps_altitude.is_some()),
+                    kept.dive
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn another_site_replaces_every_groups_location_not_its_collection() {
+        let beach = LocationTags {
+            country: None,
+            city: None,
+            location: Some("Plage".into()),
+            lat: None,
+            lon: None,
+        };
+        let mut r = sample_collections_request();
+        let names: Vec<_> = r.groups.iter().map(|g| g.collection.clone()).collect();
+        r.keep(Kept::ALL, Some(&beach));
+        for g in &r.groups {
+            assert_eq!(
+                g.location.as_ref().unwrap().location.as_deref(),
+                Some("Plage")
+            );
+        }
+        let after: Vec<_> = r.groups.iter().map(|g| g.collection.clone()).collect();
+        assert_eq!(names, after);
+    }
+
+    #[test]
+    fn tag_request_keep_all_changes_nothing() {
+        let mut r = sample_tag_request();
+        let before = serde_json::to_value(&r).unwrap();
+        r.keep(Kept::ALL);
+        assert_eq!(serde_json::to_value(&r).unwrap(), before);
+    }
+
+    #[test]
+    fn tag_request_every_combination_keeps_only_what_is_ticked() {
+        for bits in 0u8..8 {
+            let kept = Kept {
+                dive: bits & 1 != 0,
+                place: bits & 2 != 0,
+                gps: bits & 4 != 0,
+                collections: true,
+            };
+            let mut r = sample_tag_request();
+            r.keep(kept);
+            if bits == 0 {
+                assert!(r.is_empty());
+                continue;
+            }
+            assert_eq!(r.dive.is_some(), kept.dive);
+            assert_eq!(r.selection.is_some(), kept.dive);
+            assert_eq!(!r.photos.is_empty(), kept.dive);
+            assert_eq!(
+                r.location.as_ref().is_some_and(|l| l.country.is_some()),
+                kept.place
+            );
+            assert_eq!(
+                r.location.as_ref().is_some_and(|l| l.lat.is_some()),
+                kept.gps
+            );
+        }
+    }
+
+    #[test]
+    fn tag_request_another_site_is_not_applied_here() {
+        // TagRequest::keep takes no other site: its location is already the
+        // chosen one. Unticking everything empties it.
+        let mut r = sample_tag_request();
+        r.keep(Kept {
+            dive: false,
+            place: false,
+            gps: false,
+            collections: true,
+        });
+        assert!(r.is_empty());
     }
 }
