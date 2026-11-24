@@ -9,25 +9,14 @@ use std::sync::Mutex;
 
 use divelens_core::collections::Span;
 use divelens_core::profile::Sample;
-use divelens_core::tags::{
-    CollectionPlace, DiveTags, Kept, LocationTags, TagRequest, Units, valid_gps,
-};
+use divelens_core::tags::{CollectionPlace, DiveTags, Kept, LocationTags, TagRequest, Units};
 use divelens_core::{Dive, Error, Site};
 
 use super::LocationChoice;
 use super::selection::{InDive, PerPhoto, Refusal, Selection, per_photo};
 use crate::apply::errors::ApplyError;
 use crate::apply::searches::Searches;
-
-/// A position edited on the screen is whole and valid, or absent: half a
-/// position, or one off the globe, is refused.
-pub(crate) fn check_gps(lat: Option<f64>, lon: Option<f64>) -> Result<(), ApplyError> {
-    match (lat, lon) {
-        (Some(a), Some(b)) if !valid_gps(a, b) => Err(ApplyError::BadGps),
-        (Some(_), None) | (None, Some(_)) => Err(ApplyError::BadGps),
-        _ => Ok(()),
-    }
-}
+use crate::apply::site::another_site;
 
 /// The dive `id` names (the first, should two share it).
 pub(super) fn find_dive(dives: Vec<Dive>, id: &str) -> Result<Dive, ApplyError> {
@@ -35,14 +24,6 @@ pub(super) fn find_dive(dives: Vec<Dive>, id: &str) -> Result<Dive, ApplyError> 
         .into_iter()
         .find(|d| d.id == id)
         .ok_or(ApplyError::UnknownDive)
-}
-
-/// The site `site_id` names (the first, should two share it).
-pub(crate) fn find_site(sites: Vec<Site>, site_id: &str) -> Result<Site, ApplyError> {
-    sites
-        .into_iter()
-        .find(|s| s.id.as_deref() == Some(site_id))
-        .ok_or(ApplyError::UnknownSite)
 }
 
 /// The location to write, if one is ticked: the dive's own site (a dive
@@ -60,10 +41,7 @@ pub(super) fn location(
             Some(LocationTags::new(&dive.site, None, None))
         }
         Some(LocationChoice::Site { site_id, lat, lon }) => {
-            check_gps(*lat, *lon)?;
-            let sites = sites().map_err(|detail| ApplyError::Source { detail })?;
-            let site = find_site(sites, site_id)?;
-            Some(LocationTags::new(&site, *lat, *lon))
+            Some(another_site(site_id, *lat, *lon, sites)?)
         }
     })
 }
@@ -248,46 +226,14 @@ mod tests {
     }
 
     #[test]
-    fn half_a_gps_position_is_refused() {
-        assert!(matches!(
-            check_gps(Some(12.5), None),
-            Err(ApplyError::BadGps)
-        ));
-        assert!(matches!(
-            check_gps(None, Some(-45.25)),
-            Err(ApplyError::BadGps)
-        ));
-        assert!(matches!(
-            check_gps(Some(91.0), Some(0.0)),
-            Err(ApplyError::BadGps)
-        ));
-        assert!(check_gps(Some(12.5), Some(-45.25)).is_ok());
-        assert!(check_gps(None, None).is_ok());
-    }
-
-    #[test]
     fn unknown_dive_or_site_is_refused() {
         assert!(matches!(
             find_dive(vec![], "x"),
             Err(ApplyError::UnknownDive)
         ));
-        assert!(matches!(
-            find_site(vec![], "x"),
-            Err(ApplyError::UnknownSite)
-        ));
         // The one the id names; the first when two share it.
         let dives = vec![dive("B", 700), dive("A", 701), dive("A", 702)];
         assert_eq!(find_dive(dives, "A").unwrap().number, Some(701));
-        let sites = vec![
-            Site::default(),
-            site("s2", "Blue Hole"),
-            site("s1", "Coral Garden"),
-            site("s1", "Shark Point"),
-        ];
-        assert_eq!(
-            find_site(sites, "s1").unwrap().name.as_deref(),
-            Some("Coral Garden")
-        );
     }
 
     #[test]

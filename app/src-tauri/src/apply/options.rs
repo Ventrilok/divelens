@@ -16,6 +16,16 @@ pub(crate) struct WriteOptions {
 }
 
 impl WriteOptions {
+    /// Everything ticked, the altitude following the setting: what the
+    /// current screens write.
+    pub(crate) const EVERYTHING: WriteOptions = WriteOptions {
+        dive: true,
+        altitude: None,
+        place: true,
+        gps: true,
+        collections: true,
+    };
+
     pub(crate) fn kept(&self) -> Kept {
         Kept {
             dive: self.dive,

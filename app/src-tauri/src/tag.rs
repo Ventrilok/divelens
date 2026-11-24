@@ -2,7 +2,7 @@
 //! selected in Lightroom and their per-photo values are in `selection`; what
 //! a choice writes, and which refusal wins, in `rules`.
 
-pub(crate) mod rules;
+mod rules;
 pub(crate) mod selection;
 
 use std::sync::Mutex;

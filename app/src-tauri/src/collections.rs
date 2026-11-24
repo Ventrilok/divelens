@@ -14,12 +14,13 @@ use crate::apply::errors::ApplyError;
 use crate::apply::offsets::Offsets;
 use crate::apply::options::WriteOptions;
 use crate::apply::searches::{Searches, keep_search};
+use crate::apply::site::another_site;
 use crate::apply::{ask, send, write_and_remember};
 use crate::dive_log::{LogId, Writes, open, source_info};
 use crate::files::config_dir;
 use crate::lightroom::{CollectionSet, Command, WrittenCollection};
 use crate::settings::{Settings, units_in_use};
-use crate::tag::{LocationChoice, rules};
+use crate::tag::LocationChoice;
 use plan::{Choices, Period, Preview, Session};
 
 /// Photos found for "Create Collections", kept until the next search.
@@ -171,7 +172,9 @@ pub(crate) async fn apply_collections(
         let writes = app.state::<Writes>();
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
         let units = units_in_use(&app, &info);
-        let (request, empty_dives, applied) = {
+        // Another site alone means everything ticked, as today's screen.
+        let chosen = chosen_options(options, other_site.as_ref());
+        let (request, empty_dives, applied, altitude_setting) = {
             let state = app.state::<CollectionsState>();
             let searches = state.searches.lock().expect("collections");
             let session = searches.get(search).ok_or(ApplyError::NoPhotos)?;
@@ -181,8 +184,9 @@ pub(crate) async fn apply_collections(
             let settings = Settings::load(&config_dir(&app));
             request.parent = settings.collections.parent.clone();
             request.group = settings.collections.group_name();
-            // With options, the altitude is decided below, with the rest.
-            if options.is_none() && settings.depth_to_altitude {
+            // Today's path copies the altitude here; with options or another
+            // site it is decided below, with the rest.
+            if chosen.is_none() && settings.depth_to_altitude {
                 request.copy_depth_to_altitude();
             }
             let preview = session.preview(&choices);
@@ -192,25 +196,25 @@ pub(crate) async fn apply_collections(
                 .filter(|d| d.photos == 0)
                 .map(|d| d.id.clone())
                 .collect();
-            (request, empty, session.applied(&choices))
+            (
+                request,
+                empty,
+                session.applied(&choices),
+                settings.depth_to_altitude,
+            )
         };
         let mut request = request;
-        if let Some(options) = &options {
+        if let Some(options) = &chosen {
             let other = match &other_site {
                 Some(LocationChoice::Site { site_id, lat, lon }) => {
-                    rules::check_gps(*lat, *lon)?;
-                    let sites = open(&app, &info)
-                        .and_then(|opened| opened.log.sites())
-                        .map_err(|detail| ApplyError::Source { detail })?;
-                    let site = rules::find_site(sites, site_id)?;
-                    Some(LocationTags::new(&site, *lat, *lon))
+                    Some(another_site(site_id, *lat, *lon, || {
+                        open(&app, &info).and_then(|opened| opened.log.sites())
+                    })?)
                 }
                 // Each dive's own site is already on its group.
                 Some(LocationChoice::DiveSite) | None => None,
             };
-            with_options(&mut request, options, other.as_ref(), || {
-                Settings::load(&config_dir(&app)).depth_to_altitude
-            })?;
+            with_options(&mut request, options, other.as_ref(), || altitude_setting)?;
         }
         if request.is_empty() {
             return Err(ApplyError::NothingToWrite);
@@ -253,6 +257,15 @@ pub(crate) async fn apply_collections(
     })
     .await
     .expect("collections task failed")
+}
+
+/// The options in force: those sent, else everything ticked when another
+/// site is sent alone, else none (today's path: nothing sent).
+fn chosen_options(
+    options: Option<WriteOptions>,
+    other_site: Option<&LocationChoice>,
+) -> Option<WriteOptions> {
+    options.or_else(|| other_site.map(|_| WriteOptions::EVERYTHING))
 }
 
 /// What the diver ticked, applied to the request built as today: another
@@ -423,6 +436,42 @@ mod tests {
         let mut got = request();
         let none = options(false, Some(true), false, false, false);
         let refused = with_options(&mut got, &none, None, || panic!("setting read"));
+        assert!(matches!(refused, Err(ApplyError::NothingToWrite)));
+    }
+
+    #[test]
+    fn another_site_alone_means_everything_ticked() {
+        let diving = Some(LocationChoice::DiveSite);
+        assert!(chosen_options(None, None).is_none());
+        let chosen = chosen_options(None, diving.as_ref()).expect("options");
+        let mut got = request();
+        let other = LocationTags::new(&dive("C", "Shark Reef").site, None, None);
+        with_options(&mut got, &chosen, Some(&other), || true).unwrap();
+        // Everything kept, the other site everywhere, the altitude from the setting.
+        let mut expected = request();
+        expected
+            .groups
+            .iter_mut()
+            .for_each(|g| g.location = Some(other.clone()));
+        expected.copy_depth_to_altitude();
+        assert_eq!(got, expected);
+        // Options sent win.
+        let sent = options(true, None, false, false, false);
+        assert_eq!(
+            chosen_options(Some(sent), diving.as_ref()).map(|o| o.place),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn another_site_without_a_position_and_only_gps_ticked_is_refused() {
+        let mut bare = dive("C", "Shark Reef").site;
+        bare.lat = None;
+        bare.lon = None;
+        let other = LocationTags::new(&bare, None, None);
+        let mut got = request();
+        let only_gps = options(false, None, false, true, false);
+        let refused = with_options(&mut got, &only_gps, Some(&other), || true);
         assert!(matches!(refused, Err(ApplyError::NothingToWrite)));
     }
 }

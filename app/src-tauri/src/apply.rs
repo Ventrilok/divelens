@@ -6,6 +6,7 @@ pub(crate) mod errors;
 pub(crate) mod offsets;
 pub(crate) mod options;
 pub(crate) mod searches;
+pub(crate) mod site;
 
 use std::collections::BTreeMap;
 use std::sync::mpsc::{self, RecvError};
