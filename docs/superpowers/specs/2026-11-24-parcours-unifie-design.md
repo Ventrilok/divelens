@@ -209,7 +209,7 @@ Essais manuels du propriétaire : seulement en phase 4. La mesure du catalogue, 
 À vérifier par le propriétaire en lisant ; aucun n'a été décidé par lui explicitement.
 
 - « Suggérer pour tous » dans le chemin « sélection ».
-- « Terminer » (récapitulatif du chemin « sélection ») ramène à l'étape 1. « Retour aux plongées » ramène à l'étape 2 sans plongée cochée, comme aujourd'hui. « Traiter la plongée N à part » ramène à l'étape 2 avec cette seule plongée cochée.
+- « Terminer » (récapitulatif du chemin « sélection ») ramène à l'étape 1. « Retour aux plongées » ramène à l'étape 2 sans plongée cochée, comme aujourd'hui. « Traiter la plongée N à part » mène directement à l'étape 3 (Horloges) avec cette seule plongée cochée, comme aujourd'hui.
 - Au moins une option cochée à l'étape 4 pour pouvoir appliquer.
 - « Détails de la plongée » décochée : rien n'est effacé des champs de plongée déjà présents.
 - « Autre site » : GPS modifiable dans les deux chemins.
