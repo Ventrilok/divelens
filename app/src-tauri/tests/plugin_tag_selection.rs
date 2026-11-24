@@ -398,6 +398,22 @@ fn a_request_with_nothing_is_still_refused() {
 }
 
 #[test]
+fn a_request_with_only_a_null_collection_is_refused() {
+    // JSON null decodes to the plug-in's null marker, not to a missing key:
+    // it still counts as no collection.
+    let out = lua_value(
+        r#"
+        local Json = require "Json"
+        local Tagging = require "Tagging"
+        local request = Json.decode('{"collection":null}')
+        local changes, why = Tagging.plan(request, function(iso) return iso end)
+        return tostring(changes) .. "/" .. tostring(why)
+        "#,
+    );
+    assert_eq!(out, "nil/nothing to write");
+}
+
+#[test]
 fn the_collection_of_a_request_is_checked() {
     let lua = lua();
     run(
