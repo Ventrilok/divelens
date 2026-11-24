@@ -7,7 +7,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Mutex;
 
-use divelens_core::collections::Span;
+use divelens_core::collections::{Span, collection_name};
 use divelens_core::profile::Sample;
 use divelens_core::tags::{CollectionPlace, DiveTags, Kept, LocationTags, TagRequest, Units};
 use divelens_core::{Dive, Error, Site};
@@ -108,6 +108,24 @@ pub(super) fn apply_per_photo(
         Err(Refusal::Describe) => Err(ApplyError::NoPhotos),
         Err(Refusal::Profile(detail)) => Err(ApplyError::Source { detail }),
     }
+}
+
+/// Where the selection goes when the collections are ticked: the collection
+/// of the chosen dive, named as Create Collections names it. Without the
+/// tick, or without a dive to name it, no collection. `settings` gives the
+/// collection settings' parent and group, read only when a collection goes.
+pub(super) fn collection_place(
+    collections: bool,
+    dive: Option<&Dive>,
+    settings: impl FnOnce() -> (Vec<String>, Option<String>),
+) -> Option<CollectionPlace> {
+    let dive = dive.filter(|_| collections)?;
+    let (parent, group) = settings();
+    Some(CollectionPlace {
+        name: collection_name(dive),
+        parent,
+        group,
+    })
 }
 
 /// What `build_request` made: the request, the offsets applied (to remember
@@ -537,6 +555,30 @@ mod tests {
             parent: vec![],
             group: None,
         }
+    }
+
+    #[test]
+    fn a_collection_only_with_the_tick_and_a_chosen_dive() {
+        let d = dive("A", 701);
+        let settings = || (vec!["Trips".to_string()], Some("Dive Lens".to_string()));
+        assert_eq!(
+            collection_place(true, Some(&d), settings),
+            Some(CollectionPlace {
+                name: collection_name(&d),
+                parent: vec!["Trips".into()],
+                group: Some("Dive Lens".into()),
+            })
+        );
+        // No dive to name it, or the collections unticked: no collection,
+        // and the settings are not read.
+        assert_eq!(
+            collection_place(true, None, || panic!("settings read")),
+            None
+        );
+        assert_eq!(
+            collection_place(false, Some(&d), || panic!("settings read")),
+            None
+        );
     }
 
     #[test]

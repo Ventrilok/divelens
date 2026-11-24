@@ -8,8 +8,7 @@ pub(crate) mod selection;
 use std::sync::Mutex;
 use std::sync::mpsc;
 
-use divelens_core::collections::collection_name;
-use divelens_core::tags::{CollectionPlace, TagRequest};
+use divelens_core::tags::TagRequest;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
@@ -111,27 +110,16 @@ fn tag_request(
     };
     let location = rules::location(choice.location.as_ref(), dive.as_ref(), || source.sites())?;
     let dive_id = dive.as_ref().map(|d| d.id.clone());
-    let (ticked, altitude_set) = match &choice.options {
-        None => (None, None),
-        Some(options) => {
-            let collection = match (&dive, options.collections) {
-                (Some(dive), true) => {
-                    let settings = Settings::load(&config_dir(app));
-                    Some(CollectionPlace {
-                        name: collection_name(dive),
-                        parent: settings.collections.parent.clone(),
-                        group: settings.collections.group_name(),
-                    })
-                }
-                _ => None,
-            };
-            let ticked = rules::Ticked {
-                kept: options.kept(),
-                collection,
-            };
-            (Some(ticked), Some(*options))
-        }
-    };
+    let ticked = choice.options.map(|options| rules::Ticked {
+        kept: options.kept(),
+        collection: rules::collection_place(options.collections, dive.as_ref(), || {
+            let place = Settings::load(&config_dir(app)).collections;
+            let group = place.group_name();
+            (place.parent, group)
+        }),
+    });
+    // The setting is read only when the altitude follows it, and last.
+    let depth_to_altitude = || Settings::load(&config_dir(app)).depth_to_altitude;
     let built = rules::build_request(
         dive,
         location,
@@ -146,12 +134,9 @@ fn tag_request(
             )
         },
         |id| source.profile(id),
-        || {
-            let setting = || Settings::load(&config_dir(app)).depth_to_altitude;
-            match altitude_set {
-                None => setting(),
-                Some(options) => options.copies_altitude(setting),
-            }
+        || match choice.options {
+            None => depth_to_altitude(),
+            Some(options) => options.copies_altitude(depth_to_altitude),
         },
         ticked,
     )?;
