@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::sync::mpsc;
 
 use divelens_core::collections::collection_name;
-use divelens_core::tags::{CollectionPlace, Kept, TagRequest};
+use divelens_core::tags::{CollectionPlace, TagRequest};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
@@ -111,8 +111,8 @@ fn tag_request(
     };
     let location = rules::location(choice.location.as_ref(), dive.as_ref(), || source.sites())?;
     let dive_id = dive.as_ref().map(|d| d.id.clone());
-    let (kept, collection, altitude_set) = match &choice.options {
-        None => (Kept::ALL, None, None),
+    let (ticked, altitude_set) = match &choice.options {
+        None => (None, None),
         Some(options) => {
             let collection = match (&dive, options.collections) {
                 (Some(dive), true) => {
@@ -125,7 +125,11 @@ fn tag_request(
                 }
                 _ => None,
             };
-            (options.kept(), collection, Some(*options))
+            let ticked = rules::Ticked {
+                kept: options.kept(),
+                collection,
+            };
+            (Some(ticked), Some(*options))
         }
     };
     let built = rules::build_request(
@@ -149,8 +153,7 @@ fn tag_request(
                 Some(options) => options.copies_altitude(setting),
             }
         },
-        kept,
-        collection,
+        ticked,
     )?;
     if let Some(e) = built.unreadable {
         log::warn!(
