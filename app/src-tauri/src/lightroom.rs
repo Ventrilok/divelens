@@ -1470,7 +1470,7 @@ mod tests {
             write(
                 to_app,
                 &format!(
-                    "{{\"type\":\"applied\",\"id\":{id},\"count\":5,\"collection\":{{\"collection\":\"707 - Maaya Thila\",\"count\":5,\"created\":true}}}}\n"
+                    "{{\"type\":\"applied\",\"id\":{id},\"count\":5,\"collection\":{{\"collection\":\"101 - Three Arches Reef\",\"count\":5,\"created\":true}}}}\n"
                 ),
             );
             outcome_tx.send(outcome.recv().unwrap()).unwrap();
@@ -1484,7 +1484,7 @@ mod tests {
             Ok(TagWritten {
                 count: 5,
                 collection: Some(WrittenCollection {
-                    collection: Some("707 - Maaya Thila".into()),
+                    collection: Some("101 - Three Arches Reef".into()),
                     count: 5,
                     created: true,
                 })

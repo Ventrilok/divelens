@@ -578,11 +578,11 @@ mod tests {
 
     fn full_location(site: &str) -> LocationTags {
         LocationTags {
-            country: Some("Maldives".into()),
-            city: Some("Ari".into()),
+            country: Some("Fictia".into()),
+            city: Some("North Bay".into()),
             location: Some(site.into()),
-            lat: Some(4.09),
-            lon: Some(72.86),
+            lat: Some(12.34),
+            lon: Some(56.78),
         }
     }
 
@@ -609,8 +609,8 @@ mod tests {
             parent: Vec::new(),
             group: None,
             groups: vec![
-                group("1 - Maaya Thila", "Maaya Thila"),
-                group("2 - Fish Head", "Fish Head"),
+                group("1 - Three Arches Reef", "Three Arches Reef"),
+                group("2 - Lantern Wall", "Lantern Wall"),
             ],
         }
     }
@@ -618,7 +618,7 @@ mod tests {
     fn sample_tag_request() -> TagRequest {
         TagRequest {
             dive: Some(DiveTags::new(&dive(), Units::default(), "MacDive")),
-            location: Some(full_location("Maaya Thila")),
+            location: Some(full_location("Three Arches Reef")),
             collection: None,
             selection: Some(7),
             photos: vec![sample_photo("1", Some(18.4))],
@@ -627,16 +627,16 @@ mod tests {
 
     #[test]
     fn location_keeps_only_the_ticked_half() {
-        let l = full_location("Maaya Thila");
+        let l = full_location("Three Arches Reef");
         let place = l.clone().keep(true, false).unwrap();
         assert_eq!(
             (place.country.as_deref(), place.lat),
-            (Some("Maldives"), None)
+            (Some("Fictia"), None)
         );
         let gps = l.clone().keep(false, true).unwrap();
         assert_eq!(
             (gps.country, gps.city, gps.location, gps.lat),
-            (None, None, None, Some(4.09))
+            (None, None, None, Some(12.34))
         );
         assert!(l.clone().keep(false, false).is_none());
         let no_gps = LocationTags {
@@ -753,7 +753,7 @@ mod tests {
 
     fn place() -> CollectionPlace {
         CollectionPlace {
-            name: "707 - Maaya Thila".into(),
+            name: "101 - Three Arches Reef".into(),
             parent: vec!["Voyages".into()],
             group: Some("Dive Lens".into()),
         }
@@ -771,7 +771,7 @@ mod tests {
         assert_eq!(
             with["collection"],
             serde_json::json!({
-                "name": "707 - Maaya Thila",
+                "name": "101 - Three Arches Reef",
                 "parent": ["Voyages"],
                 "group": "Dive Lens"
             })

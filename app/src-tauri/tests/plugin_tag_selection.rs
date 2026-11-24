@@ -377,7 +377,7 @@ fn a_request_with_only_a_collection_is_planned() {
         r#"
         local Json = require "Json"
         local Tagging = require "Tagging"
-        local request = Json.decode('{"collection":{"name":"707 - Maaya Thila","parent":[]},"dive":null,"location":null}')
+        local request = Json.decode('{"collection":{"name":"101 - Three Arches Reef","parent":[]},"dive":null,"location":null}')
         local changes, why = Tagging.plan(request, function(iso) return iso end)
         return tostring(changes and #changes) .. "/" .. tostring(why)
         "#,
@@ -432,8 +432,8 @@ fn the_collection_of_a_request_is_checked() {
         assert(c == nil and why == "bad collection")
         c, why = plan('{"collection":{"name":"A","parent":[""]}}')
         assert(c == nil and why == "bad collection")
-        c = plan('{"collection":{"name":"707 - Maaya Thila","parent":["Voyages"],"group":"Dive Lens"}}')
-        assert(c.name == "707 - Maaya Thila" and c.group == "Dive Lens")
+        c = plan('{"collection":{"name":"101 - Three Arches Reef","parent":["Voyages"],"group":"Dive Lens"}}')
+        assert(c.name == "101 - Three Arches Reef" and c.group == "Dive Lens")
         assert(#c.parent == 1 and c.parent[1] == "Voyages")
         c = plan('{"collection":{"name":"A","parent":[],"group":""}}')
         assert(c.group == nil and #c.parent == 0)
@@ -450,7 +450,7 @@ fn a_collection_already_there_is_completed_not_created() {
         &lua,
         r#"
         local Tagging = require "Tagging"
-        local name = "707 - Maaya Thila"
+        local name = "101 - Three Arches Reef"
         local r = Tagging.selectionCollection(name, 5, { [name] = true })
         assert(r.collection == name and r.count == 5 and r.created == false)
         assert(Tagging.selectionCollection(name, 5, {}).created == true)
