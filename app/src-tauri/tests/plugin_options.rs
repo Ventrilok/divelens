@@ -4,8 +4,6 @@
 
 mod common;
 
-use std::collections::BTreeSet;
-
 use common::{json_of, lua, sample_dive};
 use divelens_core::profile::PhotoPoint;
 use divelens_core::tags::{
@@ -64,33 +62,113 @@ fn point() -> PhotoPoint {
     }
 }
 
-/// Lua defining `values(changes, id, out)`: adds "id field" to `out` for each
-/// change that writes a value (not a clearing).
-const VALUES_LUA: &str = r#"
-    function values(changes, id, out)
+/// Lua defining `record(changes, id, out)`: adds "id field written" or
+/// "id field cleared" to `out` for every change, a clearing (nil value)
+/// included, and `BEFORE`, what photo "1" carries before the write: another
+/// dive, with its own values and an altitude marker matching its altitude.
+const RECORD_LUA: &str = r#"
+    function record(changes, id, out)
         for _, c in ipairs(changes) do
-            if c.value ~= nil then out[#out + 1] = id .. " " .. c.field end
+            out[#out + 1] = id .. " " .. c.field .. (c.value ~= nil and " written" or " cleared")
         end
     end
+    BEFORE = {
+        Source = "MacDive", StartDate = "2025-12-30T08:00:00", DiveId = "699",
+        PhotoDepth = "3.0 m", PhotoTemp = "20.0°C", PhotoElapsed = "01:00",
+        ClockOffset = "+00:00", WrittenAltitude = "-3", gpsAltitude = -3,
+    }
 "#;
 
-fn written(out: &serde_json::Value) -> BTreeSet<String> {
+/// Where the two photos are, for the expectation.
+#[derive(Clone, Copy)]
+enum Path {
+    /// "Create Collections": photo 2 is at the surface, in the dive's group.
+    Catalogue,
+    /// "Tag Selection": photo 2 was taken outside the dive.
+    Selection,
+}
+
+/// Every write ("photo field written|cleared") the options must give, the
+/// sample dive having no low temperature and no rating, and photo 1 (12 m,
+/// carrying another dive) being the only photo with a depth.
+fn expected(c: &Combination, path: Path, p1: &str, p2: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut add =
+        |photo: &str, field: &str, state: &str| out.push(format!("{photo} {field} {state}"));
+    for photo in [p1, p2] {
+        if c.dive {
+            // Dive details ticked: the dive's fields on both photos; what the
+            // dive has not (low temperature, rating) is cleared.
+            for field in [
+                "DiveId",
+                "StartDate",
+                "EndDate",
+                "Duration",
+                "MaxDepth",
+                "TempHigh",
+                "Source",
+            ] {
+                add(photo, field, "written");
+            }
+            for field in ["TempLow", "Rating"] {
+                add(photo, field, "cleared");
+            }
+        }
+        if c.place {
+            // Place ticked: the site's country and name (it has no city).
+            add(photo, "country", "written");
+            add(photo, "location", "written");
+        }
+        if c.gps {
+            // GPS ticked: the site's position.
+            add(photo, "gps", "written");
+        }
+    }
+    if c.dive {
+        // Photo 1, taken during the dive, gets its own values, replacing
+        // those of the other dive it carried.
+        for field in ["PhotoDepth", "PhotoTemp", "PhotoElapsed", "ClockOffset"] {
+            add(p1, field, "written");
+        }
+        if c.copies_altitude() {
+            // Altitude ticked with the dive: the depth copied, with its marker.
+            add(p1, "gpsAltitude", "written");
+            add(p1, "WrittenAltitude", "written");
+        } else {
+            // No new altitude: the other dive's own altitude and marker go.
+            add(p1, "gpsAltitude", "cleared");
+            add(p1, "WrittenAltitude", "cleared");
+        }
+        if let Path::Catalogue = path {
+            // A photo at the surface of the dive's group: its clock offset
+            // written, its per-photo values written empty.
+            for field in ["PhotoDepth", "PhotoTemp", "PhotoElapsed"] {
+                add(p2, field, "cleared");
+            }
+            add(p2, "ClockOffset", "written");
+        }
+    }
+    // Dive details unticked: no Dive Lens field at all, and nothing cleared
+    // on photo 1 (the other dive's values stay) - nothing more is added.
+    out.sort();
+    out
+}
+
+fn recorded(out: &serde_json::Value) -> Vec<String> {
     // An empty list is encoded as null by the plug-in's JSON.
-    out["written"]
+    let mut list: Vec<String> = out["written"]
         .as_array()
         .map(Vec::as_slice)
         .unwrap_or_default()
         .iter()
         .map(|v| v.as_str().unwrap().to_string())
-        .collect()
-}
-
-fn has(set: &BTreeSet<String>, entry: &str) -> bool {
-    set.contains(entry)
+        .collect();
+    list.sort();
+    list
 }
 
 /// Every combination of the "Create Collections" path: the request `keep`
-/// leaves, planned by the plug-in, writes only what is ticked.
+/// leaves, planned by the plug-in, writes exactly what is ticked.
 #[test]
 fn every_option_combination_writes_only_what_is_ticked_catalogue() {
     let sample = sample_dive();
@@ -133,18 +211,19 @@ fn every_option_combination_writes_only_what_is_ticked_catalogue() {
             &lua,
             &format!(
                 r#"
-                {VALUES_LUA}
+                {RECORD_LUA}
                 local Json = require "Json"
                 local Tagging = require "Tagging"
                 local groups = assert(Tagging.planCollections(Json.decode(input), function(iso) return iso end))
-                Tagging.resolvePhotos(groups, {{ ["1"] = {{ id = "1" }}, ["2"] = {{ id = "2" }} }})
-                local plan = Tagging.collectionWrites(groups, {{}}, {{}})
+                local p1, p2 = {{ id = "1" }}, {{ id = "2" }}
+                Tagging.resolvePhotos(groups, {{ ["1"] = p1, ["2"] = p2 }})
+                local plan = Tagging.collectionWrites(groups, {{ [p1] = BEFORE }}, {{}})
                 local out = {{}}
                 for _, step in ipairs(plan.groups[1].steps) do
-                    values(step.changes, step.photo.id, out)
+                    record(step.changes, step.photo.id, out)
                 end
                 for _, later in ipairs(plan.later) do
-                    values(later.changes, later.photo.id, out)
+                    record(later.changes, later.photo.id, out)
                 end
                 return Json.encode {{
                     written = out,
@@ -154,27 +233,12 @@ fn every_option_combination_writes_only_what_is_ticked_catalogue() {
                 "#
             ),
         );
-        let w = written(&out);
         let l = c.label();
-        assert_eq!(has(&w, "1 StartDate"), c.dive, "StartDate: {l}");
-        assert_eq!(has(&w, "2 StartDate"), c.dive, "StartDate: {l}");
-        assert_eq!(has(&w, "1 PhotoDepth"), c.dive, "PhotoDepth: {l}");
-        assert!(!has(&w, "2 PhotoDepth"), "depth at the surface: {l}");
         assert_eq!(
-            has(&w, "1 gpsAltitude"),
-            c.copies_altitude(),
-            "gpsAltitude: {l}"
+            recorded(&out),
+            expected(&c, Path::Catalogue, "1", "2"),
+            "{l}"
         );
-        assert_eq!(
-            has(&w, "1 WrittenAltitude"),
-            c.copies_altitude(),
-            "WrittenAltitude: {l}"
-        );
-        assert!(!has(&w, "2 gpsAltitude"), "altitude at the surface: {l}");
-        assert_eq!(has(&w, "1 country"), c.place, "country: {l}");
-        assert_eq!(has(&w, "1 location"), c.place, "location: {l}");
-        assert_eq!(has(&w, "1 gps"), c.gps, "gps: {l}");
-        assert_eq!(has(&w, "2 gps"), c.gps, "gps: {l}");
         assert_eq!(
             out["collection"].is_string(),
             c.collections,
@@ -230,7 +294,7 @@ fn every_option_combination_writes_only_what_is_ticked_selection() {
             &lua,
             &format!(
                 r#"
-                {VALUES_LUA}
+                {RECORD_LUA}
                 local Json = require "Json"
                 local Tagging = require "Tagging"
                 local request = Json.decode(input)
@@ -239,56 +303,26 @@ fn every_option_combination_writes_only_what_is_ticked_selection() {
                 assert(perPhoto or not why, why)
                 local place = Tagging.planCollection(request)
                 local p1, p2 = {{ id = "p1" }}, {{ id = "p2" }}
-                local plan = Tagging.tagWrites(changes, {{ p1, p2 }}, {{}}, perPhoto, function(p) return p.id end)
-                local out, depthChanges = {{}}, {{}}
-                for _, w in ipairs(plan.writes) do
-                    values(w.changes, w.photo.id, out)
-                    for _, ch in ipairs(w.changes) do
-                        if ch.field == "PhotoDepth" then depthChanges[#depthChanges + 1] = w.photo.id end
-                    end
-                end
-                for _, l in ipairs(plan.later) do
-                    values(l.changes, l.photo.id, out)
-                end
+                local plan = Tagging.tagWrites(changes, {{ p1, p2 }}, {{ [p1] = BEFORE }}, perPhoto, function(p) return p.id end)
+                local out = {{}}
+                for _, w in ipairs(plan.writes) do record(w.changes, w.photo.id, out) end
+                for _, l in ipairs(plan.later) do record(l.changes, l.photo.id, out) end
                 return Json.encode {{
                     written = out,
-                    depthChanges = depthChanges,
                     collection = place and place.name or Json.null,
                     withValues = plan.withValues,
                 }}
                 "#
             ),
         );
-        let w = written(&out);
         let l = c.label();
-        assert_eq!(has(&w, "p1 StartDate"), c.dive, "StartDate: {l}");
-        assert_eq!(has(&w, "p2 StartDate"), c.dive, "StartDate: {l}");
-        assert_eq!(has(&w, "p1 PhotoDepth"), c.dive, "PhotoDepth: {l}");
+        let got = recorded(&out);
         assert!(
-            !out["depthChanges"]
-                .as_array()
-                .map(Vec::as_slice)
-                .unwrap_or_default()
-                .iter()
-                .any(|id| id == "p2"),
-            "the photo outside the dive got a PhotoDepth: {l}"
+            !got.iter()
+                .any(|w| w.starts_with("p2 Photo") || w.starts_with("p2 ClockOffset")),
+            "the photo outside the dive got a per-photo value: {l}"
         );
-        assert!(!has(&w, "p2 PhotoDepth"), "{l}");
-        assert_eq!(
-            has(&w, "p1 gpsAltitude"),
-            c.copies_altitude(),
-            "gpsAltitude: {l}"
-        );
-        assert_eq!(
-            has(&w, "p1 WrittenAltitude"),
-            c.copies_altitude(),
-            "WrittenAltitude: {l}"
-        );
-        assert!(!has(&w, "p2 gpsAltitude"), "altitude outside the dive: {l}");
-        assert_eq!(has(&w, "p1 country"), c.place, "country: {l}");
-        assert_eq!(has(&w, "p1 location"), c.place, "location: {l}");
-        assert_eq!(has(&w, "p1 gps"), c.gps, "gps: {l}");
-        assert_eq!(has(&w, "p2 gps"), c.gps, "gps: {l}");
+        assert_eq!(got, expected(&c, Path::Selection, "p1", "p2"), "{l}");
         assert_eq!(
             out["collection"].is_string(),
             c.collections,
