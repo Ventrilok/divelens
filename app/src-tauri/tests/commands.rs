@@ -52,5 +52,5 @@ fn every_command_the_screens_call_is_registered() {
         "called by the screens but not registered: {not_registered:?}; \
          registered but never called: {never_called:?}"
     );
-    assert_eq!(called.len(), 27, "expected 27 commands, found {called:?}");
+    assert_eq!(called.len(), 28, "expected 28 commands, found {called:?}");
 }

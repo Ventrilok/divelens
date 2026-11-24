@@ -179,12 +179,13 @@ local function handle(s, text)
     elseif message.type == "logLevel" then
         if Log.setLevel(message.level) then Log.info("log level: %s", tostring(message.level)) end
     elseif message.type == "apply" or message.type == "findPhotos" or message.type == "applyCollections" or message.type == "listSets"
-        or message.type == "describeSelection" then
+        or message.type == "describeSelection" or message.type == "countPhotos" then
         -- The app waits for an answer: unless the answer was already sent, an error still gets one.
         local handlers = {
             apply = ApplyTags.run, findPhotos = ApplyCollections.find, applyCollections = ApplyCollections.run,
             listSets = ApplyCollections.listSets,
             describeSelection = Selection.describe,
+            countPhotos = Selection.count,
         }
         local handler = handlers[message.type]
         local ok, err = LrTasks.pcall(handler, s, message)

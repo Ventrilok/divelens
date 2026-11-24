@@ -161,3 +161,15 @@ fn large_collections_request_is_framed_quickly() {
         started.elapsed()
     );
 }
+
+#[test]
+fn the_link_knows_the_count_message() {
+    let link = std::fs::read_to_string(common::plugin_dir().join("Link.lua")).unwrap();
+    // Line by line: a Windows checkout may end lines with CRLF.
+    assert!(
+        link.lines()
+            .map(str::trim)
+            .any(|l| l == "countPhotos = Selection.count,"),
+        "Link.lua must dispatch countPhotos to Selection.count"
+    );
+}

@@ -50,6 +50,7 @@ pub fn run() {
             dive_log::set_source_path,
             lightroom::commands::lightroom_status,
             lightroom::commands::lightroom_writing,
+            lightroom::commands::refresh_catalog_size,
             lightroom::commands::initial_screen,
             tag::tag_selection,
             tag::find_selection_photos,

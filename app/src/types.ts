@@ -135,6 +135,8 @@ export interface LightroomStatus {
   pluginVersion: string | null;
   /** Photos selected in Lightroom; 0 when nothing is selected. */
   selected: number;
+  /** Photos in the whole catalog; null until Lightroom has answered. */
+  catalogPhotos: number | null;
   /** Changes with each new selection; thumbnails carry it. */
   selectionVersion: number;
   /** Earliest and latest capture times, wall-clock "YYYY-MM-DDTHH:MM:SS". */

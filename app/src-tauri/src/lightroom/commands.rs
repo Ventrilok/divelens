@@ -5,6 +5,8 @@ use tauri::{AppHandle, Manager, State};
 
 use super::events::{Lightroom, SelectionPreview};
 use super::{Command, Status};
+use crate::apply::ask;
+use crate::apply::errors::ApplyError;
 use crate::dive_log::Writes;
 use crate::settings;
 
@@ -84,4 +86,16 @@ mod tests {
             Some("collections".into())
         );
     }
+}
+
+/// Asks Lightroom for the number of photos in the catalog again; the new
+/// number arrives in the Lightroom status (`catalogPhotos`).
+#[tauri::command]
+pub(crate) async fn refresh_catalog_size(app: AppHandle) -> Result<(), ApplyError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        ask(&app, |reply| Command::CountPhotos { reply })??;
+        Ok(())
+    })
+    .await
+    .expect("catalog size task failed")
 }
