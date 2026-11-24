@@ -20,7 +20,10 @@ import { revertChange } from "./settings/save";
 import { unitsInUse } from "./collections/collectionPlace";
 import { latestOnly, logChangedNotice, logWatch, sameLogSetting } from "./diveLog";
 import { profiles } from "./dives/profiles";
-import { isReadyScreen, Sidebar, type Screen } from "./ui/Sidebar";
+import { isReadyScreen, shownScreen, type Screen } from "./ui/screens";
+import { Header } from "./ui/Header";
+import { StatusBar } from "./ui/AppStatusBar";
+import { Icon } from "./ui/Icon";
 import { lang, setLanguage, t, type Key } from "./i18n";
 import { CollectionsScreen, type Phase } from "./collections/CollectionsScreen";
 import { DivesStep } from "./collections/DivesStep";
@@ -31,6 +34,12 @@ import { UpdateBanner } from "./updates/UpdateBanner";
 import { noticeVersion } from "./updates/updates";
 import type { AppInfo, LightroomStatus, LoadError, Settings, Sort, SourceInfo, SourceKind, UpdateStatus } from "./types";
 import "./App.css";
+
+// Temporary navigation between the two screens, until the journey (phase 3).
+const tabs = [
+  { id: "collections", icon: "folder", label: "nav.collections" },
+  { id: "tag", icon: "tag", label: "nav.tag" },
+] as const;
 
 const offline: LightroomStatus = {
   connected: false,
@@ -49,6 +58,8 @@ const offline: LightroomStatus = {
 
 function App({ initialSettings }: { initialSettings: Settings }) {
   const [screen, setScreen] = useState<Screen>("collections");
+  // The screen Settings were opened from: "Back" returns there.
+  const [before, setBefore] = useState<Screen>("collections");
   // Create Collections: step 1 checks the dives, step 2 adjusts and applies
   // (its summary is step 3). The checked dives are kept between steps.
   const [step, setStep] = useState<"dives" | "adjust">("dives");
@@ -67,15 +78,30 @@ function App({ initialSettings }: { initialSettings: Settings }) {
     phase.current = p;
   }, []);
 
-  // Entering Create Collections, from the sidebar or the Lightroom menu,
+  // Entering Create Collections, from its tab or the Lightroom menu,
   // always opens step 1, with the checked dives kept (none after a summary).
   const open = useCallback((s: Screen) => {
     if (phase.current === "writing") return;
     setLogNotice(null);
-    if (phase.current === "summary") setChosen(new Set());
+    if (s === "settings") {
+      // From a Lightroom menu: Back leads to the default screen. The screens
+      // stay as they are meanwhile (a summary included).
+      setBefore("collections");
+    } else {
+      if (phase.current === "summary") setChosen(new Set());
+      if (s === "collections") setStep("dives");
+    }
     setScreen(s);
-    if (s === "collections") setStep("dives");
   }, []);
+  // The gear (or the update notice): Settings in place of the screen in use.
+  const openSettings = useCallback(() => {
+    setLogNotice(null);
+    setBefore(screen === "settings" ? before : screen);
+    setScreen("settings");
+  }, [screen, before]);
+  // Under Settings, the screen they were opened from stays mounted.
+  const shown = shownScreen(screen, before);
+  const closeSettings = useCallback(() => setScreen(before), [before]);
   const [state, setState] = useState<LogState>({ status: "loading" });
   const [settings, setSettings] = useState<Settings>(initialSettings);
   // What the settings file holds: the screen may show a change not saved yet.
@@ -239,12 +265,16 @@ function App({ initialSettings }: { initialSettings: Settings }) {
 
   return (
     <div className="app" key={lang}>
-      <Sidebar current={screen} onGo={(s) => s !== screen && open(s)} log={log} lr={lr} />
+      <Header
+        onSettings={() => (screen === "settings" ? closeSettings() : openSettings())}
+        settingsDisabled={writing}
+        inSettings={screen === "settings"}
+      />
       <div className="content">
         <UpdateBanner
           version={newVersion}
           restartLightroom={lr.restartLightroom}
-          onSee={() => open("settings")}
+          onSee={openSettings}
           onClose={(version) => dismissUpdate(version)}
         />
         {screen === "settings" && (
@@ -257,63 +287,84 @@ function App({ initialSettings }: { initialSettings: Settings }) {
             writing={writing}
             error={saveError}
             onChange={change}
+            onBack={closeSettings}
           />
         )}
-        {screen !== "settings" && state.status === "loading" && (
-          <main className="screen screen-center">
-            <p className="muted">{t("dives.loading")}</p>
-          </main>
-        )}
-        {screen !== "settings" && state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
-        {log && screen === "collections" && !adjusting && (
-          <DivesStep
-            log={log}
-            selected={chosen}
-            onSelect={setChosen}
-            sort={sort}
-            onSort={onSort}
-            notice={notice}
-            onDismissNotice={dismissNotice}
-            onNext={() => {
-              setLogNotice(null);
-              setStep("adjust");
-            }}
-          />
-        )}
-        {log && screen === "collections" && adjusting && (
-          <CollectionsScreen
-            log={log}
-            lr={lr}
-            settings={settings}
-            chosen={chosen}
-            onChooseDives={() => {
-              setLogNotice(null);
-              setStep("dives");
-            }}
-            onDone={() => {
-              setChosen(new Set());
-              setStep("dives");
-            }}
-            onRetryDives={(ids) => setChosen(new Set(ids))}
-            onOpenSettings={() => setScreen("settings")}
-            onPhase={onPhase}
-          />
-        )}
-        {log && screen === "tag" && (
-          <TagScreen
-            key={tagRun}
-            log={log}
-            lr={lr}
-            sort={sort}
-            notice={notice}
-            onDismissNotice={dismissNotice}
-            onCancel={() => {
-              setLogNotice(null);
-              setTagRun((n) => n + 1);
-            }}
-          />
-        )}
+        {/* Hidden, not unmounted, while Settings are shown: choices survive. */}
+        <div className="journey" hidden={screen === "settings"}>
+          {/* Temporary: the two tabs disappear with the journey (phase 3). */}
+          <div className="tabs" role="tablist">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={screen === tab.id}
+                className={`tab ${screen === tab.id ? "tab-on" : ""}`}
+                onClick={() => screen !== tab.id && open(tab.id)}
+              >
+                <Icon name={tab.icon} />
+                {t(tab.label)}
+              </button>
+            ))}
+          </div>
+          {state.status === "loading" && (
+            <main className="screen screen-center">
+              <p className="muted">{t("dives.loading")}</p>
+            </main>
+          )}
+          {state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
+          {log && shown === "collections" && !adjusting && (
+            <DivesStep
+              log={log}
+              selected={chosen}
+              onSelect={setChosen}
+              sort={sort}
+              onSort={onSort}
+              notice={notice}
+              onDismissNotice={dismissNotice}
+              onNext={() => {
+                setLogNotice(null);
+                setStep("adjust");
+              }}
+            />
+          )}
+          {log && shown === "collections" && adjusting && (
+            <CollectionsScreen
+              log={log}
+              lr={lr}
+              settings={settings}
+              chosen={chosen}
+              onChooseDives={() => {
+                setLogNotice(null);
+                setStep("dives");
+              }}
+              onDone={() => {
+                setChosen(new Set());
+                setStep("dives");
+              }}
+              onRetryDives={(ids) => setChosen(new Set(ids))}
+              onOpenSettings={openSettings}
+              onPhase={onPhase}
+            />
+          )}
+          {log && shown === "tag" && (
+            <TagScreen
+              key={tagRun}
+              log={log}
+              lr={lr}
+              sort={sort}
+              notice={notice}
+              onDismissNotice={dismissNotice}
+              onCancel={() => {
+                setLogNotice(null);
+                setTagRun((n) => n + 1);
+              }}
+            />
+          )}
+        </div>
       </div>
+      <StatusBar lr={lr} log={log} />
     </div>
   );
 }

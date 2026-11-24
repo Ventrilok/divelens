@@ -492,6 +492,7 @@ export function SettingsScreen({
   writing,
   error,
   onChange,
+  onBack,
 }: {
   settings: Settings;
   logState: LogState;
@@ -503,6 +504,8 @@ export function SettingsScreen({
   /** Why the last change was not made (a ChangeError), or null. */
   error: unknown;
   onChange: (patch: Patch) => void;
+  /** Back to the screen Settings were opened from. */
+  onBack: () => void;
 }) {
   const appName = appOf(
     logState.status === "ok" ? logState.log.source.kind : logState.status === "error" ? logState.failure.source.kind : settings.source.kind,
@@ -515,6 +518,10 @@ export function SettingsScreen({
   return (
     <main className="screen screen-scroll">
       <div className="settings">
+        <button type="button" className="btn btn-g settings-back" onClick={onBack}>
+          <Icon name="back" />
+          {t("settings.back")}
+        </button>
         <h1 className="settings-title">{t("settings.title")}</h1>
         {error !== null && (
           <p className="set-error" role="alert">
