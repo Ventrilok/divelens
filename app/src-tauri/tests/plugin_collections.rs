@@ -138,7 +138,11 @@ const PARTIAL_LUA: &str = r#"
 #[test]
 fn a_group_without_a_dive_writes_only_the_location() {
     let lua = lua();
-    let request = partial_request(Some("700 - Coral Garden"), false, true);
+    let mut request = partial_request(Some("700 - Coral Garden"), false, true);
+    // The photo carries an altitude: without a dive it must not be written.
+    request.copy_depth_to_altitude();
+    let json = serde_json::to_string(&request).unwrap();
+    assert!(json.contains("gpsAltitude"), "{json}");
     lua.globals()
         .set("input", serde_json::to_string(&request).unwrap())
         .unwrap();
@@ -163,6 +167,12 @@ fn a_group_without_a_dive_writes_only_the_location() {
         ))
         .eval()
         .unwrap();
+    assert!(
+        fields
+            .iter()
+            .all(|f| !f.contains("gpsAltitude") && !f.contains("WrittenAltitude")),
+        "an altitude written without a dive: {fields:?}"
+    );
     assert!(
         fields.iter().all(|f| f.starts_with("raw ")),
         "a Dive Lens field written: {fields:?}"
@@ -204,6 +214,49 @@ fn a_group_without_a_collection_creates_none() {
     assert_eq!(
         out,
         serde_json::json!({ "writesDive": true, "names": false })
+    );
+}
+
+#[test]
+fn only_the_photos_of_groups_with_a_dive_are_read_before() {
+    let mut request = partial_request(Some("700 - Coral Garden"), true, true);
+    // The photos requested: 11 (found) and 12 (not found) in the dive group.
+    let photo = |id: &str| {
+        divelens_core::tags::PhotoTags::new(
+            id.into(),
+            None,
+            0,
+            divelens_core::tags::Units::default(),
+        )
+    };
+    request.groups[0].photos = vec![photo("11"), photo("12")];
+    // A second group without a dive or a collection, sharing photo 11.
+    let mut bare = partial_request(None, false, true).groups.remove(0);
+    bare.photos = vec![photo("11"), photo("13")];
+    request.groups.push(bare);
+    let lua = lua();
+    lua.globals()
+        .set("input", serde_json::to_string(&request).unwrap())
+        .unwrap();
+    let out = json_of(
+        &lua,
+        r#"
+        local Json = require "Json"
+        local Tagging = require "Tagging"
+        local groups = assert(Tagging.planCollections(Json.decode(input), tostring))
+        local p11, p13 = { id = "11" }, { id = "13" }
+        Tagging.resolvePhotos(groups, { ["11"] = p11, ["13"] = p13 })
+        local read = Tagging.divePhotos(groups)
+        return Json.encode({
+            count = #read,
+            first = read[1] == p11,
+            names = Tagging.namesCollections(groups),
+        })
+        "#,
+    );
+    assert_eq!(
+        out,
+        serde_json::json!({ "count": 1, "first": true, "names": true })
     );
 }
 

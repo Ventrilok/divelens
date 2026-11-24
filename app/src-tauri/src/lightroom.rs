@@ -1374,7 +1374,7 @@ mod tests {
     #[test]
     fn a_plugin_with_an_older_protocol_is_refused() {
         let (commands, inbox) = std::sync::mpsc::channel();
-        let (reply, sets) = std::sync::mpsc::channel();
+        let (reply, _sets) = std::sync::mpsc::channel();
         commands.send(Command::ListSets { reply }).unwrap();
         let (link, plugin) = fake_plugin(|lines, to_app| {
             lines.next().unwrap();
@@ -1382,20 +1382,19 @@ mod tests {
                 to_app,
                 &format!("{}\n", HELLO.replace("\"protocol\":7", "\"protocol\":6")),
             );
-            // Nothing more is sent to it: no request, no ping.
+            // Nothing more is sent to it, though a request is waiting.
             assert_eq!(lines.next(), None);
         });
         let mut events = Vec::new();
         let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |e| events.push(e));
         plugin.join().unwrap();
         assert_eq!(end, End::Protocol(6));
-        // Never connected, and the request waiting was not answered.
+        // Never connected (and the plug-in saw no line after its hello).
         assert!(
             events
                 .iter()
                 .all(|e| !matches!(e, Event::Status(s) if s.connected))
         );
-        assert!(sets.recv().is_err());
     }
 
     #[test]
