@@ -164,7 +164,16 @@ pub struct PhotoSearch {
     pub photos: Vec<FoundPhoto>,
 }
 
-/// One collection written by "Create Collections".
+/// What "Tag Selection" answers once the plugin applied it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TagWritten {
+    /// The number of photos written.
+    pub count: usize,
+    /// The collection the selection went in, when the request asked for one.
+    pub collection: Option<WrittenCollection>,
+}
+
+/// One collection written by "Create Collections" or "Tag Selection".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WrittenCollection {
@@ -211,9 +220,9 @@ pub enum Command {
     /// Tag the photos selected in Lightroom at the time the plugin gets it.
     Apply {
         request: Box<TagRequest>,
-        /// The number of photos written, or Lightroom's refusal or failure
-        /// (including `gpsNotWritten`: written, but for the GPS and altitude).
-        reply: Sender<Result<usize, ApplyOutcome>>,
+        /// What was written, or Lightroom's refusal or failure (including
+        /// `gpsNotWritten`: written, but for the GPS and altitude).
+        reply: Sender<Result<TagWritten, ApplyOutcome>>,
     },
     /// Every photo of the catalog captured between two days (`YYYY-MM-DD`,
     /// inclusive).
@@ -243,7 +252,7 @@ pub enum Command {
 
 /// A request waiting for the plugin's answer.
 enum Pending {
-    Apply(Sender<Result<usize, ApplyOutcome>>),
+    Apply(Sender<Result<TagWritten, ApplyOutcome>>),
     Find(Sender<Result<PhotoSearch, ApplyOutcome>>, Vec<FoundPhoto>),
     Collections(Sender<Result<Vec<WrittenCollection>, ApplyOutcome>>),
     Sets(Sender<Result<Vec<CollectionSet>, ApplyOutcome>>),
@@ -328,6 +337,8 @@ enum FromPlugin {
     Applied {
         id: u64,
         count: usize,
+        #[serde(default)]
+        collection: Option<WrittenCollection>,
     },
     ApplyFailed {
         id: u64,
@@ -584,9 +595,13 @@ fn session(
                     FromPlugin::Progress { done, total } => {
                         on_event(Event::Progress { done, total });
                     }
-                    FromPlugin::Applied { id, count } => match pending.remove(&id) {
+                    FromPlugin::Applied {
+                        id,
+                        count,
+                        collection,
+                    } => match pending.remove(&id) {
                         Some(Pending::Apply(reply)) => {
-                            let _ = reply.send(Ok(count));
+                            let _ = reply.send(Ok(TagWritten { count, collection }));
                         }
                         Some(other) => other.fail(ApplyOutcome::Failed {
                             reason: "error".into(),
@@ -1036,7 +1051,7 @@ mod tests {
         lines: &mut dyn Iterator<Item = String>,
         to_app: &mut TcpStream,
         commands: &Sender<Command>,
-    ) -> Receiver<Result<usize, ApplyOutcome>> {
+    ) -> Receiver<Result<TagWritten, ApplyOutcome>> {
         lines.next().unwrap(); // hello
         write(to_app, &format!("{HELLO}\n"));
         let ping: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
@@ -1088,7 +1103,13 @@ mod tests {
         plugin.join().unwrap();
         assert_eq!(end, End::Bye);
         let outcome = outcome_rx.recv().unwrap();
-        assert_eq!(outcome, Ok(120));
+        assert_eq!(
+            outcome,
+            Ok(TagWritten {
+                count: 120,
+                collection: None
+            })
+        );
         assert!(events.contains(&Event::Progress {
             done: 50,
             total: 120
@@ -1174,6 +1195,39 @@ mod tests {
         assert_eq!(end, End::Lost);
         let outcome = outcome_rx.recv().unwrap();
         assert!(outcome.recv().is_err(), "reply channel dropped");
+    }
+
+    #[test]
+    fn apply_answer_carries_the_collection_when_there_is_one() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (outcome_tx, outcome_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin(move |lines, to_app| {
+            let outcome = connect_and_apply(lines, to_app, &commands);
+            let apply = next_request(lines);
+            let id = apply["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!(
+                    "{{\"type\":\"applied\",\"id\":{id},\"count\":5,\"collection\":{{\"collection\":\"707 - Maaya Thila\",\"count\":5,\"created\":true}}}}\n"
+                ),
+            );
+            outcome_tx.send(outcome.recv().unwrap()).unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {});
+        plugin.join().unwrap();
+        assert_eq!(end, End::Bye);
+        assert_eq!(
+            outcome_rx.recv().unwrap(),
+            Ok(TagWritten {
+                count: 5,
+                collection: Some(WrittenCollection {
+                    collection: Some("707 - Maaya Thila".into()),
+                    count: 5,
+                    created: true,
+                })
+            })
+        );
     }
 
     #[test]

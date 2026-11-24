@@ -140,7 +140,7 @@ pub(crate) async fn tag_selection(
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
         let (request, applied) = tag_request(&app, &info, &choice)?;
         let with_values = request.photos.len();
-        let count = write_and_remember(
+        let written = write_and_remember(
             &app,
             &info,
             |reply| Command::Apply {
@@ -150,6 +150,7 @@ pub(crate) async fn tag_selection(
             &applied,
             |outcome| log::warn!("selection not tagged: {outcome:?}"),
         )?;
+        let count = written.count;
         log::info!("selection tagged: {count} photos, per-photo values on {with_values}");
         Ok(TagApplied::from(count))
     })

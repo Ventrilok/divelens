@@ -10,7 +10,6 @@ Part of DiveLens, GPL-3.0-or-later.
 ]]
 
 local LrApplication = import "LrApplication"
-local LrTasks = import "LrTasks"
 
 local CatalogWrite = require "CatalogWrite"
 local Json = require "Json"
@@ -79,27 +78,8 @@ function ApplyCollections.run(s, message)
     local holder, container
     local existing = {}
     if Tagging.namesCollections(groups) then
-        holder = Tagging.findSet(catalog, place.parent)
-        if not holder then return fail("parentNotFound", table.concat(place.parent, " › ")) end
-        container = #place.parent > 0 and holder or nil
-
-        -- The group set is created on its own the first time: a set created
-        -- inside a write cannot be used before that write ends.
-        if place.group then
-            local set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
-            if not set then
-                local ok, status = LrTasks.pcall(function()
-                    return catalog:withWriteAccessDo(place.group, function()
-                        catalog:createCollectionSet(place.group, container, true)
-                    end, { timeout = CatalogWrite.WRITE_TIMEOUT })
-                end)
-                local reason, detail = Tagging.writeFailure(ok, status)
-                if reason then return fail(reason, detail) end
-                set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
-                if not set then return fail("error", "collection set not created") end
-            end
-            holder, container = set, set
-        end
+        holder, container = CatalogWrite.holder(catalog, place, fail)
+        if not holder then return end
         for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
     end
 

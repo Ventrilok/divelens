@@ -69,13 +69,30 @@ pub struct LocationTags {
     pub lon: Option<f64>,
 }
 
-/// Everything one "Tag Selection › Apply" writes. At least one of `dive`
-/// and `location` is present.
+/// Where "Tag Selection" puts the selected photos: the collection, inside
+/// the collection set `parent` leads to.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionPlace {
+    pub name: String,
+    /// Names of the existing collection sets leading to where the collection
+    /// goes, from the catalog's root; empty for the root.
+    pub parent: Vec<String>,
+    /// Collection set inside `parent` grouping the collections, created when
+    /// needed; `None`: straight into `parent`.
+    pub group: Option<String>,
+}
+
+/// Everything one "Tag Selection › Apply" writes. At least one of `dive`,
+/// `location` and `collection` is present.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TagRequest {
     pub dive: Option<DiveTags>,
     pub location: Option<LocationTags>,
+    /// Put the selected photos in this collection (made when missing).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collection: Option<CollectionPlace>,
     /// The selection the per-photo values were computed for, as the plugin
     /// numbered it when it described it; `None`: no per-photo values (no
     /// dive, or a dive without a profile). The plugin then writes only if
@@ -230,9 +247,11 @@ impl CollectionsRequest {
 }
 
 impl TagRequest {
-    /// Removes what is not ticked (`kept.collections` does not concern
-    /// this request yet).
+    /// Removes what is not ticked.
     pub fn keep(&mut self, kept: Kept) {
+        if !kept.collections {
+            self.collection = None;
+        }
         self.location = self
             .location
             .take()
@@ -245,7 +264,7 @@ impl TagRequest {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.dive.is_none() && self.location.is_none()
+        self.dive.is_none() && self.location.is_none() && self.collection.is_none()
     }
 
     /// Copies the depth of each photo taken during the dive to its GPS
@@ -493,6 +512,7 @@ mod tests {
         let mut request = TagRequest {
             dive: Some(DiveTags::new(&dive(), Units::default(), "MacDive")),
             location: None,
+            collection: None,
             selection: Some(7),
             photos: vec![PhotoTags::new(
                 "1".into(),
@@ -599,6 +619,7 @@ mod tests {
         TagRequest {
             dive: Some(DiveTags::new(&dive(), Units::default(), "MacDive")),
             location: Some(full_location("Maaya Thila")),
+            collection: None,
             selection: Some(7),
             photos: vec![sample_photo("1", Some(18.4))],
         }
@@ -728,6 +749,57 @@ mod tests {
                 kept.gps
             );
         }
+    }
+
+    fn place() -> CollectionPlace {
+        CollectionPlace {
+            name: "707 - Maaya Thila".into(),
+            parent: vec!["Voyages".into()],
+            group: Some("Dive Lens".into()),
+        }
+    }
+
+    #[test]
+    fn tag_request_serialises_its_collection_only_when_present() {
+        let without = serde_json::to_value(TagRequest::default()).unwrap();
+        assert!(without.get("collection").is_none());
+        let with = serde_json::to_value(TagRequest {
+            collection: Some(place()),
+            ..TagRequest::default()
+        })
+        .unwrap();
+        assert_eq!(
+            with["collection"],
+            serde_json::json!({
+                "name": "707 - Maaya Thila",
+                "parent": ["Voyages"],
+                "group": "Dive Lens"
+            })
+        );
+    }
+
+    #[test]
+    fn tag_request_collection_follows_the_collections_tick() {
+        let mut r = sample_tag_request();
+        r.collection = Some(place());
+        r.keep(Kept::ALL);
+        assert_eq!(r.collection, Some(place()));
+        r.keep(Kept {
+            collections: false,
+            ..Kept::ALL
+        });
+        assert_eq!(r.collection, None);
+        // A request with only a collection is not empty; without it, it is.
+        let mut only = TagRequest {
+            collection: Some(place()),
+            ..TagRequest::default()
+        };
+        assert!(!only.is_empty());
+        only.keep(Kept {
+            collections: false,
+            ..Kept::ALL
+        });
+        assert!(only.is_empty());
     }
 
     #[test]

@@ -61,7 +61,9 @@ function Tagging.plan(request, formatDate)
     if type(request) ~= "table" then return nil, "bad request" end
     local dive = value(request.dive)
     local location = value(request.location)
-    if not dive and not location then return nil, "nothing to write" end
+    if not dive and not location and not value(request.collection) then
+        return nil, "nothing to write"
+    end
     local changes = {}
     local function plugin(field, v) changes[#changes + 1] = { kind = "plugin", field = field, value = v } end
     local function raw(field, v) changes[#changes + 1] = { kind = "raw", field = field, value = v } end
@@ -560,6 +562,33 @@ local function planGroup(group, formatDate)
         photos[#photos + 1] = { id = id, changes = changes }
     end
     return { collection = name, common = common, photos = photos, writesDive = dive ~= nil }
+end
+
+--- The collection a "Tag Selection" request asks for (core/src/tags.rs,
+--- TagRequest.collection): { name, parent = list of set names from the
+--- root, group = set name or nil }; nil without one; nil and "bad
+--- collection" when it is unusable (same checks as planCollections).
+function Tagging.planCollection(request)
+    local c = value(request.collection)
+    if c == nil then return nil end
+    if type(c) ~= "table" or not text(c.name) or c.name == "" then return nil, "bad collection" end
+    local parent = {}
+    local names = value(c.parent) or {}
+    if type(names) ~= "table" then return nil, "bad collection" end
+    for i, name in ipairs(names) do
+        if not text(name) or name == "" then return nil, "bad collection" end
+        parent[i] = name
+    end
+    local group = text(c.group)
+    if group == "" then group = nil end
+    return { name = c.name, parent = parent, group = group }
+end
+
+--- What "Tag Selection" tells the app about its collection: `count` photos
+--- were put in `name`; `existing` = { [name] = true } for the collections
+--- already in that place, which is then completed, not created.
+function Tagging.selectionCollection(name, count, existing)
+    return { collection = name, count = count, created = not existing[name] and count > 0 }
 end
 
 --- Plans a "Create Collections" request (core/src/tags.rs, CollectionsRequest):
