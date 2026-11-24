@@ -4,6 +4,7 @@
 
 pub(crate) mod errors;
 pub(crate) mod offsets;
+pub(crate) mod options;
 pub(crate) mod searches;
 
 use std::collections::BTreeMap;

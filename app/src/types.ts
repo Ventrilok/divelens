@@ -161,6 +161,21 @@ export interface TagChoice {
   search: number | null;
   /** Clock offsets shown, in minutes by camera key. */
   offsets: Record<string, number>;
+  /**
+   * What is ticked. Absent: today's behaviour (everything the choice names; the altitude follows
+   * the setting). With options, diveId is the chosen dive even when its details are unticked.
+   */
+  options?: WriteOptions;
+}
+
+/** What the diver ticked to write when tagging the selection (app/src-tauri/src/apply/options.rs). */
+export interface WriteOptions {
+  dive: boolean;
+  /** null: the "depth copied to altitude" setting decides. */
+  altitude: boolean | null;
+  place: boolean;
+  gps: boolean;
+  collections: boolean;
 }
 
 /** The photos selected in Lightroom, described for Tag Selection's per-photo values (app/src-tauri/src/tag/selection.rs). */
@@ -194,6 +209,8 @@ export interface TagPreview {
 /** What Tag Selection wrote: the number of photos tagged. */
 export interface TagApplied {
   count: number;
+  /** The collection the selection was put in; null when none was written. */
+  collection: WrittenCollection | null;
 }
 
 /**

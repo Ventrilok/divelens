@@ -9,7 +9,9 @@ use std::sync::Mutex;
 
 use divelens_core::collections::Span;
 use divelens_core::profile::Sample;
-use divelens_core::tags::{DiveTags, LocationTags, TagRequest, Units, valid_gps};
+use divelens_core::tags::{
+    CollectionPlace, DiveTags, Kept, LocationTags, TagRequest, Units, valid_gps,
+};
 use divelens_core::{Dive, Error, Site};
 
 use super::LocationChoice;
@@ -144,6 +146,12 @@ pub(super) struct Built {
 /// profile of a dive id: each only when needed), then the "depth to
 /// altitude" setting (`depth_to_altitude`, read last, so a refusal before it
 /// never reads it). A profile that cannot be read leaves the dive data alone.
+/// `kept` is what the diver ticked and `collection` where the dive's
+/// collection goes: with `Kept::ALL` and no collection, the request is the one
+/// the current screens always got. Nothing left to write is refused before
+/// anything is read; the profile and the description only when the dive
+/// details are kept.
+#[allow(clippy::too_many_arguments)] // the reads handed in as closures, then what is ticked
 pub(super) fn build_request(
     dive: Option<Dive>,
     location: Option<LocationTags>,
@@ -152,11 +160,19 @@ pub(super) fn build_request(
     described: impl FnOnce(&Dive) -> Result<Option<(u64, Vec<InDive>)>, ApplyError>,
     profile: impl FnOnce(&str) -> Result<Vec<Sample>, Error>,
     depth_to_altitude: impl FnOnce() -> bool,
+    kept: Kept,
+    collection: Option<CollectionPlace>,
 ) -> Result<Built, ApplyError> {
     let mut request = base_request(dive.as_ref(), location, units, source)?;
+    request.collection = collection;
+    request.keep(kept);
+    if request.is_empty() {
+        return Err(ApplyError::NothingChosen);
+    }
     let mut applied = BTreeMap::new();
     let mut unreadable = None;
-    if let Some(dive) = dive.filter(|d| d.has_profile) {
+    // Unticked dive details: no profile, no selection description.
+    if let Some(dive) = dive.filter(|d| kept.dive && d.has_profile) {
         let described = described(&dive)?;
         let outcome = per_photo(&dive, described, units, || profile(&dive.id));
         (applied, unreadable) = apply_per_photo(&mut request, outcome)?;
@@ -447,6 +463,8 @@ mod tests {
                 |_| Ok(described),
                 |_| profile,
                 || panic!("setting read"),
+                Kept::ALL,
+                None,
             )
         };
         // The screen showed no selection, the profile reads: it must be described.
@@ -466,6 +484,8 @@ mod tests {
             |_| Err(ApplyError::NoPhotos),
             |_| panic!("profile read"),
             || panic!("setting read"),
+            Kept::ALL,
+            None,
         );
         assert!(matches!(refused, Err(ApplyError::NoPhotos)));
         // Nothing chosen: refused before anything is read.
@@ -477,6 +497,8 @@ mod tests {
             |_| panic!("described"),
             |_| panic!("profile read"),
             || panic!("setting read"),
+            Kept::ALL,
+            None,
         );
         assert!(matches!(nothing, Err(ApplyError::NothingChosen)));
     }
@@ -515,6 +537,8 @@ mod tests {
                     reads.set(reads.get() + 1);
                     on
                 },
+                Kept::ALL,
+                None,
             )
             .unwrap();
             assert_eq!(reads.get(), 1);
@@ -540,11 +564,137 @@ mod tests {
                 reads.set(reads.get() + 1);
                 true
             },
+            Kept::ALL,
+            None,
         )
         .unwrap();
         assert_eq!(reads.get(), 1);
         assert!(built.request.photos.is_empty());
         assert!(built.applied.is_empty());
+    }
+
+    fn place() -> CollectionPlace {
+        CollectionPlace {
+            name: "701 - Coral Garden".into(),
+            parent: vec![],
+            group: None,
+        }
+    }
+
+    #[test]
+    fn without_options_the_request_is_todays() {
+        let d = dive("A", 701);
+        let sample = |time_s, depth_m| Sample {
+            time_s,
+            depth_m,
+            temp_c: None,
+        };
+        let profile = vec![sample(0, 0.0), sample(3000, 30.0)];
+        let location = Some(LocationTags::new(&d.site, Some(12.5), Some(-45.25)));
+        let built = build_request(
+            Some(d.clone()),
+            location.clone(),
+            Units::default(),
+            "MacDive",
+            |_| Ok(Some((42, vec![photo_in_dive()]))),
+            |_| Ok(profile.clone()),
+            || true,
+            Kept::ALL,
+            None,
+        )
+        .unwrap();
+        let request = built.request;
+        assert_eq!(
+            request.dive,
+            Some(DiveTags::new(&d, Units::default(), "MacDive"))
+        );
+        assert_eq!(request.location, location);
+        assert_eq!(request.collection, None);
+        assert_eq!(request.selection, Some(42));
+        assert_eq!(request.photos.len(), 1);
+        assert_eq!(request.photos[0].gps_altitude, Some(-15.0));
+        assert_eq!(built.applied, BTreeMap::from([("TG-7|A1".to_string(), 0)]));
+        assert!(built.unreadable.is_none());
+    }
+
+    #[test]
+    fn dive_details_unticked_keep_the_dives_site_and_collection() {
+        let d = dive("A", 701);
+        let kept = Kept {
+            dive: false,
+            place: true,
+            gps: true,
+            collections: true,
+        };
+        let built = build_request(
+            Some(d.clone()),
+            Some(LocationTags::new(&d.site, None, None)),
+            Units::default(),
+            "MacDive",
+            |_| panic!("described"),
+            |_| panic!("profile read"),
+            || false,
+            kept,
+            Some(place()),
+        )
+        .unwrap();
+        assert!(built.request.dive.is_none());
+        assert!(built.request.photos.is_empty());
+        assert_eq!(built.request.selection, None);
+        assert_eq!(
+            built.request.location,
+            Some(LocationTags::new(&d.site, None, None))
+        );
+        assert_eq!(built.request.collection, Some(place()));
+        assert!(built.applied.is_empty());
+    }
+
+    #[test]
+    fn gps_alone_on_a_site_without_gps_is_refused() {
+        let mut d = dive("A", 701);
+        d.site.lat = None;
+        d.site.lon = None;
+        let kept = Kept {
+            dive: false,
+            place: false,
+            gps: true,
+            collections: false,
+        };
+        let built = build_request(
+            Some(d.clone()),
+            Some(LocationTags::new(&d.site, None, None)),
+            Units::default(),
+            "MacDive",
+            |_| panic!("described"),
+            |_| panic!("profile read"),
+            || panic!("setting read"),
+            kept,
+            Some(place()),
+        );
+        assert!(matches!(built, Err(ApplyError::NothingChosen)));
+    }
+
+    #[test]
+    fn no_dive_and_another_site_writes_the_place_only() {
+        let other = site("s2", "Blue Hole");
+        let built = build_request(
+            None,
+            Some(LocationTags::new(&other, None, None)),
+            Units::default(),
+            "MacDive",
+            |_| panic!("described"),
+            |_| panic!("profile read"),
+            || false,
+            Kept::ALL,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            built.request.location,
+            Some(LocationTags::new(&other, None, None))
+        );
+        assert_eq!(built.request.collection, None);
+        assert!(built.request.dive.is_none());
     }
 
     #[test]
