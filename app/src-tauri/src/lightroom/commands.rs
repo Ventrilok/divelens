@@ -42,6 +42,16 @@ pub(crate) fn lightroom_writing(writes: State<Writes>) -> bool {
     writes.in_progress()
 }
 
+/// Asks Lightroom for the number of photos in the catalog again. Never
+/// waits: the request is handed over and the new number arrives in the
+/// Lightroom status (`catalogPhotos`) whenever the plugin answers, if it
+/// does. `NotConnected` without a link.
+#[tauri::command]
+pub(crate) fn refresh_catalog_size(app: AppHandle) -> Result<(), ApplyError> {
+    let (reply, _) = std::sync::mpsc::channel();
+    send(&app, Command::CountPhotos { reply })
+}
+
 /// Screen asked for on the command line (`--screen tag`), when Lightroom
 /// launched the app from one of its menus.
 #[tauri::command]
@@ -86,14 +96,4 @@ mod tests {
             Some("collections".into())
         );
     }
-}
-
-/// Asks Lightroom for the number of photos in the catalog again. Never
-/// waits: the request is handed over and the new number arrives in the
-/// Lightroom status (`catalogPhotos`) whenever the plugin answers, if it
-/// does. `NotConnected` without a link.
-#[tauri::command]
-pub(crate) fn refresh_catalog_size(app: AppHandle) -> Result<(), ApplyError> {
-    let (reply, _) = std::sync::mpsc::channel();
-    send(&app, Command::CountPhotos { reply })
 }
