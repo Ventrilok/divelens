@@ -154,8 +154,8 @@ fn the_undo_names_match() {
 
 #[test]
 fn the_screens_match() {
-    let sidebar = repo_file("app/src/ui/screens.ts");
-    let line = sidebar
+    let screens = repo_file("app/src/ui/screens.ts");
+    let line = screens
         .lines()
         .map(str::trim)
         .find(|l| l.starts_with("export type Screen ="))

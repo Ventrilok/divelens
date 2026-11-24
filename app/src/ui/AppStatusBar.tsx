@@ -17,7 +17,7 @@ export function StatusBar({
       <div className="status-group" role="group" aria-label="Lightroom">
         <span className="status-title">
           <span
-            className={`dot ${group.state === "connected" ? "" : "dot-warn"}`}
+            className={group.state === "connected" ? "dot" : "dot dot-warn"}
             aria-hidden="true"
           />
           {group.title}

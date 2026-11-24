@@ -20,7 +20,7 @@ import { revertChange } from "./settings/save";
 import { unitsInUse } from "./collections/collectionPlace";
 import { latestOnly, logChangedNotice, logWatch, sameLogSetting } from "./diveLog";
 import { profiles } from "./dives/profiles";
-import { isReadyScreen, type Screen } from "./ui/screens";
+import { isReadyScreen, shownScreen, type Screen } from "./ui/screens";
 import { Header } from "./ui/Header";
 import { StatusBar } from "./ui/AppStatusBar";
 import { Icon } from "./ui/Icon";
@@ -99,6 +99,8 @@ function App({ initialSettings }: { initialSettings: Settings }) {
     setBefore(screen === "settings" ? before : screen);
     setScreen("settings");
   }, [screen, before]);
+  // Under Settings, the screen they were opened from stays mounted.
+  const shown = shownScreen(screen, before);
   const closeSettings = useCallback(() => setScreen(before), [before]);
   const [state, setState] = useState<LogState>({ status: "loading" });
   const [settings, setSettings] = useState<Settings>(initialSettings);
@@ -306,60 +308,60 @@ function App({ initialSettings }: { initialSettings: Settings }) {
               </button>
             ))}
           </div>
-        {state.status === "loading" && (
-          <main className="screen screen-center">
-            <p className="muted">{t("dives.loading")}</p>
-          </main>
-        )}
-        {state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
-        {log && screen === "collections" && !adjusting && (
-          <DivesStep
-            log={log}
-            selected={chosen}
-            onSelect={setChosen}
-            sort={sort}
-            onSort={onSort}
-            notice={notice}
-            onDismissNotice={dismissNotice}
-            onNext={() => {
-              setLogNotice(null);
-              setStep("adjust");
-            }}
-          />
-        )}
-        {log && screen === "collections" && adjusting && (
-          <CollectionsScreen
-            log={log}
-            lr={lr}
-            settings={settings}
-            chosen={chosen}
-            onChooseDives={() => {
-              setLogNotice(null);
-              setStep("dives");
-            }}
-            onDone={() => {
-              setChosen(new Set());
-              setStep("dives");
-            }}
-            onRetryDives={(ids) => setChosen(new Set(ids))}
-            onOpenSettings={openSettings}
-            onPhase={onPhase}
-          />
-        )}
-        {log && screen === "tag" && (
-          <TagScreen
-            key={tagRun}
-            log={log}
-            lr={lr}
-            sort={sort}
-            notice={notice}
-            onDismissNotice={dismissNotice}
-            onCancel={() => {
-              setLogNotice(null);
-              setTagRun((n) => n + 1);
-            }}
-          />
-        )}
+          {state.status === "loading" && (
+            <main className="screen screen-center">
+              <p className="muted">{t("dives.loading")}</p>
+            </main>
+          )}
+          {state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
+          {log && shown === "collections" && !adjusting && (
+            <DivesStep
+              log={log}
+              selected={chosen}
+              onSelect={setChosen}
+              sort={sort}
+              onSort={onSort}
+              notice={notice}
+              onDismissNotice={dismissNotice}
+              onNext={() => {
+                setLogNotice(null);
+                setStep("adjust");
+              }}
+            />
+          )}
+          {log && shown === "collections" && adjusting && (
+            <CollectionsScreen
+              log={log}
+              lr={lr}
+              settings={settings}
+              chosen={chosen}
+              onChooseDives={() => {
+                setLogNotice(null);
+                setStep("dives");
+              }}
+              onDone={() => {
+                setChosen(new Set());
+                setStep("dives");
+              }}
+              onRetryDives={(ids) => setChosen(new Set(ids))}
+              onOpenSettings={openSettings}
+              onPhase={onPhase}
+            />
+          )}
+          {log && shown === "tag" && (
+            <TagScreen
+              key={tagRun}
+              log={log}
+              lr={lr}
+              sort={sort}
+              notice={notice}
+              onDismissNotice={dismissNotice}
+              onCancel={() => {
+                setLogNotice(null);
+                setTagRun((n) => n + 1);
+              }}
+            />
+          )}
         </div>
       </div>
       <StatusBar lr={lr} log={log} />
