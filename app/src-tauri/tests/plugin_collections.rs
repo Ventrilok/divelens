@@ -87,6 +87,146 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
     );
 }
 
+/// A request with one group: the dive and the collection name as given,
+/// the location of the sample dive, and two photos (one in the dive).
+fn partial_request(
+    collection: Option<&str>,
+    dive: bool,
+    location: bool,
+) -> divelens_core::tags::CollectionsRequest {
+    use divelens_core::tags::{
+        CollectionGroup, CollectionsRequest, DiveTags, LocationTags, PhotoTags, Units,
+    };
+    let sample = sample_dive();
+    let point = divelens_core::profile::PhotoPoint {
+        elapsed_s: 160,
+        depth_m: 12.0,
+        temp_c: Some(25.0),
+    };
+    CollectionsRequest {
+        search: 3,
+        parent: Vec::new(),
+        group: Some("Dive Lens".into()),
+        groups: vec![CollectionGroup {
+            collection: collection.map(Into::into),
+            dive: dive.then(|| DiveTags::new(&sample, Units::default(), "Subsurface")),
+            location: location.then(|| LocationTags::new(&sample.site, None, None)),
+            photos: vec![PhotoTags::new(
+                "1".into(),
+                Some(point),
+                240,
+                Units::default(),
+            )],
+        }],
+    }
+}
+
+/// Lua defining `partial()`: plans `input` and writes it on photo "1"
+/// (found, nothing before it, no collection there). Returns the planned
+/// groups and the writes, or nil and the reason.
+const PARTIAL_LUA: &str = r#"
+    local Json = require "Json"
+    local Tagging = require "Tagging"
+    function partial()
+        local groups, place = Tagging.planCollections(Json.decode(input), function(iso) return iso end)
+        if not groups then return nil, place end
+        Tagging.resolvePhotos(groups, { ["1"] = {} })
+        return groups, Tagging.collectionWrites(groups, {}, {})
+    end
+"#;
+
+#[test]
+fn a_group_without_a_dive_writes_only_the_location() {
+    let lua = lua();
+    let request = partial_request(Some("700 - Coral Garden"), false, true);
+    lua.globals()
+        .set("input", serde_json::to_string(&request).unwrap())
+        .unwrap();
+    let fields: Vec<String> = lua
+        .load(format!(
+            r#"
+            {PARTIAL_LUA}
+            local groups, plan = partial()
+            assert(groups, plan)
+            -- Its own values (clock offset, depth) are ignored.
+            assert(groups[1].photos[1].changes == nil)
+            assert(not groups[1].writesDive)
+            local out = {{}}
+            for _, c in ipairs(plan.groups[1].steps[1].changes) do
+                out[#out + 1] = c.kind .. " " .. c.field
+            end
+            for _, c in ipairs(plan.later[1].changes) do
+                out[#out + 1] = c.kind .. " " .. c.field
+            end
+            return out
+            "#
+        ))
+        .eval()
+        .unwrap();
+    assert!(
+        fields.iter().all(|f| f.starts_with("raw ")),
+        "a Dive Lens field written: {fields:?}"
+    );
+    let mut sorted = fields.clone();
+    sorted.sort();
+    assert!(sorted.contains(&"raw country".to_string()), "{fields:?}");
+    assert!(sorted.contains(&"raw gps".to_string()), "{fields:?}");
+    assert!(
+        sorted
+            .iter()
+            .all(|f| ["raw country", "raw city", "raw location", "raw gps"].contains(&f.as_str())),
+        "{fields:?}"
+    );
+}
+
+#[test]
+fn a_group_without_a_collection_creates_none() {
+    let lua = lua();
+    let request = partial_request(None, true, true);
+    lua.globals()
+        .set("input", serde_json::to_string(&request).unwrap())
+        .unwrap();
+    let out = json_of(
+        &lua,
+        &format!(
+            r#"
+            {PARTIAL_LUA}
+            local groups, plan = partial()
+            assert(groups, plan)
+            local r = plan.results[1]
+            assert(r.collection == nil and r.created == false and r.count == 1)
+            assert(#plan.groups[1].photos == 1)
+            return Json.encode({{ writesDive = groups[1].writesDive,
+                names = Tagging.namesCollections(groups) }})
+            "#
+        ),
+    );
+    assert_eq!(
+        out,
+        serde_json::json!({ "writesDive": true, "names": false })
+    );
+}
+
+#[test]
+fn a_group_with_nothing_is_refused() {
+    let lua = lua();
+    let request = partial_request(None, false, false);
+    lua.globals()
+        .set("input", serde_json::to_string(&request).unwrap())
+        .unwrap();
+    let out: Vec<String> = lua
+        .load(format!(
+            r#"
+            {PARTIAL_LUA}
+            local groups, why = partial()
+            return {{ tostring(groups), why }}
+            "#
+        ))
+        .eval()
+        .unwrap();
+    assert_eq!(out, ["nil", "nothing to write"]);
+}
+
 #[test]
 fn collections_write_gps_and_altitude_in_a_write_of_their_own() {
     use divelens_core::tags::{

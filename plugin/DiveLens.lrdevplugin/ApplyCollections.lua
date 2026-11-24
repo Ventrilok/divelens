@@ -78,9 +78,10 @@ function ApplyCollections.run(s, message)
     if not holder then return fail("parentNotFound", table.concat(place.parent, " › ")) end
     local container = #place.parent > 0 and holder or nil
 
-    -- The group set is created on its own the first time: a set created
+    -- The group set is created on its own the first time (only when a group
+    -- has a collection to make): a set created
     -- inside a write cannot be used before that write ends.
-    if place.group then
+    if place.group and Tagging.namesCollections(groups) then
         local set = Tagging.findChild(holder:getChildCollectionSets(), place.group)
         if not set then
             local ok, status = LrTasks.pcall(function()
@@ -99,13 +100,14 @@ function ApplyCollections.run(s, message)
     for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
 
     -- The photos found, in the catalog.
-    local total, found = Tagging.resolvePhotos(groups, s.search.photos)
+    local total = Tagging.resolvePhotos(groups, s.search.photos)
     CatalogWrite.apply(s, id, {
         catalog = catalog,
         undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)",
         total = total,
         fail = fail,
-        before = function(cat) return CatalogWrite.photosBefore(cat, found) end,
+        -- Only the photos of groups writing a dive: the others clear nothing.
+        before = function(cat) return CatalogWrite.photosBefore(cat, Tagging.divePhotos(groups)) end,
         writeFirst = function(cat, before, advance)
             local planned = Tagging.collectionWrites(groups, before, existing)
             for gi, g in ipairs(groups) do
@@ -115,7 +117,7 @@ function ApplyCollections.run(s, message)
                     if step.photo then CatalogWrite.write(step.photo, step.changes) end
                     advance()
                 end
-                if #group.photos > 0 then
+                if g.collection and #group.photos > 0 then
                     local collection = cat:createCollection(g.collection, container, true)
                     collection:addPhotos(group.photos)
                 end

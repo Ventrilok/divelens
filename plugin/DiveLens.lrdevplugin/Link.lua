@@ -41,7 +41,7 @@ local Selection = require "Selection"
 local Send = require "Send"
 local Tagging = require "Tagging"
 
-local PROTOCOL = 6
+local PROTOCOL = 7
 local APP_ID = "com.querton.divelens.desktop" -- the app's bundle identifier
 local LINK_FILE = "lightroom-link.json"
 local TICK = 0.1           -- seconds between two passes of the link task

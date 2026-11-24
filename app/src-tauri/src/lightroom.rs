@@ -39,7 +39,7 @@ use crate::settings::{Legacy, LogLevel};
 /// Name of the link file, written by the plugin in the app's settings folder.
 pub const LINK_FILE: &str = "lightroom-link.json";
 /// Version of the message set; both sides must agree.
-pub const PROTOCOL: u32 = 6;
+pub const PROTOCOL: u32 = 7;
 
 /// Every reason the plug-in gives in an `applyFailed` message.
 pub const APPLY_REASONS: &[&str] = &[
@@ -168,7 +168,8 @@ pub struct PhotoSearch {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WrittenCollection {
-    pub collection: String,
+    /// None for a group written without a collection.
+    pub collection: Option<String>,
     pub count: usize,
     /// The collection did not exist before.
     pub created: bool,
@@ -731,7 +732,7 @@ mod tests {
         stream.write_all(text.as_bytes()).unwrap();
     }
 
-    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":6,"type":"hello"}"#;
+    const HELLO: &str = r#"{"catalog":"Dives 2026","lightroom":"16.0","plugin":"0.1.0","protocol":7,"type":"hello"}"#;
 
     #[test]
     fn dropped_requests_stop_their_callers_waiting() {
@@ -1286,7 +1287,7 @@ mod tests {
         assert_eq!(
             written,
             Ok(vec![WrittenCollection {
-                collection: "700 - Coral Garden".into(),
+                collection: Some("700 - Coral Garden".into()),
                 count: 1,
                 created: true,
             }])
@@ -1301,7 +1302,7 @@ mod tests {
             lines.next().unwrap();
             write(
                 to_app,
-                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":6,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
+                r#"{"catalog":"C","lightroom":"16.0","plugin":"0.1.0","protocol":7,"type":"hello","legacy":{"macDivePath":"~/MacDive.sqlite","displayLogOrder":"asc"}}"#,
             );
             write(to_app, "\n");
             lines.next().unwrap(); // first ping: the app is connected
@@ -1368,6 +1369,33 @@ mod tests {
             run_session(&link, "0.1.0", fast(), &idle(), &mut |_| {}),
             End::Unreachable
         );
+    }
+
+    #[test]
+    fn a_plugin_with_an_older_protocol_is_refused() {
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (reply, sets) = std::sync::mpsc::channel();
+        commands.send(Command::ListSets { reply }).unwrap();
+        let (link, plugin) = fake_plugin(|lines, to_app| {
+            lines.next().unwrap();
+            write(
+                to_app,
+                &format!("{}\n", HELLO.replace("\"protocol\":7", "\"protocol\":6")),
+            );
+            // Nothing more is sent to it: no request, no ping.
+            assert_eq!(lines.next(), None);
+        });
+        let mut events = Vec::new();
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |e| events.push(e));
+        plugin.join().unwrap();
+        assert_eq!(end, End::Protocol(6));
+        // Never connected, and the request waiting was not answered.
+        assert!(
+            events
+                .iter()
+                .all(|e| !matches!(e, Event::Status(s) if s.connected))
+        );
+        assert!(sets.recv().is_err());
     }
 
     #[test]

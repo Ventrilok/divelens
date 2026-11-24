@@ -285,7 +285,8 @@ export interface CollectionsPreview {
 }
 
 export interface WrittenCollection {
-  collection: string;
+  /** null for a group written without a collection. */
+  collection: string | null;
   count: number;
   created: boolean;
 }

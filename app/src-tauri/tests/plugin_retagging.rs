@@ -805,6 +805,48 @@ fn create_collections_clears_the_altitude_it_wrote_from_a_depth_cleared() {
 }
 
 #[test]
+fn a_group_without_a_dive_clears_nothing_of_another_dive() {
+    let a = sample_dive();
+    // Photo "1" carries dive A, its depth and the altitude Dive Lens wrote.
+    let photo = filed(&a, "MacDive", Some(18.44), Units::default());
+    // Filed again with no dive details: the location and the collection only.
+    let mut request = filing(&next_dive(), "MacDive", Some(10.0), Units::default(), true);
+    request.groups[0].dive = None;
+    let lua = lua();
+    run(&lua, WRITES_LUA);
+    set_before(&lua, Before::Filed(&photo), Some(-18.44));
+    lua.globals()
+        .set("input", serde_json::to_string(&request).unwrap())
+        .unwrap();
+    let out: Vec<String> = lua
+        .load(
+            r#"
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            local groups = assert(Tagging.planCollections(Json.decode(input), date))
+            local p = {}
+            Tagging.resolvePhotos(groups, { ["1"] = p })
+            assert(current.PhotoDepth and current.WrittenAltitude and current.StartDate,
+                "the photo must carry the other dive")
+            local plan = Tagging.collectionWrites(groups, { [p] = current }, {})
+            assert(plan.cleared == 0, "cleared " .. plan.cleared)
+            local lists = { plan.groups[1].steps[1].changes }
+            for _, l in ipairs(plan.later) do lists[#lists + 1] = l.changes end
+            for _, list in ipairs(lists) do
+                for _, c in ipairs(list) do
+                    assert(c.value ~= nil, "cleared: " .. c.field)
+                end
+            end
+            return checked(plan.groups[1].steps[1].changes, plan.later[1] and plan.later[1].changes or {})
+            "#,
+        )
+        .eval()
+        .unwrap();
+    assert!(!out.is_empty());
+    assert!(out.iter().all(|l| !l.contains("plugin ")), "{out:?}");
+}
+
+#[test]
 fn retag_fields_are_the_dive_identity_then_the_photo_values_then_the_marker() {
     let lua = common::lua();
     let fields: Vec<String> = lua

@@ -524,22 +524,42 @@ function Tagging.tagWrites(changes, photos, before, perPhoto, idOf)
     return plan
 end
 
---- Changes for one dive of a "Create Collections" request:
---- { collection = name, common = changes for every photo,
----   photos = { { id = photo id, changes = per-photo changes }, ... } },
---- or nil and a reason.
+--- Changes for one group of a "Create Collections" request:
+--- { collection = name or nil, common = changes for every photo,
+---   photos = { { id = photo id, changes = per-photo changes or nil }, ... },
+---   writesDive = true when the group writes a dive },
+--- or nil and a reason. A group may lack its dive (then only its location
+--- is written, and the photos' own values, which belong to a dive, are
+--- ignored: `changes` is nil, only the id is required) or its collection
+--- (then none is made), not all three.
 local function planGroup(group, formatDate)
-    if type(group) ~= "table" or not text(group.collection) then return nil, "bad group" end
-    local common, why = Tagging.plan({ dive = group.dive, location = group.location }, formatDate)
-    if not common then return nil, why end
-    if not value(group.dive) then return nil, "bad dive" end
+    if type(group) ~= "table" then return nil, "bad group" end
+    local name = value(group.collection)
+    if name ~= nil and type(name) ~= "string" then return nil, "bad group" end
+    local dive, location = value(group.dive), value(group.location)
+    if not dive and not location and name == nil then return nil, "nothing to write" end
+    local common = {}
+    if dive or location then
+        local why
+        common, why = Tagging.plan({ dive = dive, location = location }, formatDate)
+        if not common then return nil, why end
+    end
+    local list = value(group.photos)
+    if type(list) ~= "table" then return nil, "bad group" end
     local photos = {}
-    for _, photo in ipairs(value(group.photos) or {}) do
-        local id, changes = photoChanges(photo)
+    for _, photo in ipairs(list) do
+        local id, changes
+        if dive then
+            id, changes = photoChanges(photo)
+        elseif type(photo) == "table" and text(photo.id) then
+            id = photo.id
+        else
+            id, changes = nil, "bad photo"
+        end
         if not id then return nil, changes end
         photos[#photos + 1] = { id = id, changes = changes }
     end
-    return { collection = group.collection, common = common, photos = photos }
+    return { collection = name, common = common, photos = photos, writesDive = dive ~= nil }
 end
 
 --- Plans a "Create Collections" request (core/src/tags.rs, CollectionsRequest):
@@ -565,6 +585,29 @@ function Tagging.planCollections(request, formatDate)
     end
     if #groups == 0 then return nil, "nothing to write" end
     return groups, { parent = parent, group = group }
+end
+
+--- True when at least one planned group (planCollections) has a collection
+--- to make: only then is the collection set looked for or created.
+function Tagging.namesCollections(groups)
+    for _, g in ipairs(groups) do
+        if g.collection then return true end
+    end
+    return false
+end
+
+--- The photos found (resolvePhotos) of the groups that write a dive: the
+--- only ones whose previous dive data is read, to clear what it left.
+function Tagging.divePhotos(groups)
+    local found = {}
+    for _, g in ipairs(groups) do
+        if g.writesDive then
+            for _, p in ipairs(g.photos) do
+                if p.photo then found[#found + 1] = p.photo end
+            end
+        end
+    end
+    return found
 end
 
 --- Finds the photos of planned groups (planCollections) in `byId`, the
@@ -594,9 +637,10 @@ end
 ---             collection;
 ---   later   = { { photo, changes }, ... }: the second write's, for the
 ---             photos with a GPS position or altitude to write;
----   results = { [gi] = { collection, count = photos found, created } }, as
+---   results = { [gi] = { collection (nil without a name), count = photos
+---             found, created } }, as
 ---             the app is told: `created` only for the group that really
----             makes its collection: a photo found, the name neither there
+---             makes its collection: a name, a photo found, the name neither there
 ---             nor made by an earlier group (that one is completed);
 ---   cleared = photos that carried another dive's values (as tagWrites).
 function Tagging.collectionWrites(groups, before, existing)
@@ -609,7 +653,9 @@ function Tagging.collectionWrites(groups, before, existing)
             if p.photo then
                 -- Its changes for the first write, and its GPS position
                 -- and altitude for the second.
-                local now, gps, replaced = Tagging.photoWrites(g.common, before[p.photo], p.changes)
+                -- A group without a dive reads nothing and clears nothing
+                -- (p.changes is nil): another dive's values stay.
+                local now, gps, replaced = Tagging.photoWrites(g.common, p.changes and before[p.photo], p.changes)
                 if replaced then plan.cleared = plan.cleared + 1 end
                 step.photo, step.changes = p.photo, now
                 if #gps > 0 then plan.later[#plan.later + 1] = { photo = p.photo, changes = gps } end
@@ -618,7 +664,8 @@ function Tagging.collectionWrites(groups, before, existing)
             steps[#steps + 1] = step
         end
         plan.groups[gi] = { steps = steps, photos = photos }
-        local created = #photos > 0 and not existing[g.collection] and not made[g.collection]
+        local created = g.collection ~= nil and #photos > 0
+            and not existing[g.collection] and not made[g.collection]
         if created then made[g.collection] = true end
         plan.results[gi] = { collection = g.collection, count = #photos, created = created }
     end
