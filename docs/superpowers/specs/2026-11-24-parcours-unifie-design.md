@@ -30,6 +30,7 @@ On les remplace par **un seul parcours en cinq étapes**, où la seule vraie que
 - **S'écarter du comportement d'aujourd'hui sans décision du propriétaire.** Règle du chantier : dans le doute, on garde ce que fait la version 2.1.1. Les seuls écarts permis sont listés dans « Ce qui change pour le plongeur ».
 - Changer l'ordre des deux écritures, ce qui va dans chacune, ou le fait qu'un seul « Annuler » défait tout.
 - Renommer ce que le guide des contributeurs interdit de renommer (identifiant du plug-in, identifiants des champs, ensemble « Dive Lens », noms des collections, identifiant de l'app).
+- Dix écrans au lieu de cinq : chaque étape est **un seul écran**, codé une fois, qui s'adapte au chemin choisi à l'étape 1 (les maquettes dessinent ses deux variantes). Deux copies d'un même écran, une par chemin, sont un échec : c'est ce que la réorganisation de novembre a supprimé.
 - Un test supprimé, désactivé ou assoupli pour faire passer un changement.
 - Un état intermédiaire de `main` où l'application ne fonctionne plus : entre deux phases, les écrans en place doivent marcher.
 
