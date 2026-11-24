@@ -51,6 +51,7 @@ const offline: LightroomStatus = {
   selectionVersion: 0,
   selectionFrom: null,
   selectionTo: null,
+  selectionCameras: [],
   coverFrom: null,
   coverTo: null,
   restartLightroom: false,

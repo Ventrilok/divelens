@@ -142,11 +142,21 @@ export interface LightroomStatus {
   /** Earliest and latest capture times, wall-clock "YYYY-MM-DDTHH:MM:SS". */
   selectionFrom: string | null;
   selectionTo: string | null;
+  /** Same, per camera of the selection, in the order Lightroom first gave them. */
+  selectionCameras: CameraRange[];
   /** The selection's range moved by each camera's remembered clock offset. */
   coverFrom: string | null;
   coverTo: string | null;
   /** Lightroom runs the plug-in of another version (Dive Lens was updated): it must restart. */
   restartLightroom: boolean;
+}
+
+/** Capture times of the selected photos of one camera, wall-clock "YYYY-MM-DDTHH:MM:SS". */
+export interface CameraRange {
+  model: string | null;
+  serial: string | null;
+  from: string;
+  to: string;
 }
 
 /** Thumbnails of the selection received so far (data URLs, by position). */
@@ -209,11 +219,27 @@ export interface TagPreview {
   /** The selection's range moved by the offsets shown ("covers the selection"). */
   coverFrom: string | null;
   coverTo: string | null;
+  /** The first five photos with a capture time taken outside the dive, by corrected time; empty without a dive. */
+  outside: OutsidePhoto[];
+  /** How many more photos are outside the dive. */
+  outsideMore: number;
+}
+
+/** A selected photo taken outside the chosen dive, with the offsets shown. */
+export interface OutsidePhoto {
+  /** Capture time corrected by its camera's offset, wall-clock "YYYY-MM-DDTHH:MM:SS". */
+  time: string;
+  /** Its camera's key. */
+  camera: string;
+  /** Whole minutes before the dive's start (negative) or after its end (positive), never 0. */
+  minutes: number;
 }
 
 /** What Tag Selection wrote: the number of photos tagged. */
 export interface TagApplied {
   count: number;
+  /** Of which with per-photo values and a depth; 0 with the dive details unticked. */
+  withDepth: number;
   /** The collection the selection was put in; null when none was written. */
   collection: WrittenCollection | null;
 }

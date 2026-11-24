@@ -5,8 +5,8 @@ pub(crate) mod plan;
 
 use std::sync::{Mutex, mpsc};
 
-use divelens_core::Dive;
 use divelens_core::tags::{CollectionsRequest, LocationTags};
+use divelens_core::{Dive, Error, Site};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
@@ -174,7 +174,7 @@ pub(crate) async fn apply_collections(
         let units = units_in_use(&app, &info);
         // Another site alone means everything ticked, as today's screen.
         let chosen = chosen_options(options, other_site.as_ref());
-        let (request, empty_dives, applied, altitude_setting) = {
+        let (request, preview, applied, altitude_setting) = {
             let state = app.state::<CollectionsState>();
             let searches = state.searches.lock().expect("collections");
             let session = searches.get(search).ok_or(ApplyError::NoPhotos)?;
@@ -189,42 +189,26 @@ pub(crate) async fn apply_collections(
             if chosen.is_none() && settings.depth_to_altitude {
                 request.copy_depth_to_altitude();
             }
-            let preview = session.preview(&choices);
-            let empty: Vec<String> = preview
-                .dives
-                .iter()
-                .filter(|d| d.photos == 0)
-                .map(|d| d.id.clone())
-                .collect();
             (
                 request,
-                empty,
+                session.preview(&choices),
                 session.applied(&choices),
                 settings.depth_to_altitude,
             )
         };
-        let mut request = request;
-        if let Some(options) = &chosen {
-            let other = match &other_site {
-                Some(LocationChoice::Site { site_id, lat, lon }) => {
-                    Some(another_site(site_id, *lat, *lon, || {
-                        open(&app, &info).and_then(|opened| opened.log.sites())
-                    })?)
-                }
-                // Each dive's own site is already on its group.
-                Some(LocationChoice::DiveSite) | None => None,
-            };
-            with_options(&mut request, options, other.as_ref(), || altitude_setting)?;
-        }
-        if request.is_empty() {
-            return Err(ApplyError::NothingToWrite);
-        }
-        let with_depth = request
-            .groups
-            .iter()
-            .flat_map(|g| &g.photos)
-            .filter(|p| p.photo_depth.is_some())
-            .count();
+        let other = match &chosen {
+            Some(options) => other_location(other_site.as_ref(), options, || {
+                open(&app, &info).and_then(|opened| opened.log.sites())
+            })?,
+            None => None,
+        };
+        let Planned {
+            request,
+            empty_dives,
+            with_depth,
+        } = planned(request, &preview, chosen.as_ref(), other.as_ref(), || {
+            altitude_setting
+        })?;
         let written = write_and_remember(
             &app,
             &info,
@@ -266,6 +250,75 @@ fn chosen_options(
     other_site: Option<&LocationChoice>,
 ) -> Option<WriteOptions> {
     options.or_else(|| other_site.map(|_| WriteOptions::EVERYTHING))
+}
+
+/// The location of another site of the log for every group, when the diver
+/// picked one (`other_site`) and kept its place or GPS; `None` for each
+/// dive's own site, already on its group, and when neither is kept: nothing
+/// of the site would be written, so it is neither checked nor looked for.
+/// `sites` reads the log's sites, only when needed.
+fn other_location(
+    other_site: Option<&LocationChoice>,
+    options: &WriteOptions,
+    sites: impl FnOnce() -> Result<Vec<Site>, Error>,
+) -> Result<Option<LocationTags>, ApplyError> {
+    match other_site {
+        Some(LocationChoice::Site { site_id, lat, lon }) if options.place || options.gps => {
+            Ok(Some(another_site(site_id, *lat, *lon, sites)?))
+        }
+        Some(LocationChoice::Site { .. } | LocationChoice::DiveSite) | None => Ok(None),
+    }
+}
+
+/// What "Apply" sends, and what its result tells besides Lightroom's answer.
+#[derive(Debug)]
+struct Planned {
+    request: CollectionsRequest,
+    /// Chosen dives that got no photo (no collection).
+    empty_dives: Vec<String>,
+    /// Photos with per-photo values and a depth (0 with the dive details
+    /// unticked).
+    with_depth: usize,
+}
+
+/// The write of `request`, built as today's screen sends it, `preview` being
+/// the live counts of the same choices. The chosen dives without photo are
+/// read from the counts first, before anything is removed: a dive whose
+/// group the options drop, nothing being left to write on it, is not
+/// "without photo". Then what the diver ticked (`chosen`, `other` the
+/// location of another site, `setting` the altitude setting) is applied
+/// (`with_options`; none: today's path). Refused when nothing is left to
+/// write.
+fn planned(
+    mut request: CollectionsRequest,
+    preview: &Preview,
+    chosen: Option<&WriteOptions>,
+    other: Option<&LocationTags>,
+    setting: impl FnOnce() -> bool,
+) -> Result<Planned, ApplyError> {
+    let empty_dives = preview
+        .dives
+        .iter()
+        .filter(|d| d.photos == 0)
+        .map(|d| d.id.clone())
+        .collect();
+    if let Some(options) = chosen {
+        with_options(&mut request, options, other, setting)?;
+    }
+    if request.is_empty() {
+        return Err(ApplyError::NothingToWrite);
+    }
+    let with_depth = request
+        .groups
+        .iter()
+        .flat_map(|g| &g.photos)
+        .filter(|p| p.photo_depth.is_some())
+        .count();
+    Ok(Planned {
+        request,
+        empty_dives,
+        with_depth,
+    })
 }
 
 /// What the diver ticked, applied to the request built as today: another
@@ -461,6 +514,130 @@ mod tests {
             chosen_options(Some(sent), diving.as_ref()).map(|o| o.place),
             Some(false)
         );
+    }
+
+    #[test]
+    fn another_site_without_place_or_gps_reads_no_site() {
+        let unknown = LocationChoice::Site {
+            site_id: "Nowhere Reef".into(),
+            lat: None,
+            lon: None,
+        };
+        // Neither the place nor the GPS ticked: nothing of the site would be
+        // written, so the log is not read and the site not looked for.
+        let collections_only = options(false, None, false, false, true);
+        let other = other_location(Some(&unknown), &collections_only, || panic!("sites read"));
+        assert!(matches!(other, Ok(None)), "{other:?}");
+        // The collections still go, with nothing else.
+        let mut got = request();
+        with_options(&mut got, &collections_only, None, || panic!("setting read")).unwrap();
+        assert_eq!(got.groups.len(), 2);
+        assert!(
+            got.groups
+                .iter()
+                .all(|g| g.collection.is_some() && g.location.is_none() && g.dive.is_none())
+        );
+        // The place or the GPS ticked: the site is looked for, and refused
+        // when the log has no such site.
+        for (place, gps) in [(true, false), (false, true), (true, true)] {
+            let ticked = options(false, None, place, gps, true);
+            let other = other_location(Some(&unknown), &ticked, || {
+                Ok(vec![dive("C", "Shark Reef").site])
+            });
+            assert!(matches!(other, Err(ApplyError::UnknownSite)), "{other:?}");
+        }
+    }
+
+    /// Dive A at 07:00 on a named site and dive B at 10:00 on none, each
+    /// with a profile and one photo taken during it, and dive C at 14:00
+    /// with no photo: the request for everything ticked and its live counts.
+    fn three_dives() -> (CollectionsRequest, Preview) {
+        use crate::apply::offsets::Offsets;
+        use crate::lightroom::FoundPhoto;
+        use divelens_core::profile::Sample;
+        let at = |id: &str, site: Option<&str>, hour: u32| {
+            let mut d = dive(id, site.unwrap_or_default());
+            d.start = d.start.date().and_hms_opt(hour, 0, 0).unwrap();
+            d.end = d.start + chrono::Duration::seconds(2100);
+            if site.is_none() {
+                d.site = Site::default();
+            }
+            d
+        };
+        let dives = vec![
+            at("A", Some("Coral Garden"), 7),
+            at("B", None, 10),
+            at("C", Some("Blue Hole"), 14),
+        ];
+        let photo = |id: &str, time: &str| FoundPhoto {
+            id: id.into(),
+            time: Some(time.into()),
+            model: Some("GoPro".into()),
+            serial: None,
+        };
+        let found = vec![
+            photo("1", "2025-12-31T07:20:00"),
+            photo("2", "2025-12-31T10:10:00"),
+        ];
+        let session = Session::new(3, dives, found, &Offsets::default());
+        let choices = Choices::default();
+        let ramp = |_: &Dive| {
+            Ok(vec![
+                Sample {
+                    time_s: 0,
+                    depth_m: 0.0,
+                    temp_c: None,
+                },
+                Sample {
+                    time_s: 2100,
+                    depth_m: 21.0,
+                    temp_c: None,
+                },
+            ])
+        };
+        let request = session
+            .request(&choices, Units::default(), "Subsurface", ramp)
+            .unwrap();
+        (request, session.preview(&choices))
+    }
+
+    #[test]
+    fn a_group_left_with_nothing_is_not_an_empty_dive() {
+        // Everything ticked: both dives with a photo written, with depth;
+        // dive C without photo.
+        let (request, preview) = three_dives();
+        let all = options(true, Some(false), true, true, true);
+        let written = planned(request, &preview, Some(&all), None, || {
+            panic!("setting read")
+        });
+        let written = written.unwrap();
+        assert_eq!(written.request.groups.len(), 2);
+        assert_eq!(written.with_depth, 2);
+        assert_eq!(written.empty_dives, ["C"]);
+        // The site details alone: dive B has no site, nothing is left to
+        // write on its photo and its group goes. It still had a photo: it
+        // is not a dive without photo; dive C still is.
+        let (request, preview) = three_dives();
+        let site_only = options(false, Some(false), true, true, false);
+        let written = planned(request, &preview, Some(&site_only), None, || {
+            panic!("setting read")
+        })
+        .unwrap();
+        let locations: Vec<_> = written
+            .request
+            .groups
+            .iter()
+            .map(|g| g.location.as_ref().and_then(|l| l.location.as_deref()))
+            .collect();
+        assert_eq!(locations, [Some("Coral Garden")]);
+        assert_eq!(written.empty_dives, ["C"]);
+        // The dive details unticked: no photo with depth.
+        assert_eq!(written.with_depth, 0);
+        // Today's path (no option): the same dives without photo.
+        let (request, preview) = three_dives();
+        let today = planned(request, &preview, None, None, || panic!("setting read")).unwrap();
+        assert_eq!(today.empty_dives, ["C"]);
+        assert_eq!(today.request.groups.len(), 2);
     }
 
     #[test]

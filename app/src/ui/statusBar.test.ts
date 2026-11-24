@@ -27,6 +27,7 @@ const connected: LightroomStatus = {
   selectionVersion: 1,
   selectionFrom: null,
   selectionTo: null,
+  selectionCameras: [],
   coverFrom: null,
   coverTo: null,
   restartLightroom: false,

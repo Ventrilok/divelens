@@ -94,9 +94,11 @@ pub struct TagRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub collection: Option<CollectionPlace>,
     /// The selection the per-photo values were computed for, as the plugin
-    /// numbered it when it described it; `None`: no per-photo values (no
-    /// dive, or a dive without a profile). The plugin then writes only if
-    /// the photos selected at that moment are exactly those.
+    /// numbered it when it described it, also kept with the dive details
+    /// unticked (the clock offsets remembered come from it); `None`: no
+    /// selection described (no dive, or a dive without a profile). The
+    /// plugin then writes only if the photos selected at that moment are
+    /// exactly those.
     pub selection: Option<u64>,
     /// Per-photo values of the photos taken during the dive (spec F6, F8).
     /// The other photos of the selection are not listed: they get the dive
@@ -247,7 +249,8 @@ impl CollectionsRequest {
 }
 
 impl TagRequest {
-    /// Removes what is not ticked.
+    /// Removes what is not ticked. The selection described stays named
+    /// whatever is ticked: the plugin still checks it is the one selected.
     pub fn keep(&mut self, kept: Kept) {
         if !kept.collections {
             self.collection = None;
@@ -258,7 +261,6 @@ impl TagRequest {
             .and_then(|l| l.keep(kept.place, kept.gps));
         if !kept.dive {
             self.dive = None;
-            self.selection = None;
             self.photos.clear();
         }
     }
@@ -738,7 +740,9 @@ mod tests {
                 continue;
             }
             assert_eq!(r.dive.is_some(), kept.dive);
-            assert_eq!(r.selection.is_some(), kept.dive);
+            // The selection described stays named, dive details ticked or
+            // not: the plug-in still checks it is the one selected.
+            assert_eq!(r.selection, Some(7));
             assert_eq!(!r.photos.is_empty(), kept.dive);
             assert_eq!(
                 r.location.as_ref().is_some_and(|l| l.country.is_some()),

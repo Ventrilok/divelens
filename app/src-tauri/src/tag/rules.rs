@@ -152,7 +152,8 @@ pub(super) struct Ticked {
 /// `ticked` is what the diver ticked; `None` (the current screens): the
 /// request is the one they always got. With options, nothing left to write
 /// is refused before anything is read; with the dive details unticked, the
-/// description still gives the offsets to remember, the profile is not read.
+/// description still gives the offsets to remember and stays named in the
+/// request, the profile is not read.
 #[allow(clippy::too_many_arguments)] // the reads handed in as closures, then what is ticked
 pub(super) fn build_request(
     dive: Option<Dive>,
@@ -183,10 +184,12 @@ pub(super) fn build_request(
         if dive_kept {
             let outcome = per_photo(&dive, described, units, || profile(&dive.id));
             (applied, unreadable) = apply_per_photo(&mut request, outcome)?;
-        } else if let Some((_, in_dive)) = described {
-            // Unticked dive details: nothing more in the request and the
-            // profile never read, but the offsets of the cameras with a
-            // photo in the dive are still remembered, as when ticked.
+        } else if let Some((number, in_dive)) = described {
+            // Unticked dive details: no per-photo value and the profile
+            // never read, but the offsets of the cameras with a photo in
+            // the dive are still remembered, as when ticked, so the
+            // selection they come from is named for the plugin to check.
+            request.selection = Some(number);
             applied = applied_offsets(&in_dive);
         }
     }
@@ -196,6 +199,16 @@ pub(super) fn build_request(
         applied,
         unreadable,
     })
+}
+
+/// Photos of `request` that get per-photo values with a depth, counted as
+/// Create Collections counts them; 0 with the dive details unticked.
+pub(super) fn with_depth(request: &TagRequest) -> usize {
+    request
+        .photos
+        .iter()
+        .filter(|p| p.photo_depth.is_some())
+        .count()
 }
 
 /// The "depth to altitude" setting applied to the whole request, as Create
@@ -702,7 +715,9 @@ mod tests {
         .unwrap();
         assert!(built.request.dive.is_none());
         assert!(built.request.photos.is_empty());
-        assert_eq!(built.request.selection, None);
+        // The selection the offsets come from stays named: the plug-in
+        // checks it is still the one selected.
+        assert_eq!(built.request.selection, Some(42));
         assert_eq!(
             built.request.location,
             Some(LocationTags::new(&d.site, None, None))
@@ -755,10 +770,10 @@ mod tests {
         // selection the screen shows, the profile never read...
         let both = BTreeMap::from([("GoPro|".to_string(), 60), ("TG-7|A1".to_string(), 0)]);
         assert_eq!(unticked.applied, both);
-        // ...and nothing of them in the request: no per-photo value, no
-        // selection to check.
+        // ...and nothing of them in the request but the selection they come
+        // from, for the plug-in to check: no per-photo value.
         assert_eq!(unticked.request.dive, None);
-        assert_eq!(unticked.request.selection, None);
+        assert_eq!(unticked.request.selection, Some(42));
         assert!(unticked.request.photos.is_empty());
         assert!(unticked.unreadable.is_none());
         // Exactly what the dive details ticked remember.
@@ -766,15 +781,103 @@ mod tests {
         let ticked = build(true, Ok(Some((42, two_cameras_in_dive()))), &read).unwrap();
         assert_eq!(ticked.applied, unticked.applied);
         // The screen showed no description: nothing remembered, as with the
-        // dive details ticked.
+        // dive details ticked, and no selection to check.
         let none = build(false, Ok(None), &never).unwrap();
         assert!(none.applied.is_empty());
+        assert_eq!(none.request.selection, None);
         // A description no longer kept: refused, as with the dive details
         // ticked.
         assert!(matches!(
             build(false, Err(ApplyError::NoPhotos), &never),
             Err(ApplyError::NoPhotos)
         ));
+    }
+
+    /// Selection description 2, numbered 42 by the plug-in: three photos
+    /// from a TG-7 on dive time, at 09:10 and 09:30 during the dive (09:00
+    /// to 09:50), and at 10:30, after it.
+    fn three_photos_two_in_the_dive() -> Mutex<Searches<Selection>> {
+        let photo = |id: &str, time: &str| FoundPhoto {
+            id: id.into(),
+            time: Some(time.into()),
+            model: Some("TG-7".into()),
+            serial: Some("A1".into()),
+        };
+        let found = vec![
+            photo("1", "2025-12-30T09:10:00"),
+            photo("2", "2025-12-30T09:30:00"),
+            photo("3", "2025-12-30T10:30:00"),
+        ];
+        let selections = Mutex::new(Searches::default());
+        assert!(selections.lock().unwrap().start(2));
+        assert!(
+            selections
+                .lock()
+                .unwrap()
+                .finish(2, Selection::new(42, found, &Offsets::default()))
+        );
+        selections
+    }
+
+    /// The request for the described selection, the dive details ticked or
+    /// not, everything else ticked.
+    fn built_for_selection(dive_ticked: bool) -> Built {
+        let d = dive("A", 701);
+        let selections = three_photos_two_in_the_dive();
+        let sample = |time_s, depth_m| Sample {
+            time_s,
+            depth_m,
+            temp_c: None,
+        };
+        let profile = vec![sample(0, 0.0), sample(3000, 30.0)];
+        build_request(
+            Some(d.clone()),
+            Some(LocationTags::new(&d.site, None, None)),
+            Units::default(),
+            "MacDive",
+            |dive| described(&selections, Some(2), dive, &HashMap::new()),
+            |_| {
+                assert!(dive_ticked, "profile read with the dive details unticked");
+                Ok(profile.clone())
+            },
+            || false,
+            Some(Ticked {
+                kept: Kept {
+                    dive: dive_ticked,
+                    ..Kept::ALL
+                },
+                collection: Some(place()),
+            }),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn tag_applied_counts_photos_with_depth() {
+        // Two of the three photos were taken during the dive: they get a
+        // depth, the third the dive data alone.
+        let ticked = built_for_selection(true);
+        assert_eq!(ticked.request.photos.len(), 2);
+        assert_eq!(with_depth(&ticked.request), 2);
+        // The same photos, the dive details unticked: no per-photo value.
+        let unticked = built_for_selection(false);
+        assert_eq!(with_depth(&unticked.request), 0);
+    }
+
+    #[test]
+    fn the_described_selection_is_named_without_dive_details() {
+        // The plug-in's number for the description the screen shows (42),
+        // not the screen's own (2), as with the dive details ticked.
+        let unticked = built_for_selection(false);
+        assert_eq!(unticked.request.selection, Some(42));
+        assert!(unticked.request.dive.is_none());
+        assert!(unticked.request.photos.is_empty());
+        assert_eq!(built_for_selection(true).request.selection, Some(42));
+        // The offsets of the camera with photos in the dive, still remembered.
+        assert_eq!(
+            unticked.applied,
+            BTreeMap::from([("TG-7|A1".to_string(), 0)])
+        );
     }
 
     #[test]

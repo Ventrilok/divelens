@@ -63,12 +63,14 @@ pub(crate) struct TagChoice {
     options: Option<WriteOptions>,
 }
 
-/// What "Tag Selection › Apply" wrote: the number of photos tagged, and the
-/// collection the selection was put in, if one was written.
+/// What "Tag Selection › Apply" wrote: the number of photos tagged, of which
+/// with per-photo values and a depth (0 with the dive details unticked), and
+/// the collection the selection was put in, if one was written.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TagApplied {
     count: usize,
+    with_depth: usize,
     collection: Option<WrittenCollection>,
 }
 
@@ -76,6 +78,7 @@ impl From<usize> for TagApplied {
     fn from(count: usize) -> Self {
         Self {
             count,
+            with_depth: 0,
             collection: None,
         }
     }
@@ -168,6 +171,7 @@ pub(crate) async fn tag_selection(
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
         let (request, applied) = tag_request(&app, &info, &choice)?;
         let with_values = request.photos.len();
+        let with_depth = rules::with_depth(&request);
         let written = write_and_remember(
             &app,
             &info,
@@ -182,6 +186,7 @@ pub(crate) async fn tag_selection(
         log::info!("selection tagged: {count} photos, per-photo values on {with_values}");
         Ok(TagApplied {
             count,
+            with_depth,
             collection: written.collection,
         })
     })

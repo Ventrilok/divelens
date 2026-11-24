@@ -84,7 +84,7 @@ mod tests {
         let tagged = answered(Ok(2), |_| ()).map(TagApplied::from).unwrap();
         assert_eq!(
             serde_json::to_value(tagged).unwrap(),
-            serde_json::json!({ "count": 2, "collection": null })
+            serde_json::json!({ "count": 2, "withDepth": 0, "collection": null })
         );
     }
 
