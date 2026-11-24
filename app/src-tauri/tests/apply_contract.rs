@@ -154,12 +154,12 @@ fn the_undo_names_match() {
 
 #[test]
 fn the_screens_match() {
-    let sidebar = repo_file("app/src/ui/Sidebar.tsx");
+    let sidebar = repo_file("app/src/ui/screens.ts");
     let line = sidebar
         .lines()
         .map(str::trim)
         .find(|l| l.starts_with("export type Screen ="))
-        .expect("`export type Screen =` not found in app/src/ui/Sidebar.tsx");
+        .expect("`export type Screen =` not found in app/src/ui/screens.ts");
     let accepted: BTreeSet<&str> = line
         .trim_start_matches("export type Screen =")
         .trim_end_matches(';')

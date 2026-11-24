@@ -64,7 +64,7 @@ button { font: inherit; }
 .btn-g { background: transparent; color: var(--text-3); }
 .btn-g:hover { background: var(--btn); color: var(--text); }
 .inp { min-height: 40px; padding: 0 12px; border-radius: 8px; background: var(--bg-input); border: 1px solid var(--line-strong); color: var(--text); font: inherit; }
-.inp:focus-visible, .btn:focus-visible, .chip button:focus-visible, .nav:focus-visible, .list-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.inp:focus-visible, .btn:focus-visible, .chip button:focus-visible, .list-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .inp:disabled { opacity: 0.5; cursor: not-allowed; }
 .inp-num { width: 90px; }
 /* Dropdowns: drawn like the other fields on macOS and Windows; the open list
@@ -76,24 +76,35 @@ select.inp option { background: var(--card); color: var(--text); }
 input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-color: var(--accent); margin: 0; }
 
 /* Layout */
-.app { display: flex; height: 100vh; }
-.sidebar { flex: 0 0 220px; padding: 20px 12px; background: var(--bg-side); border-right: 1px solid #2c2e33; display: flex; flex-direction: column; gap: 4px; }
-.brand { display: flex; align-items: center; gap: 10px; padding: 0 12px 18px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
-.brand-logo { height: 32px; width: auto; flex: none; }
-.nav { display: flex; align-items: center; gap: 10px; padding: 0 12px; min-height: 40px; border-radius: 8px; color: var(--text-3); background: none; border: 0; font-weight: 500; text-align: left; cursor: pointer; }
-.nav:not(:disabled):hover { background: var(--btn); color: var(--text); }
-.nav:disabled { opacity: 0.45; cursor: default; }
-.nav-on, .nav-on:hover { background: var(--accent-soft) !important; color: var(--accent-text) !important; }
-.sidebar-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 4px; padding-top: 24px; }
-.status { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--bg); border: 1px solid #2c2e33; display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-3); }
-.status-line { display: flex; align-items: center; gap: 8px; }
-.status-title { color: var(--text); font-weight: 600; }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-.dot-warn { background: var(--warn); }
-.status-catalog { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app { display: flex; flex-direction: column; height: 100vh; }
+.app-header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 0 20px; background: var(--bg-side); border-bottom: 1px solid #2c2e33; }
+.brand { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.brand-logo { height: 28px; width: auto; flex: none; }
+.gear { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 8px; background: transparent; border: 1px solid var(--line-strong); color: var(--text-3); cursor: pointer; }
+.gear:not(:disabled):hover { background: var(--btn); color: var(--text); }
+.gear[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
+.gear:disabled { opacity: 0.45; cursor: not-allowed; }
+.gear:focus-visible, .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.status-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 24px; min-height: 36px; padding: 8px 20px; background: var(--bg-side); border-top: 1px solid #2c2e33; font-size: 12px; color: var(--muted); }
+.status-group { display: flex; flex-wrap: wrap; align-items: center; row-gap: 6px; min-width: 0; }
+.status-title { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; }
+.status-item { margin-left: 14px; padding-left: 14px; border-left: 1px solid var(--line-strong); color: var(--text-2); }
+.status-group > .status-item:first-child { margin-left: 0; padding-left: 0; border-left: 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.dot-warn { background: var(--warn); box-shadow: 0 0 0 3px rgba(242, 118, 46, 0.2); }
+/* Every screen of the journey stays mounted while Settings are shown, so that
+   its choices are still there on return; [hidden] must beat the display below. */
+.journey { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.journey[hidden] { display: none; }
+/* Temporary tabs, until the journey replaces the two screens. */
+.tabs { flex: none; display: flex; gap: 4px; padding: 8px 28px 0; border-bottom: 1px solid var(--line-soft); }
+.tab { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-3); font-weight: 500; cursor: pointer; }
+.tab:hover { color: var(--text); }
+.tab-on { color: var(--accent-text); border-bottom-color: var(--accent); }
+.settings-back { align-self: flex-start; }
 
 .content { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.content > .screen { min-height: 0; }
+.content > .screen, .journey > .screen { min-height: 0; }
 .update-banner { margin: 16px 28px 0; }
 .update-banner-actions { display: inline-flex; align-items: center; gap: 4px; }
 .screen { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 24px 28px; }
