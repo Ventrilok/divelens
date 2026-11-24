@@ -5,8 +5,8 @@ use tauri::{AppHandle, Manager, State};
 
 use super::events::{Lightroom, SelectionPreview};
 use super::{Command, Status};
-use crate::apply::ask;
 use crate::apply::errors::ApplyError;
+use crate::apply::send;
 use crate::dive_log::Writes;
 use crate::settings;
 
@@ -88,14 +88,12 @@ mod tests {
     }
 }
 
-/// Asks Lightroom for the number of photos in the catalog again; the new
-/// number arrives in the Lightroom status (`catalogPhotos`).
+/// Asks Lightroom for the number of photos in the catalog again. Never
+/// waits: the request is handed over and the new number arrives in the
+/// Lightroom status (`catalogPhotos`) whenever the plugin answers, if it
+/// does. `NotConnected` without a link.
 #[tauri::command]
-pub(crate) async fn refresh_catalog_size(app: AppHandle) -> Result<(), ApplyError> {
-    tauri::async_runtime::spawn_blocking(move || {
-        ask(&app, |reply| Command::CountPhotos { reply })??;
-        Ok(())
-    })
-    .await
-    .expect("catalog size task failed")
+pub(crate) fn refresh_catalog_size(app: AppHandle) -> Result<(), ApplyError> {
+    let (reply, _) = std::sync::mpsc::channel();
+    send(&app, Command::CountPhotos { reply })
 }

@@ -835,7 +835,7 @@ mod tests {
 
     #[test]
     fn connects_follows_selection_and_ends_on_bye() {
-        let (link, plugin) = fake_plugin(|lines, to_app| {
+        let (link, plugin) = fake_plugin_seeing_everything(|lines, to_app| {
             let hello: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
             assert_eq!(hello["type"], "hello");
             assert_eq!(hello["token"], "secret");
@@ -855,6 +855,9 @@ mod tests {
                 to_app,
                 "{\"type\":\"show\",\"screen\":\"tag\"}\n{\"type\":\"future\"}\n",
             );
+            // After an accepted hello: the size request, then the pings.
+            let count: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
+            assert_eq!(count["type"], "countPhotos");
             let ping: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
             assert_eq!(ping["type"], "ping");
             write(to_app, "{\"type\":\"pong\"}\n{\"type\":\"bye\"}\n");
@@ -1012,6 +1015,63 @@ mod tests {
             Event::Status(s) => s.catalog_photos.is_none(),
             _ => true,
         }));
+    }
+
+    #[test]
+    fn a_malformed_size_is_ignored() {
+        let (events, end) = events_of(|lines, to_app| {
+            hello_and_count(
+                lines,
+                to_app,
+                Some(&|id| format!(r#"{{"type":"catalogSize","id":{id},"count":"many"}}"#)),
+            );
+            thread::sleep(Duration::from_millis(100));
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        // The session went on until the plug-in's bye.
+        assert_eq!(end, End::Bye);
+        assert!(events.iter().all(|e| match e {
+            Event::Status(s) => s.catalog_photos.is_none(),
+            _ => true,
+        }));
+    }
+
+    #[test]
+    fn refreshing_the_size_does_not_wait_for_the_plugin() {
+        // What `refresh_catalog_size` does: hand the request over and drop
+        // the reply channel. A plug-in that never answers (pongs only) must
+        // not disturb the link, and other requests are served.
+        let (commands, inbox) = std::sync::mpsc::channel();
+        let (outcome_tx, outcome_rx) = std::sync::mpsc::channel();
+        let (link, plugin) = fake_plugin_seeing_everything(move |lines, to_app| {
+            hello_and_count(lines, to_app, Some(&size_answer(10)));
+            let (reply, _) = std::sync::mpsc::channel();
+            commands.send(Command::CountPhotos { reply }).unwrap();
+            let again = next_request(lines);
+            assert_eq!(again["type"], "countPhotos");
+            // Never answered: pings are, as Lightroom would.
+            write(to_app, "{\"type\":\"pong\"}\n");
+            let (reply, outcome) = std::sync::mpsc::channel();
+            commands
+                .send(Command::Apply {
+                    request: Box::new(request()),
+                    reply,
+                })
+                .unwrap();
+            let apply = next_request(lines);
+            let id = apply["id"].as_u64().unwrap();
+            write(
+                to_app,
+                &format!("{{\"type\":\"applied\",\"id\":{id},\"count\":1}}\n"),
+            );
+            outcome_tx.send(outcome.recv().unwrap()).unwrap();
+            write(to_app, "{\"type\":\"bye\"}\n");
+        });
+        let mut events = Vec::new();
+        let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |e| events.push(e));
+        plugin.join().unwrap();
+        assert_eq!(end, End::Bye);
+        assert_eq!(outcome_rx.recv().unwrap().unwrap().count, 1);
     }
 
     #[test]
@@ -1442,10 +1502,13 @@ mod tests {
                 reply,
             })
             .unwrap();
-        let (link, plugin) = fake_plugin(|lines, to_app| {
+        let (link, plugin) = fake_plugin_seeing_everything(|lines, to_app| {
             lines.next().unwrap();
             write(to_app, &format!("{HELLO}\n"));
-            // Only pings may follow, then the session ends.
+            // The size request, then only pings (the queued request was
+            // dropped), then the session ends.
+            let count = lines.next().unwrap();
+            assert!(count.contains("countPhotos"), "unexpected: {count}");
             for line in lines.take(3) {
                 assert!(line.contains("ping"), "unexpected: {line}");
             }
@@ -1632,7 +1695,7 @@ mod tests {
         let (commands, inbox) = std::sync::mpsc::channel();
         let (reply, _sets) = std::sync::mpsc::channel();
         commands.send(Command::ListSets { reply }).unwrap();
-        let (link, plugin) = fake_plugin(|lines, to_app| {
+        let (link, plugin) = fake_plugin_seeing_everything(|lines, to_app| {
             lines.next().unwrap();
             write(
                 to_app,
