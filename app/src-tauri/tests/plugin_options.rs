@@ -5,6 +5,7 @@
 mod common;
 
 use common::{json_of, lua, sample_dive};
+use divelens_core::Dive;
 use divelens_core::profile::PhotoPoint;
 use divelens_core::tags::{
     CollectionGroup, CollectionPlace, CollectionsRequest, DiveTags, Kept, LocationTags, PhotoTags,
@@ -167,6 +168,117 @@ fn recorded(out: &serde_json::Value) -> Vec<String> {
     list
 }
 
+/// The "Create Collections" request for `dive`: one group, two photos, "1"
+/// at 12 m during the dive, "2" at the surface.
+fn catalogue_request(dive: &Dive) -> CollectionsRequest {
+    CollectionsRequest {
+        search: 3,
+        parent: Vec::new(),
+        group: Some("Dive Lens".into()),
+        groups: vec![CollectionGroup {
+            collection: Some("700 - Coral Garden".into()),
+            dive: Some(DiveTags::new(dive, Units::default(), "Subsurface")),
+            location: Some(LocationTags::new(&dive.site, None, None)),
+            photos: vec![
+                PhotoTags::new("1".into(), Some(point()), 240, Units::default()),
+                PhotoTags::new("2".into(), None, 240, Units::default()),
+            ],
+        }],
+    }
+}
+
+/// What the plug-in writes for a "Create Collections" request: every
+/// change recorded (`written`), the group's collection and photo count.
+fn planned_catalogue(request: &CollectionsRequest) -> serde_json::Value {
+    let lua = lua();
+    lua.globals()
+        .set("input", serde_json::to_string(request).unwrap())
+        .unwrap();
+    json_of(
+        &lua,
+        &format!(
+            r#"
+            {RECORD_LUA}
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            local groups = assert(Tagging.planCollections(Json.decode(input), function(iso) return iso end))
+            local p1, p2 = {{ id = "1" }}, {{ id = "2" }}
+            Tagging.resolvePhotos(groups, {{ ["1"] = p1, ["2"] = p2 }})
+            local plan = Tagging.collectionWrites(groups, {{ [p1] = BEFORE }}, {{}})
+            local out = {{}}
+            for _, step in ipairs(plan.groups[1].steps) do
+                record(step.changes, step.photo.id, out)
+            end
+            for _, later in ipairs(plan.later) do
+                record(later.changes, later.photo.id, out)
+            end
+            return Json.encode {{
+                written = out,
+                collection = plan.results[1].collection,
+                count = plan.results[1].count,
+            }}
+            "#
+        ),
+    )
+}
+
+/// The "Tag Selection" request for `dive`: the selection holds "p1", taken
+/// during the dive at 12 m, and "p2", taken outside it: only "p1" is listed
+/// with per-photo values.
+fn selection_request(dive: &Dive) -> TagRequest {
+    TagRequest {
+        dive: Some(DiveTags::new(dive, Units::default(), "Subsurface")),
+        location: Some(LocationTags::new(&dive.site, None, None)),
+        collection: Some(CollectionPlace {
+            name: "700 - Coral Garden".into(),
+            parent: vec!["Trips".into()],
+            group: Some("Dive Lens".into()),
+        }),
+        selection: Some(12),
+        photos: vec![PhotoTags::new(
+            "p1".into(),
+            Some(point()),
+            240,
+            Units::default(),
+        )],
+    }
+}
+
+/// What the plug-in writes for a "Tag Selection" request on "p1" and "p2":
+/// every change recorded (`written`), the collection and the number of
+/// photos with their own values.
+fn planned_selection(request: &TagRequest) -> serde_json::Value {
+    let lua = lua();
+    lua.globals()
+        .set("input", serde_json::to_string(request).unwrap())
+        .unwrap();
+    json_of(
+        &lua,
+        &format!(
+            r#"
+            {RECORD_LUA}
+            local Json = require "Json"
+            local Tagging = require "Tagging"
+            local request = Json.decode(input)
+            local changes = assert(Tagging.plan(request, function(iso) return iso end))
+            local perPhoto, why = Tagging.planPhotos(request)
+            assert(perPhoto or not why, why)
+            local place = Tagging.planCollection(request)
+            local p1, p2 = {{ id = "p1" }}, {{ id = "p2" }}
+            local plan = Tagging.tagWrites(changes, {{ p1, p2 }}, {{ [p1] = BEFORE }}, perPhoto, function(p) return p.id end)
+            local out = {{}}
+            for _, w in ipairs(plan.writes) do record(w.changes, w.photo.id, out) end
+            for _, l in ipairs(plan.later) do record(l.changes, l.photo.id, out) end
+            return Json.encode {{
+                written = out,
+                collection = place and place.name or Json.null,
+                withValues = plan.withValues,
+            }}
+            "#
+        ),
+    )
+}
+
 /// Every combination of the "Create Collections" path: the request `keep`
 /// leaves, planned by the plug-in, writes exactly what is ticked.
 #[test]
@@ -174,21 +286,7 @@ fn every_option_combination_writes_only_what_is_ticked_catalogue() {
     let sample = sample_dive();
     let mut tested = 0;
     for c in combinations() {
-        // One group, two photos: "1" at 12 m during the dive, "2" at the surface.
-        let mut request = CollectionsRequest {
-            search: 3,
-            parent: Vec::new(),
-            group: Some("Dive Lens".into()),
-            groups: vec![CollectionGroup {
-                collection: Some("700 - Coral Garden".into()),
-                dive: Some(DiveTags::new(&sample, Units::default(), "Subsurface")),
-                location: Some(LocationTags::new(&sample.site, None, None)),
-                photos: vec![
-                    PhotoTags::new("1".into(), Some(point()), 240, Units::default()),
-                    PhotoTags::new("2".into(), None, 240, Units::default()),
-                ],
-            }],
-        };
+        let mut request = catalogue_request(&sample);
         if c.copies_altitude() {
             request.copy_depth_to_altitude();
         }
@@ -203,36 +301,7 @@ fn every_option_combination_writes_only_what_is_ticked_catalogue() {
             continue;
         }
         tested += 1;
-        let lua = lua();
-        lua.globals()
-            .set("input", serde_json::to_string(&request).unwrap())
-            .unwrap();
-        let out = json_of(
-            &lua,
-            &format!(
-                r#"
-                {RECORD_LUA}
-                local Json = require "Json"
-                local Tagging = require "Tagging"
-                local groups = assert(Tagging.planCollections(Json.decode(input), function(iso) return iso end))
-                local p1, p2 = {{ id = "1" }}, {{ id = "2" }}
-                Tagging.resolvePhotos(groups, {{ ["1"] = p1, ["2"] = p2 }})
-                local plan = Tagging.collectionWrites(groups, {{ [p1] = BEFORE }}, {{}})
-                local out = {{}}
-                for _, step in ipairs(plan.groups[1].steps) do
-                    record(step.changes, step.photo.id, out)
-                end
-                for _, later in ipairs(plan.later) do
-                    record(later.changes, later.photo.id, out)
-                end
-                return Json.encode {{
-                    written = out,
-                    collection = plan.results[1].collection,
-                    count = plan.results[1].count,
-                }}
-                "#
-            ),
-        );
+        let out = planned_catalogue(&request);
         let l = c.label();
         assert_eq!(
             recorded(&out),
@@ -255,24 +324,7 @@ fn every_option_combination_writes_only_what_is_ticked_selection() {
     let sample = sample_dive();
     let mut tested = 0;
     for c in combinations() {
-        // The selection holds "p1", taken during the dive at 12 m, and "p2",
-        // taken outside it: only "p1" is listed with per-photo values.
-        let mut request = TagRequest {
-            dive: Some(DiveTags::new(&sample, Units::default(), "Subsurface")),
-            location: Some(LocationTags::new(&sample.site, None, None)),
-            collection: Some(CollectionPlace {
-                name: "700 - Coral Garden".into(),
-                parent: vec!["Trips".into()],
-                group: Some("Dive Lens".into()),
-            }),
-            selection: Some(12),
-            photos: vec![PhotoTags::new(
-                "p1".into(),
-                Some(point()),
-                240,
-                Units::default(),
-            )],
-        };
+        let mut request = selection_request(&sample);
         if c.copies_altitude() {
             request.copy_depth_to_altitude();
         }
@@ -286,35 +338,7 @@ fn every_option_combination_writes_only_what_is_ticked_selection() {
             continue;
         }
         tested += 1;
-        let lua = lua();
-        lua.globals()
-            .set("input", serde_json::to_string(&request).unwrap())
-            .unwrap();
-        let out = json_of(
-            &lua,
-            &format!(
-                r#"
-                {RECORD_LUA}
-                local Json = require "Json"
-                local Tagging = require "Tagging"
-                local request = Json.decode(input)
-                local changes = assert(Tagging.plan(request, function(iso) return iso end))
-                local perPhoto, why = Tagging.planPhotos(request)
-                assert(perPhoto or not why, why)
-                local place = Tagging.planCollection(request)
-                local p1, p2 = {{ id = "p1" }}, {{ id = "p2" }}
-                local plan = Tagging.tagWrites(changes, {{ p1, p2 }}, {{ [p1] = BEFORE }}, perPhoto, function(p) return p.id end)
-                local out = {{}}
-                for _, w in ipairs(plan.writes) do record(w.changes, w.photo.id, out) end
-                for _, l in ipairs(plan.later) do record(l.changes, l.photo.id, out) end
-                return Json.encode {{
-                    written = out,
-                    collection = place and place.name or Json.null,
-                    withValues = plan.withValues,
-                }}
-                "#
-            ),
-        );
+        let out = planned_selection(&request);
         let l = c.label();
         let got = recorded(&out);
         assert!(
@@ -331,4 +355,53 @@ fn every_option_combination_writes_only_what_is_ticked_selection() {
         assert_eq!(out["withValues"], u8::from(c.dive), "{l}");
     }
     assert_eq!(tested, 30);
+}
+
+/// A site with no country, but a name and a position, with the place
+/// ticked: the country is neither written nor cleared (a country set by
+/// hand stays), every other field is written as usual, in both paths.
+#[test]
+fn a_site_without_a_country_leaves_the_country_alone() {
+    let mut sample = sample_dive();
+    sample.site.country = None;
+    // What a site with a country writes, without its country.
+    let without_country = |mut writes: Vec<String>| {
+        writes.retain(|w| !w.ends_with(" country written"));
+        writes
+    };
+    let untouched = |writes: &[String]| !writes.iter().any(|w| w.contains(" country "));
+    let mut tested = 0;
+    for c in combinations().filter(|c| c.place) {
+        let l = c.label();
+
+        let mut catalogue = catalogue_request(&sample);
+        if c.copies_altitude() {
+            catalogue.copy_depth_to_altitude();
+        }
+        catalogue.keep(c.kept(), None);
+        let got = recorded(&planned_catalogue(&catalogue));
+        assert!(untouched(&got), "catalogue, country touched: {l}");
+        for photo in ["1", "2"] {
+            assert!(got.contains(&format!("{photo} location written")), "{l}");
+            assert_eq!(got.contains(&format!("{photo} gps written")), c.gps, "{l}");
+        }
+        let want = without_country(expected(&c, Path::Catalogue, "1", "2"));
+        assert_eq!(got, want, "catalogue: {l}");
+
+        let mut selection = selection_request(&sample);
+        if c.copies_altitude() {
+            selection.copy_depth_to_altitude();
+        }
+        selection.keep(c.kept());
+        let got = recorded(&planned_selection(&selection));
+        assert!(untouched(&got), "selection, country touched: {l}");
+        for photo in ["p1", "p2"] {
+            assert!(got.contains(&format!("{photo} location written")), "{l}");
+            assert_eq!(got.contains(&format!("{photo} gps written")), c.gps, "{l}");
+        }
+        let want = without_country(expected(&c, Path::Selection, "p1", "p2"));
+        assert_eq!(got, want, "selection: {l}");
+        tested += 1;
+    }
+    assert_eq!(tested, 16);
 }
