@@ -12,6 +12,7 @@ import type {
   DiveSpan,
   ImportCheck,
   LightroomStatus,
+  LocationChoice,
   LogRef,
   Period,
   Sample,
@@ -22,6 +23,7 @@ import type {
   TagChoice,
   TagPreview,
   UpdateStatus,
+  WriteOptions,
 } from "./types";
 
 let logChanged = (_applied: boolean) => {};
@@ -118,9 +120,28 @@ export const collectionsPreview = (search: number, choices: CollectionChoices) =
 /** Suggested offset (minutes) per camera key of photo search `search`; null when no offset fits. */
 export const suggestOffsets = (search: number, cameras: string[]) =>
   invoke<Record<string, number | null>>("suggest_offsets", { search, cameras });
-/** Writes the dives found with photo search `search`, which must come from `log`; rejects with an ApplyError. */
-export const applyCollections = (log: LogRef, search: number, choices: CollectionChoices) =>
-  onLog(invoke<CollectionsResult>("apply_collections", { log, search, choices }), true);
+/**
+ * Writes the dives found with photo search `search`, which must come from `log`; rejects with an ApplyError.
+ * `options`: what is ticked (absent: everything, the altitude following the setting); `otherSite`:
+ * one site of the log for every photo instead of each dive's own.
+ */
+export const applyCollections = (
+  log: LogRef,
+  search: number,
+  choices: CollectionChoices,
+  options?: WriteOptions,
+  otherSite?: LocationChoice,
+) =>
+  onLog(
+    invoke<CollectionsResult>("apply_collections", {
+      log,
+      search,
+      choices,
+      options: options ?? null,
+      otherSite: otherSite ?? null,
+    }),
+    true,
+  );
 
 /** Where the update stands (spec F13). */
 export const updateStatus = () => invoke<UpdateStatus>("update_status");

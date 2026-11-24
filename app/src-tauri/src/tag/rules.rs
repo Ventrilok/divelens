@@ -21,7 +21,7 @@ use crate::apply::searches::Searches;
 
 /// A position edited on the screen is whole and valid, or absent: half a
 /// position, or one off the globe, is refused.
-pub(super) fn check_gps(lat: Option<f64>, lon: Option<f64>) -> Result<(), ApplyError> {
+pub(crate) fn check_gps(lat: Option<f64>, lon: Option<f64>) -> Result<(), ApplyError> {
     match (lat, lon) {
         (Some(a), Some(b)) if !valid_gps(a, b) => Err(ApplyError::BadGps),
         (Some(_), None) | (None, Some(_)) => Err(ApplyError::BadGps),
@@ -38,7 +38,7 @@ pub(super) fn find_dive(dives: Vec<Dive>, id: &str) -> Result<Dive, ApplyError> 
 }
 
 /// The site `site_id` names (the first, should two share it).
-pub(super) fn find_site(sites: Vec<Site>, site_id: &str) -> Result<Site, ApplyError> {
+pub(crate) fn find_site(sites: Vec<Site>, site_id: &str) -> Result<Site, ApplyError> {
     sites
         .into_iter()
         .find(|s| s.id.as_deref() == Some(site_id))
