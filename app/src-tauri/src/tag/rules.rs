@@ -13,7 +13,7 @@ use divelens_core::tags::{CollectionPlace, DiveTags, Kept, LocationTags, TagRequ
 use divelens_core::{Dive, Error, Site};
 
 use super::LocationChoice;
-use super::selection::{InDive, PerPhoto, Refusal, Selection, per_photo};
+use super::selection::{InDive, PerPhoto, Refusal, Selection, applied_offsets, per_photo};
 use crate::apply::errors::ApplyError;
 use crate::apply::searches::Searches;
 use crate::apply::site::another_site;
@@ -133,7 +133,8 @@ pub(super) struct Ticked {
 /// never reads it). A profile that cannot be read leaves the dive data alone.
 /// `ticked` is what the diver ticked; `None` (the current screens): the
 /// request is the one they always got. With options, nothing left to write
-/// is refused before anything is read.
+/// is refused before anything is read; with the dive details unticked, the
+/// description still gives the offsets to remember, the profile is not read.
 #[allow(clippy::too_many_arguments)] // the reads handed in as closures, then what is ticked
 pub(super) fn build_request(
     dive: Option<Dive>,
@@ -159,11 +160,17 @@ pub(super) fn build_request(
     }
     let mut applied = BTreeMap::new();
     let mut unreadable = None;
-    // Unticked dive details: no profile, no selection description.
-    if let Some(dive) = dive.filter(|d| dive_kept && d.has_profile) {
+    if let Some(dive) = dive.filter(|d| d.has_profile) {
         let described = described(&dive)?;
-        let outcome = per_photo(&dive, described, units, || profile(&dive.id));
-        (applied, unreadable) = apply_per_photo(&mut request, outcome)?;
+        if dive_kept {
+            let outcome = per_photo(&dive, described, units, || profile(&dive.id));
+            (applied, unreadable) = apply_per_photo(&mut request, outcome)?;
+        } else if let Some((_, in_dive)) = described {
+            // Unticked dive details: nothing more in the request and the
+            // profile never read, but the offsets of the cameras with a
+            // photo in the dive are still remembered, as when ticked.
+            applied = applied_offsets(&in_dive);
+        }
     }
     with_altitude(&mut request, depth_to_altitude);
     Ok(Built {
@@ -629,7 +636,7 @@ mod tests {
     }
 
     #[test]
-    fn dive_details_unticked_keep_the_dives_site_and_collection() {
+    fn dive_details_unticked_keep_the_dives_site_collection_and_offsets() {
         let d = dive("A", 701);
         let kept = Kept {
             dive: false,
@@ -642,7 +649,7 @@ mod tests {
             Some(LocationTags::new(&d.site, None, None)),
             Units::default(),
             "MacDive",
-            |_| panic!("described"),
+            |_| Ok(Some((42, vec![photo_in_dive()]))),
             |_| panic!("profile read"),
             || false,
             Some(Ticked {
@@ -659,7 +666,73 @@ mod tests {
             Some(LocationTags::new(&d.site, None, None))
         );
         assert_eq!(built.request.collection, Some(place()));
-        assert!(built.applied.is_empty());
+        assert_eq!(built.applied, BTreeMap::from([("TG-7|A1".to_string(), 0)]));
+    }
+
+    /// Photo 1 (the TG-7, no offset) and photo 2 (a GoPro, one hour) taken
+    /// during the dive.
+    fn two_cameras_in_dive() -> Vec<InDive> {
+        let gopro = InDive {
+            id: "2".into(),
+            camera: "GoPro|".into(),
+            offset: 60,
+            corrected: NaiveDate::from_ymd_opt(2025, 12, 30)
+                .unwrap()
+                .and_hms_opt(9, 30, 0)
+                .unwrap(),
+        };
+        vec![photo_in_dive(), gopro]
+    }
+
+    #[test]
+    fn dive_details_unticked_still_remember_the_offsets_of_cameras_in_the_dive() {
+        let build = |dive_ticked: bool,
+                     described: Result<Option<(u64, Vec<InDive>)>, ApplyError>,
+                     profile: &dyn Fn() -> Result<Vec<Sample>, Error>| {
+            let d = dive("A", 701);
+            build_request(
+                Some(d.clone()),
+                Some(LocationTags::new(&d.site, None, None)),
+                Units::default(),
+                "MacDive",
+                |_| described,
+                |_| profile(),
+                || false,
+                Some(Ticked {
+                    kept: Kept {
+                        dive: dive_ticked,
+                        ..Kept::ALL
+                    },
+                    collection: None,
+                }),
+            )
+        };
+        let never = || -> Result<Vec<Sample>, Error> { panic!("profile read") };
+        let unticked = build(false, Ok(Some((42, two_cameras_in_dive()))), &never).unwrap();
+        // The offsets of the cameras with a photo in the dive, from the
+        // selection the screen shows, the profile never read...
+        let both = BTreeMap::from([("GoPro|".to_string(), 60), ("TG-7|A1".to_string(), 0)]);
+        assert_eq!(unticked.applied, both);
+        // ...and nothing of them in the request: no per-photo value, no
+        // selection to check.
+        assert_eq!(unticked.request.dive, None);
+        assert_eq!(unticked.request.selection, None);
+        assert!(unticked.request.photos.is_empty());
+        assert!(unticked.unreadable.is_none());
+        // Exactly what the dive details ticked remember.
+        let read = || Ok(vec![]);
+        let ticked = build(true, Ok(Some((42, two_cameras_in_dive()))), &read).unwrap();
+        assert_eq!(ticked.applied, unticked.applied);
+        // The screen showed no description: nothing remembered, as with the
+        // dive details ticked.
+        let none = build(false, Ok(None), &never).unwrap();
+        assert!(none.applied.is_empty());
+        // A description no longer kept: refused, as with the dive details
+        // ticked.
+        assert!(matches!(
+            build(false, Err(ApplyError::NoPhotos), &never),
+            Err(ApplyError::NoPhotos)
+        ));
     }
 
     #[test]
