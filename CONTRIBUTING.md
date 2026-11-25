@@ -24,7 +24,7 @@ Bug reports, requests to support another dive application, fixes and documentati
 
 ## How Dive Lens is built
 
-Dive Lens has two parts that ship together. A **Lightroom Classic plug-in**, written in Lua, stays invisible: it declares the Dive Lens metadata fields, reads and writes the catalog, follows the photo selection, provides thumbnails and adds two Library menu items and a Help menu item that only open the app on the matching screen. A **desktop app**, written in Rust with Tauri (and a React + TypeScript front end), is the only user interface. The app contains one *reader* per dive-log application (MacDive and Subsurface for now), each translating its data into a common dive format; dive logs are always opened read-only. The two parts talk over a local connection: the app follows the Lightroom selection live, and writes to the catalog only when the user clicks **Apply**, as one step Lightroom can undo: two catalog writes in a row, the GPS and altitude in the second, with nothing in between. Keep them apart: Lightroom does not undo a GPS position or altitude written in the same write as a location text field (country, city, location). In the released package, the app sits inside the plug-in folder.
+Dive Lens has two parts that ship together. A **Lightroom Classic plug-in**, written in Lua, stays invisible: it declares the Dive Lens metadata fields, reads and writes the catalog, follows the photo selection, provides thumbnails and adds a Library menu item and a Help menu item that only open the app, on its journey or on Settings. A **desktop app**, written in Rust with Tauri (and a React + TypeScript front end), is the only user interface. The app contains one *reader* per dive-log application (MacDive and Subsurface for now), each translating its data into a common dive format; dive logs are always opened read-only. The two parts talk over a local connection: the app follows the Lightroom selection live, and writes to the catalog only when the user clicks **Apply**, as one step Lightroom can undo: two catalog writes in a row, the GPS and altitude in the second, with nothing in between. Keep them apart: Lightroom does not undo a GPS position or altitude written in the same write as a location text field (country, city, location). In the released package, the app sits inside the plug-in folder.
 
 The product specification is [`docs/spec-v1.md`](docs/spec-v1.md) (in French). It is the reference for scope and decisions; each item is tagged *Décidé* (decided), *Proposé* (proposed) or *À trancher* (to be decided). The user guide is in [`docs/user/`](docs/user/), in English and French.
 
@@ -103,7 +103,7 @@ The plug-in's pure-Lua parts (JSON, message framing, manifest, metadata fields, 
 
 1. Build the app once (see above). In development, the plug-in's menus launch the release build of the repository when no app ships in the plug-in folder: `target/release/bundle/macos/Dive Lens.app` on macOS, `target/release/divelens.exe` on Windows.
 2. In Lightroom Classic: **File › Plug-in Manager… › Add**, and choose the `plugin/DiveLens.lrdevplugin` folder of your clone.
-3. Use **Library › Plug-in Extras › Create Collections…** or **Tag Selection…**, or **Help › Plug-in Extras › Dive Lens Settings…**.
+3. Use **Library › Plug-in Extras › Open Dive Lens…**, or **Help › Plug-in Extras › Dive Lens Settings…**.
 
 A dev window started with `npm run tauri dev` connects to Lightroom by itself while it runs.
 
