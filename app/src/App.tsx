@@ -354,6 +354,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
               key={tagRun}
               log={log}
               lr={lr}
+              settings={settings}
               sort={sort}
               notice={notice}
               onDismissNotice={dismissNotice}

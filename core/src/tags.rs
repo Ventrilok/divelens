@@ -711,6 +711,40 @@ mod tests {
     }
 
     #[test]
+    fn a_group_left_with_nothing_goes_while_the_other_stays() {
+        // The second dive's site has no field at all: with the site details
+        // alone ticked, nothing is left to write on its group, which goes.
+        let mut r = sample_collections_request();
+        r.groups[1].location = Some(LocationTags {
+            country: None,
+            city: None,
+            location: None,
+            lat: None,
+            lon: None,
+        });
+        let site_only = Kept {
+            dive: false,
+            place: true,
+            gps: true,
+            collections: false,
+        };
+        r.keep(site_only, None);
+        // The first stays, with its location alone, and all its photos
+        // without the dive's values.
+        assert_eq!(r.groups.len(), 1);
+        let g = &r.groups[0];
+        assert_eq!(g.location, Some(full_location("Three Arches Reef")));
+        assert_eq!((g.dive.as_ref(), g.collection.as_deref()), (None, None));
+        let ids: Vec<_> = g.photos.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["1", "2"]);
+        assert!(
+            g.photos
+                .iter()
+                .all(|p| p.photo_depth.is_none() && p.gps_altitude.is_none())
+        );
+    }
+
+    #[test]
     fn another_site_replaces_every_groups_location_not_its_collection() {
         let beach = LocationTags {
             country: None,
@@ -837,9 +871,9 @@ mod tests {
     }
 
     #[test]
-    fn tag_request_another_site_is_not_applied_here() {
-        // TagRequest::keep takes no other site: its location is already the
-        // chosen one. Unticking everything empties it.
+    fn tag_request_is_empty_once_dive_place_and_gps_are_unticked() {
+        // The sample names no collection: with the dive details, the place
+        // and the GPS unticked, nothing is left, the collections tick or not.
         let mut r = sample_tag_request();
         r.keep(Kept {
             dive: false,

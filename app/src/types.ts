@@ -170,24 +170,22 @@ export type LocationChoice = { kind: "diveSite" } | { kind: "site"; siteId: stri
 
 /** What Tag Selection writes (app/src-tauri/src/tag.rs, TagChoice). */
 export interface TagChoice {
+  /** The chosen dive, even when its details are unticked (it gives the site and the collection's name); null: no dive. */
   diveId: string | null;
   location: LocationChoice | null;
   /** The description of the selection shown (SelectionPhotos.search): needed for a dive with a profile. */
   search: number | null;
   /** Clock offsets shown, in minutes by camera key. */
   offsets: Record<string, number>;
-  /**
-   * What is ticked. Absent: today's behaviour (everything the choice names; the altitude follows
-   * the setting). With options, diveId is the chosen dive even when its details are unticked.
-   */
-  options?: WriteOptions;
+  /** What is ticked: it alone decides what is written, the altitude included. */
+  options: WriteOptions;
 }
 
-/** What the diver ticked to write when tagging the selection (app/src-tauri/src/apply/options.rs). */
+/** What the diver ticked to write, on both paths (app/src-tauri/src/apply/options.rs). */
 export interface WriteOptions {
   dive: boolean;
-  /** null: the "depth copied to altitude" setting decides. */
-  altitude: boolean | null;
+  /** Copy each photo's depth to its GPS altitude (only with the dive details). */
+  altitude: boolean;
   place: boolean;
   gps: boolean;
   collections: boolean;

@@ -44,6 +44,7 @@ import type {
   LightroomStatus,
   SelectionPhotos,
   SelectionPreview,
+  Settings,
   Site,
   TagChoice,
   TagPreview,
@@ -76,6 +77,7 @@ function siteLine(site: Site): string {
 export function TagScreen({
   log,
   lr,
+  settings,
   sort,
   notice,
   onDismissNotice,
@@ -83,6 +85,8 @@ export function TagScreen({
 }: {
   log: DiveLog;
   lr: LightroomStatus;
+  /** For the altitude option, which follows the "depth copied to altitude" setting. */
+  settings: Settings;
   /** Same order as the dive list of Create Collections (one list everywhere). */
   sort: Sort;
   /** Why the screen started again (the dive log changed), shown once. */
@@ -284,6 +288,7 @@ export function TagScreen({
           : { kind: "site", siteId: pick.siteId as string, lat: gps?.lat ?? null, lon: gps?.lon ?? null },
       search: needsValues && current ? current.search : null,
       offsets: needsValues ? offsets : {},
+      options: { dive: withDive, altitude: settings.depthToAltitude, place: withPlace, gps: withPlace, collections: false },
     };
     onDismissNotice();
     setRun({ state: "writing", done: 0, total: lr.selected });

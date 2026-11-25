@@ -236,7 +236,9 @@ pub struct Settings {
     pub units: UnitChoices,
     #[serde(deserialize_with = "lenient")]
     pub language: Language,
-    /// Copy each photo's depth to its GPS altitude (spec F7).
+    /// Copy each photo's depth to its GPS altitude (spec F7). The screens
+    /// read it and send it as the altitude option of each write; the writes
+    /// themselves never read it.
     #[serde(deserialize_with = "lenient")]
     pub depth_to_altitude: bool,
     #[serde(deserialize_with = "lenient")]

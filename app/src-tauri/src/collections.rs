@@ -156,59 +156,46 @@ pub(crate) struct CollectionsResult {
 /// Writes the dives and profiles read with photo search `search`, the one
 /// the screen shows; refused when it is no longer kept, or when `log`, the
 /// dive log the screen shows, is not theirs or no longer the configured one.
-/// `options`, what the diver ticked, and `other_site`, a site of the log for
-/// every photo instead of each dive's own, are both absent for today's
-/// screen: everything is written and the altitude follows the setting.
+/// `options`, what the diver ticked, alone decide what is written, the
+/// altitude included; `other_site` is a site of the log for every photo
+/// instead of each dive's own (`None`: each dive's own).
 #[tauri::command]
 pub(crate) async fn apply_collections(
     app: AppHandle,
     log: LogId,
     search: u64,
     choices: Choices,
-    options: Option<WriteOptions>,
+    options: WriteOptions,
     other_site: Option<LocationChoice>,
 ) -> Result<CollectionsResult, ApplyError> {
     tauri::async_runtime::spawn_blocking(move || {
         let writes = app.state::<Writes>();
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
         let units = units_in_use(&app, &info);
-        // Another site alone means everything ticked, as today's screen.
-        let chosen = chosen_options(options, other_site.as_ref());
-        let (request, preview, applied, altitude_setting) = {
+        let (request, preview, applied) = {
             let state = app.state::<CollectionsState>();
             let searches = state.searches.lock().expect("collections");
             let session = searches.get(search).ok_or(ApplyError::NoPhotos)?;
             let mut request = session
                 .write_request(&log, &choices, units)?
                 .map_err(|detail| ApplyError::Source { detail })?;
-            let settings = Settings::load(&config_dir(&app));
-            request.parent = settings.collections.parent.clone();
-            request.group = settings.collections.group_name();
-            // Today's path copies the altitude here; with options or another
-            // site it is decided below, with the rest.
-            if chosen.is_none() && settings.depth_to_altitude {
-                request.copy_depth_to_altitude();
-            }
+            let place = Settings::load(&config_dir(&app)).collections;
+            request.group = place.group_name();
+            request.parent = place.parent;
             (
                 request,
                 session.preview(&choices),
                 session.applied(&choices),
-                settings.depth_to_altitude,
             )
         };
-        let other = match &chosen {
-            Some(options) => other_location(other_site.as_ref(), options, || {
-                open(&app, &info).and_then(|opened| opened.log.sites())
-            })?,
-            None => None,
-        };
+        let other = other_location(other_site.as_ref(), &options, || {
+            open(&app, &info).and_then(|opened| opened.log.sites())
+        })?;
         let Planned {
             request,
             empty_dives,
             with_depth,
-        } = planned(request, &preview, chosen.as_ref(), other.as_ref(), || {
-            altitude_setting
-        })?;
+        } = planned(request, &preview, &options, other.as_ref())?;
         let written = write_and_remember(
             &app,
             &info,
@@ -243,15 +230,6 @@ pub(crate) async fn apply_collections(
     .expect("collections task failed")
 }
 
-/// The options in force: those sent, else everything ticked when another
-/// site is sent alone, else none (today's path: nothing sent).
-fn chosen_options(
-    options: Option<WriteOptions>,
-    other_site: Option<&LocationChoice>,
-) -> Option<WriteOptions> {
-    options.or_else(|| other_site.map(|_| WriteOptions::EVERYTHING))
-}
-
 /// The location of another site of the log for every group, when the diver
 /// picked one (`other_site`) and kept its place or GPS; `None` for each
 /// dive's own site, already on its group, and when neither is kept: nothing
@@ -281,20 +259,17 @@ struct Planned {
     with_depth: usize,
 }
 
-/// The write of `request`, built as today's screen sends it, `preview` being
-/// the live counts of the same choices. The chosen dives without photo are
-/// read from the counts first, before anything is removed: a dive whose
-/// group the options drop, nothing being left to write on it, is not
-/// "without photo". Then what the diver ticked (`chosen`, `other` the
-/// location of another site, `setting` the altitude setting) is applied
-/// (`with_options`; none: today's path). Refused when nothing is left to
-/// write.
+/// The write of `request`, built with everything in it, `preview` being the
+/// live counts of the same choices. The chosen dives without photo are read
+/// from the counts first, before anything is removed: a dive whose group the
+/// options drop, nothing being left to write on it, is not "without photo".
+/// Then what the diver ticked (`options`, `other` the location of another
+/// site) is applied. Refused when nothing is left to write.
 fn planned(
     mut request: CollectionsRequest,
     preview: &Preview,
-    chosen: Option<&WriteOptions>,
+    options: &WriteOptions,
     other: Option<&LocationTags>,
-    setting: impl FnOnce() -> bool,
 ) -> Result<Planned, ApplyError> {
     let empty_dives = preview
         .dives
@@ -302,12 +277,7 @@ fn planned(
         .filter(|d| d.photos == 0)
         .map(|d| d.id.clone())
         .collect();
-    if let Some(options) = chosen {
-        with_options(&mut request, options, other, setting)?;
-    }
-    if request.is_empty() {
-        return Err(ApplyError::NothingToWrite);
-    }
+    with_options(&mut request, options, other)?;
     Ok(Planned {
         with_depth: request.with_depth(),
         request,
@@ -315,21 +285,21 @@ fn planned(
     })
 }
 
-/// What the diver ticked, applied to the request built as today: another
-/// site on every group, what is not ticked removed, then the depth copied to
-/// the altitude (only with the dive details; `setting` decides when the
-/// options do not say). Refused when nothing is left to write.
+/// What the diver ticked, applied to the request built with everything in
+/// it: another site on every group, what is not ticked removed, then the
+/// depth copied to the altitude (only with the dive details and the
+/// altitude ticked). Refused when nothing is left to write, a request
+/// without any group included.
 fn with_options(
     request: &mut CollectionsRequest,
     options: &WriteOptions,
     other: Option<&LocationTags>,
-    setting: impl FnOnce() -> bool,
 ) -> Result<(), ApplyError> {
     request.keep(options.kept(), other);
     if request.is_empty() {
         return Err(ApplyError::NothingToWrite);
     }
-    if options.copies_altitude(setting) {
+    if options.copies_altitude() {
         request.copy_depth_to_altitude();
     }
     Ok(())
@@ -415,7 +385,7 @@ mod tests {
 
     fn options(
         dive: bool,
-        altitude: Option<bool>,
+        altitude: bool,
         place: bool,
         gps: bool,
         collections: bool,
@@ -430,27 +400,15 @@ mod tests {
     }
 
     #[test]
-    fn all_options_and_the_setting_give_todays_request() {
+    fn all_options_and_the_altitude_give_todays_request() {
         let mut expected = request();
         expected.copy_depth_to_altitude();
         let mut got = request();
-        with_options(
-            &mut got,
-            &options(true, None, true, true, true),
-            None,
-            || true,
-        )
-        .unwrap();
+        with_options(&mut got, &options(true, true, true, true, true), None).unwrap();
         assert_eq!(got, expected);
-        // Setting off: no altitude, as today.
+        // Altitude off: no altitude, as today with the setting off.
         let mut got = request();
-        with_options(
-            &mut got,
-            &options(true, None, true, true, true),
-            None,
-            || false,
-        )
-        .unwrap();
+        with_options(&mut got, &options(true, false, true, true, true), None).unwrap();
         assert_eq!(got, request());
     }
 
@@ -460,9 +418,8 @@ mod tests {
         let mut got = request();
         with_options(
             &mut got,
-            &options(true, Some(false), true, true, true),
+            &options(true, false, true, true, true),
             Some(&other),
-            || panic!("setting read"),
         )
         .unwrap();
         assert!(
@@ -481,32 +438,42 @@ mod tests {
     #[test]
     fn nothing_ticked_is_refused() {
         let mut got = request();
-        let none = options(false, Some(true), false, false, false);
-        let refused = with_options(&mut got, &none, None, || panic!("setting read"));
+        let none = options(false, true, false, false, false);
+        let refused = with_options(&mut got, &none, None);
         assert!(matches!(refused, Err(ApplyError::NothingToWrite)));
     }
 
     #[test]
-    fn another_site_alone_means_everything_ticked() {
-        let diving = Some(LocationChoice::DiveSite);
-        assert!(chosen_options(None, None).is_none());
-        let chosen = chosen_options(None, diving.as_ref()).expect("options");
-        let mut got = request();
+    fn another_site_with_everything_ticked_keeps_all_the_rest() {
         let other = LocationTags::new(&dive("C", "Shark Reef").site, None, None);
-        with_options(&mut got, &chosen, Some(&other), || true).unwrap();
-        // Everything kept, the other site everywhere, the altitude from the setting.
-        let mut expected = request();
-        expected
-            .groups
-            .iter_mut()
-            .for_each(|g| g.location = Some(other.clone()));
-        expected.copy_depth_to_altitude();
-        assert_eq!(got, expected);
-        // Options sent win.
-        let sent = options(true, None, false, false, false);
-        assert_eq!(
-            chosen_options(Some(sent), diving.as_ref()).map(|o| o.place),
-            Some(false)
+        for altitude in [true, false] {
+            let mut got = request();
+            with_options(
+                &mut got,
+                &options(true, altitude, true, true, true),
+                Some(&other),
+            )
+            .unwrap();
+            // Everything kept, the other site everywhere, the altitude as sent.
+            let mut expected = request();
+            expected
+                .groups
+                .iter_mut()
+                .for_each(|g| g.location = Some(other.clone()));
+            if altitude {
+                expected.copy_depth_to_altitude();
+            }
+            assert_eq!(got, expected, "altitude {altitude}");
+        }
+        // The options win over the other site: place and GPS unticked,
+        // nothing of it is written.
+        let mut got = request();
+        let dive_only = options(true, false, false, false, false);
+        with_options(&mut got, &dive_only, Some(&other)).unwrap();
+        assert!(
+            got.groups
+                .iter()
+                .all(|g| g.location.is_none() && g.dive.is_some())
         );
     }
 
@@ -519,12 +486,12 @@ mod tests {
         };
         // Neither the place nor the GPS ticked: nothing of the site would be
         // written, so the log is not read and the site not looked for.
-        let collections_only = options(false, None, false, false, true);
+        let collections_only = options(false, false, false, false, true);
         let other = other_location(Some(&unknown), &collections_only, || panic!("sites read"));
         assert!(matches!(other, Ok(None)), "{other:?}");
         // The collections still go, with nothing else.
         let mut got = request();
-        with_options(&mut got, &collections_only, None, || panic!("setting read")).unwrap();
+        with_options(&mut got, &collections_only, None).unwrap();
         assert_eq!(got.groups.len(), 2);
         assert!(
             got.groups
@@ -534,7 +501,7 @@ mod tests {
         // The place or the GPS ticked: the site is looked for, and refused
         // when the log has no such site.
         for (place, gps) in [(true, false), (false, true), (true, true)] {
-            let ticked = options(false, None, place, gps, true);
+            let ticked = options(false, false, place, gps, true);
             let other = other_location(Some(&unknown), &ticked, || {
                 Ok(vec![dive("C", "Shark Reef").site])
             });
@@ -600,10 +567,8 @@ mod tests {
         // Everything ticked: both dives with a photo written, with depth;
         // dive C without photo.
         let (request, preview) = three_dives();
-        let all = options(true, Some(false), true, true, true);
-        let written = planned(request, &preview, Some(&all), None, || {
-            panic!("setting read")
-        });
+        let all = options(true, false, true, true, true);
+        let written = planned(request, &preview, &all, None);
         let written = written.unwrap();
         assert_eq!(written.request.groups.len(), 2);
         assert_eq!(written.with_depth, 2);
@@ -612,11 +577,8 @@ mod tests {
         // write on its photo and its group goes. It still had a photo: it
         // is not a dive without photo; dive C still is.
         let (request, preview) = three_dives();
-        let site_only = options(false, Some(false), true, true, false);
-        let written = planned(request, &preview, Some(&site_only), None, || {
-            panic!("setting read")
-        })
-        .unwrap();
+        let site_only = options(false, false, true, true, false);
+        let written = planned(request, &preview, &site_only, None).unwrap();
         let locations: Vec<_> = written
             .request
             .groups
@@ -627,9 +589,16 @@ mod tests {
         assert_eq!(written.empty_dives, ["C"]);
         // The dive details unticked: no photo with depth.
         assert_eq!(written.with_depth, 0);
-        // Today's path (no option): the same dives without photo.
+        // Everything ticked, the altitude on (today's screen with the
+        // setting on): the same dives without photo.
         let (request, preview) = three_dives();
-        let today = planned(request, &preview, None, None, || panic!("setting read")).unwrap();
+        let today = planned(
+            request,
+            &preview,
+            &options(true, true, true, true, true),
+            None,
+        )
+        .unwrap();
         assert_eq!(today.empty_dives, ["C"]);
         assert_eq!(today.request.groups.len(), 2);
     }
@@ -641,8 +610,8 @@ mod tests {
         bare.lon = None;
         let other = LocationTags::new(&bare, None, None);
         let mut got = request();
-        let only_gps = options(false, None, false, true, false);
-        let refused = with_options(&mut got, &only_gps, Some(&other), || true);
+        let only_gps = options(false, true, false, true, false);
+        let refused = with_options(&mut got, &only_gps, Some(&other));
         assert!(matches!(refused, Err(ApplyError::NothingToWrite)));
     }
 }

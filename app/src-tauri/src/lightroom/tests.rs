@@ -868,6 +868,61 @@ fn finds_photos_in_chunks_then_writes_collections() {
 }
 
 #[test]
+fn a_group_written_without_a_collection_is_read_without_a_name() {
+    // The plug-in leaves `collection` out for a group written without one
+    // (Json.lua drops a nil): read as no name, and the answer still reaches
+    // the app.
+    let (commands, inbox) = std::sync::mpsc::channel();
+    let (result_tx, result_rx) = std::sync::mpsc::channel();
+    let (link, plugin) = fake_plugin(move |lines, to_app| {
+        lines.next().unwrap();
+        write(to_app, &format!("{HELLO}\n"));
+        lines.next().unwrap(); // first ping: the app is connected
+        let (reply, written) = std::sync::mpsc::channel();
+        commands
+            .send(Command::ApplyCollections {
+                request: CollectionsRequest {
+                    search: 3,
+                    parent: Vec::new(),
+                    group: None,
+                    groups: Vec::new(),
+                },
+                reply,
+            })
+            .unwrap();
+        let apply = next_request(lines);
+        assert_eq!(apply["type"], "applyCollections");
+        let id = apply["id"].as_u64().unwrap();
+        write(
+            to_app,
+            &format!(
+                "{{\"type\":\"collectionsApplied\",\"id\":{id},\"groups\":[{{\"count\":2,\"created\":false}},{{\"collection\":\"701 - Lantern Wall\",\"count\":1,\"created\":true}}]}}\n"
+            ),
+        );
+        result_tx.send(written.recv().unwrap()).unwrap();
+        write(to_app, "{\"type\":\"bye\"}\n");
+    });
+    let end = run_session(&link, "0.1.0", fast(), &inbox, &mut |_| {});
+    plugin.join().unwrap();
+    assert_eq!(end, End::Bye);
+    assert_eq!(
+        result_rx.recv().unwrap(),
+        Ok(vec![
+            WrittenCollection {
+                collection: None,
+                count: 2,
+                created: false,
+            },
+            WrittenCollection {
+                collection: Some("701 - Lantern Wall".into()),
+                count: 1,
+                created: true,
+            },
+        ])
+    );
+}
+
+#[test]
 fn passes_legacy_settings_log_level_and_collection_sets() {
     let (commands, inbox) = std::sync::mpsc::channel();
     let (result_tx, result_rx) = std::sync::mpsc::channel();

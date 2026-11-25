@@ -59,7 +59,9 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
             assert(#root.parent == 0 and root.group == nil)
             request.parent = { "Trips", "" }
             assert(Tagging.planCollections(request, tostring) == nil)
-            assert(Tagging.planCollections({ groups = { { collection = "x" } } }, tostring) == nil)
+            -- A group may lack its dive, not its list of photos.
+            local none, why = Tagging.planCollections({ groups = { { collection = "x" } } }, tostring)
+            assert(none == nil and why == "bad group", why)
             return lines
             "#,
         )

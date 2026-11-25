@@ -41,9 +41,10 @@ pub(crate) enum LocationChoice {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TagChoice {
-    /// Write this dive's data; `None`: dive data unticked.
+    /// The chosen dive, even when its details are unticked (it gives the
+    /// site and the collection's name); `None`: no dive.
     dive_id: Option<String>,
-    /// Write a location; `None`: location unticked.
+    /// Where the location comes from; `None`: no location.
     location: Option<LocationChoice>,
     /// The description of the selection the screen shows
     /// (`find_selection_photos`): needed when the dive has a profile, for
@@ -54,13 +55,9 @@ pub(crate) struct TagChoice {
     /// The clock offsets shown, in minutes by camera key.
     #[serde(default)]
     offsets: std::collections::HashMap<String, i32>,
-    /// What the diver ticked. `None` (the current screens): everything the
-    /// choice names is written, the altitude follows the setting. With
-    /// options, `dive_id` is the chosen dive even when its details are
-    /// unticked (it gives the site and the collection's name); `None` there
-    /// is "no dive".
-    #[serde(default)]
-    options: Option<WriteOptions>,
+    /// What the diver ticked: it alone decides what is written, the
+    /// altitude included.
+    options: WriteOptions,
 }
 
 /// What "Tag Selection › Apply" wrote: the number of photos tagged, of which
@@ -113,16 +110,16 @@ fn tag_request(
     };
     let location = rules::location(choice.location.as_ref(), dive.as_ref(), || source.sites())?;
     let dive_id = dive.as_ref().map(|d| d.id.clone());
-    let ticked = choice.options.map(|options| rules::Ticked {
+    let options = choice.options;
+    let ticked = rules::Ticked {
         kept: options.kept(),
+        altitude: options.copies_altitude(),
         collection: rules::collection_place(options.collections, dive.as_ref(), || {
             let place = Settings::load(&config_dir(app)).collections;
             let group = place.group_name();
             (place.parent, group)
         }),
-    });
-    // The setting is read only when the altitude follows it, and last.
-    let depth_to_altitude = || Settings::load(&config_dir(app)).depth_to_altitude;
+    };
     let built = rules::build_request(
         dive,
         location,
@@ -137,10 +134,6 @@ fn tag_request(
             )
         },
         |id| source.profile(id),
-        || match choice.options {
-            None => depth_to_altitude(),
-            Some(options) => options.copies_altitude(depth_to_altitude),
-        },
         ticked,
     )?;
     if let Some(e) = built.unreadable {

@@ -308,7 +308,8 @@ export function CollectionsScreen({
     if (!preview || !period) return;
     const cams = period.cameras;
     setRun({ state: "writing", done: 0, total: preview.total });
-    applyCollections(logRef(log.source), period.search, choices)
+    const options = { dive: true, altitude: settings.depthToAltitude, place: true, gps: true, collections: true };
+    applyCollections(logRef(log.source), period.search, choices, options)
       .then((result) => setRun({ state: "done", result, choices, cameras: cams }))
       .catch((e: ApplyError) => {
         setRun({ state: "failed", message: applyFailure(e, "collections") });
