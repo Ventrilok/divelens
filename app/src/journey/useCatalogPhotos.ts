@@ -7,9 +7,10 @@
 //
 // It looks for the photos only while `diveIds` is not empty: the journey
 // passes the dives ticked from step 3 on and none before, or every tick at
-// step 2 would start a search. A new `run` throws away what was found and set,
+// step 2 would start a search. Other dives in the same run reset the offsets,
+// ignored cameras and margin; a new `run` throws away what was found and set,
 // except the surface margin when the run goes on with dives ticked ("handle
-// separately", as in 2.1.1).
+// separately", as in 2.1.1), so that its first search keeps it.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collectionsPreview, findCollectionPhotos, suggestOffsets } from "../api";
@@ -33,6 +34,7 @@ import {
   diveKey as searchedDives,
   keysAfterSearch,
   marginAfterRun,
+  marginAfterSearch,
   offsetsAfterSearch,
   suggestionNotes,
   withSuggestions,
@@ -120,11 +122,13 @@ export function useCatalogPhotos(
         if (!live) return;
         // Same dives found again (link restarted): the user's settings stay.
         const keep = searchedFor.current === diveKey;
+        const firstOfRun = searchedFor.current === null;
         searchedFor.current = diveKey;
         setOffsets((o) => offsetsAfterSearch(o, period.cameras, keep));
         setIgnoredSet((s) => keysAfterSearch(s, period.cameras, keep));
         setTouched((s) => keysAfterSearch(s, period.cameras, keep));
         if (!keep) setNotes({});
+        setMarginMin((m) => marginAfterSearch(m, keep, firstOfRun));
         setSearch({ state: "ready", period });
       })
       .catch((e: ApplyError) => live && setSearch({ state: "failed", message: searchFailure(e, "collections") }));

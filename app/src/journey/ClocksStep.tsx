@@ -215,7 +215,7 @@ export function ClocksStep({
   } else if (dive) {
     const bar = selectionBar(dive, selection, lr);
     if (bar.total) main = { text: bar.total, strong: true };
-    else if (bar.waiting) main = { text: bar.waiting, strong: false };
+    else if (bar.status) main = { text: bar.status, strong: false };
     if (bar.hint) notes = [{ text: bar.hint, warn: false }];
   }
 

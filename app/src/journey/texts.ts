@@ -59,11 +59,15 @@ export function photosLine(j: Journey, i: PhotosLineInput): string | null {
   const lr = i.lr;
   if (j.path === "catalog") {
     if (j.step === 2) return t("journey.line.catalogDives");
-    const ticked = tn("journey.line.divesTicked", i.dives.filter((d) => j.dives.has(d.id)).length);
+    const dives = i.dives.filter((d) => j.dives.has(d.id));
+    const ticked = tn("journey.line.divesTicked", dives.length);
     const p = i.period;
-    if (!p) return [t("journey.line.catalog"), ticked].join(" · ");
+    if (!p || dives.length === 0) return [t("journey.line.catalog"), ticked].join(" · ");
+    // The days of the dives ticked, not the period searched, which is wider.
+    const from = dives.reduce((a, d) => (d.start < a ? d.start : a), dives[0].start);
+    const to = dives.reduce((a, d) => (d.end > a ? d.end : a), dives[0].end);
     return [
-      t("journey.line.catalogPeriod", { from: formatDay(p.from), to: formatDay(p.to) }),
+      t("journey.line.catalogPeriod", { from: formatDay(from), to: formatDay(to) }),
       t("journey.line.photosFrom", { photos: tn("coll.photos", p.photos), cameras: tn("coll.cameras", p.cameras.length) }),
       ticked,
     ].join(" · ");

@@ -7,6 +7,7 @@ import {
   freshCountsOf,
   keysAfterSearch,
   marginAfterRun,
+  marginAfterSearch,
   notesOfCameras,
   offsetsAfterSearch,
   onlyCameras,
@@ -94,6 +95,20 @@ describe("the surface margin, on a new run", () => {
 
   it("starts from 0 again otherwise", () => {
     expect(marginAfterRun(15, [])).toBe(0);
+  });
+});
+
+describe("the surface margin, after a photo search", () => {
+  it("is kept when the same dives were found again, Lightroom having come back", () => {
+    expect(marginAfterSearch(15, true, false)).toBe(15);
+  });
+
+  it("is left as the new run set it, on the run's first search", () => {
+    expect(marginAfterSearch(15, false, true)).toBe(15);
+  });
+
+  it("starts from 0 again when other dives were ticked in the same run", () => {
+    expect(marginAfterSearch(15, false, false)).toBe(0);
   });
 });
 

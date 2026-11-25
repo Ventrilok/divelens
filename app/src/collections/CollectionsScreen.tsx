@@ -4,7 +4,7 @@
 // Lightroom (one Undo step) and the summary. Only shown with at least one
 // dive checked.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { applyCollections, collectionSets, onApplyProgress } from "../api";
 import { MARGIN_STEP_MIN, MAX_MARGIN_MIN } from "../apply/cameras";
 import { placeLabel, setExists } from "./collectionPlace";
@@ -155,8 +155,14 @@ export function CollectionsScreen({
     [log.dives, chosen],
   );
   const ids = useMemo(() => [...chosen], [chosen]);
+  // This screen keeps its margin when its dives change ("handle separately",
+  // the dive log read again): each set of dives is a new run of the photo
+  // reading, whose first search keeps the margin and resets the rest.
+  const diveKey = dives.map((d) => d.id).join(",");
+  const runOf = useRef({ diveKey, run: 0 });
+  if (runOf.current.diveKey !== diveKey) runOf.current = { diveKey, run: runOf.current.run + 1 };
   // The photos, their cameras, offsets, ignored cameras, margin and live counts.
-  const photos = useCatalogPhotos(log, lr, ids, 0);
+  const photos = useCatalogPhotos(log, lr, ids, runOf.current.run);
   const { search, period, cameras, offsets, ignored, touched, notes, margin, preview, previewFailed, choices } = photos;
   const [run, setRun] = useState<Run>({ state: "idle" });
 

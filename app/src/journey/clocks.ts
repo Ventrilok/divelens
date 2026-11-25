@@ -114,7 +114,11 @@ export function catalogBar(dives: Dive[], preview: CollectionsPreview | null): {
 /** What the selection's reading shows, as the step reads it (useSelectionPhotos). */
 export interface SelectionShown {
   described: Described | null;
+  /** The last counts, which the cards keep showing until newer ones arrive. */
   counts: TagPreview | null;
+  /** The counts of the selection as it is now, read and counted; null until then. */
+  freshCounts: TagPreview | null;
+  readFailure: string | null;
   profile: { status: "loading" | "ok" | "error" };
   /** The dive has a profile that can be read (or is being read). */
   needsValues: boolean;
@@ -137,21 +141,28 @@ export function selectionWaiting(r: Pick<SelectionShown, "described" | "counts" 
 /**
  * Selection path, the bar: "N photos attached to <no. site> · N with depth", counting
  * every photo selected, those without a capture time too, and "Nothing else to set.".
- * While the cards of a dive with a profile wait, what they wait for instead; with the
- * selection empty, "Select photos in Lightroom" on any dive.
+ * Instead (`status`), in 2.1.1's order: Lightroom not connected, no photo selected; then,
+ * for a dive with a profile, the reading that failed, the profile or the selection being
+ * read. The total is always the one of the selection as it is now, never an earlier one.
  */
 export function selectionBar(
   dive: Dive,
   r: SelectionShown,
   lr: Lr,
-): { total: string | null; waiting: string | null; hint: string | null } {
-  if (lr.connected && lr.selected === 0) return { total: null, waiting: t("tag.selectInLr"), hint: null };
-  if (r.needsValues && !(r.described && r.counts)) return { total: null, waiting: selectionWaiting(r, lr), hint: null };
-  const n = r.counts ? r.counts.total : lr.selected;
-  const depth = r.needsValues && r.counts ? r.counts.inDive : 0;
+): { total: string | null; status: string | null; hint: string | null } {
+  const say = (status: string) => ({ total: null, status, hint: null });
+  if (!lr.connected) return say(t("tag.disconnected"));
+  if (lr.selected === 0) return say(t("tag.selectInLr"));
+  if (r.needsValues) {
+    if (r.readFailure) return say(r.readFailure);
+    if (r.profile.status === "loading") return say(t("detail.profileLoading"));
+    if (!r.freshCounts) return say(t("tag.perPhoto.reading"));
+  }
+  const n = r.freshCounts ? r.freshCounts.total : lr.selected;
+  const depth = r.needsValues && r.freshCounts ? r.freshCounts.inDive : 0;
   return {
     total: tn("journey.clocks.attached", n, { dive: diveLabel(dive), depth: formatInt(depth) }),
-    waiting: null,
+    status: null,
     hint: t("journey.clocks.nothingElse"),
   };
 }

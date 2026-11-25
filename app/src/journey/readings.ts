@@ -70,6 +70,16 @@ export function marginAfterRun(margin: number, diveIds: string[]): number {
   return diveIds.length > 0 ? margin : 0;
 }
 
+/**
+ * The surface margin once the photos are found (catalog path). Kept for the same dives
+ * found again (`keep`: Lightroom came back), and on the run's first search, where
+ * marginAfterRun decided; other dives ticked in the same run start it from 0, as a new
+ * screen did in 2.1.1: a margin forgotten would let boat photos in silently.
+ */
+export function marginAfterSearch(margin: number, keep: boolean, firstOfRun: boolean): number {
+  return keep || firstOfRun ? margin : 0;
+}
+
 /** "Suggest for all": the cameras neither ignored nor set by hand. */
 export function camerasToSuggest(cameras: Camera[], touched: Set<string>, ignored?: Set<string>): string[] {
   return cameras.filter((c) => !ignored?.has(c.key) && !touched.has(c.key)).map((c) => c.key);

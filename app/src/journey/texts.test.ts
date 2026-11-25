@@ -44,10 +44,11 @@ const lr: Pick<LightroomStatus, "selected" | "selectionCameras" | "selectionFrom
   selectionTo: "2026-03-06T10:10:00",
 };
 
+/** The photos found for d1 and d2: the search looks one day wider on each side than the dives. */
 const period: Period = {
   search: 3,
-  from: "2026-03-06",
-  to: "2026-03-07",
+  from: "2026-03-05",
+  to: "2026-03-08",
   photos: 40,
   undated: 0,
   cameras: [
@@ -177,12 +178,16 @@ describe("photosLine", () => {
     );
   });
 
-  it("step 3, catalog path: the period searched, the photos found and the dives ticked", () => {
+  it("step 3, catalog path: the days of the dives ticked, the photos found and the dives ticked", () => {
     expect(photosLine(catalogAt3, { ...i, period })).toBe(
       "Photos: entire catalog, from 6 Mar 2026 to 7 Mar 2026 · 40 photos from 2 cameras · 2 dives ticked",
     );
     setLanguage("fr");
     expect(photosLine(catalogAt3, { ...i, period })).toBe(
+      "Photos : tout le catalogue, du 6 mars 2026 au 7 mars 2026 · 40 photos de 2 appareils · 2 plongées cochées",
+    );
+    // Whatever the order of the log.
+    expect(photosLine(catalogAt3, { ...i, period, dives: [...dives].reverse() })).toBe(
       "Photos : tout le catalogue, du 6 mars 2026 au 7 mars 2026 · 40 photos de 2 appareils · 2 plongées cochées",
     );
   });

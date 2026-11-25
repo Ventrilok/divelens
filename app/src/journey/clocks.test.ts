@@ -188,58 +188,71 @@ describe("the bottom bar", () => {
 
   const lr = { connected: true, selected: 5 };
   const ok = { status: "ok" as const };
-  const reading = {
-    described: { photos: { search: 1, photos: 5, undated: 0, cameras }, version: 1 },
+  const fiveDescribed = { photos: { search: 1, photos: 5, undated: 0, cameras }, version: 1 };
+  /** Five photos described, their counts fresh. */
+  const read = {
+    described: fiveDescribed,
     counts,
+    freshCounts: counts,
+    readFailure: null,
     profile: ok,
     needsValues: true,
   };
+  /** Nothing read yet. */
+  const unread = { described: null, counts: null, freshCounts: null, readFailure: null, profile: ok, needsValues: false };
+  const failed = "The selection could not be read in Lightroom.";
+  const status = (text: string) => ({ total: null, status: text, hint: null });
 
   it("selection path: every photo attached, with depth, and nothing else to set", () => {
-    expect(selectionBar(d2, reading, lr)).toEqual({
+    expect(selectionBar(d2, read, lr)).toEqual({
       total: "5 photos attached to 707 Blue Arch · 4 with depth",
-      waiting: null,
+      status: null,
       hint: "Nothing else to set.",
     });
   });
 
   it("selection path, in French", () => {
     setLanguage("fr");
-    expect(selectionBar(d2, reading, lr)).toEqual({
+    expect(selectionBar(d2, read, lr)).toEqual({
       total: "5 photos rattachées à 707 Blue Arch · 4 avec profondeur",
-      waiting: null,
+      status: null,
       hint: "Rien d'autre à régler.",
     });
   });
 
   it("selection path: no depth without a profile that can be read", () => {
-    expect(selectionBar(d3, { ...reading, needsValues: false }, lr).total).toBe(
+    expect(selectionBar(d3, { ...read, needsValues: false }, lr).total).toBe(
       "5 photos attached to 708 Sand Patch · 0 with depth",
     );
-    const unread = { described: null, counts: null, profile: ok, needsValues: false };
     expect(selectionBar(d3, unread, lr).total).toBe("5 photos attached to 708 Sand Patch · 0 with depth");
   });
 
   it("selection path: asks for photos once the selection is empty, with or without a profile", () => {
     const empty = { connected: true, selected: 0 };
-    const unread = { described: null, counts: null, profile: ok, needsValues: false };
-    const asks = { total: null, waiting: "Select photos in Lightroom", hint: null };
-    expect(selectionBar(d3, unread, empty)).toEqual(asks);
-    expect(selectionBar(d2, { ...unread, needsValues: true }, empty)).toEqual(asks);
+    expect(selectionBar(d3, unread, empty)).toEqual(status("Select photos in Lightroom"));
+    expect(selectionBar(d2, { ...unread, needsValues: true }, empty)).toEqual(status("Select photos in Lightroom"));
   });
 
-  it("selection path: says what the cards wait for instead of the total", () => {
-    const waiting = { described: null, counts: null, profile: ok, needsValues: true };
-    expect(selectionBar(d2, waiting, lr)).toEqual({
-      total: null,
-      waiting: "Reading the selection in Lightroom…",
-      hint: null,
-    });
-    expect(selectionBar(d2, waiting, { connected: false, selected: 5 })).toEqual({
-      total: null,
-      waiting: null,
-      hint: null,
-    });
+  it("selection path: says the selection is being read, and never shows the total of an earlier one", () => {
+    expect(selectionBar(d2, { ...unread, needsValues: true }, lr)).toEqual(status("Reading the selection in Lightroom…"));
+    // 5 photos read, then 9 selected: their counts are not fresh any more.
+    const nine = { connected: true, selected: 9 };
+    expect(selectionBar(d2, { ...read, freshCounts: null }, nine)).toEqual(status("Reading the selection in Lightroom…"));
+  });
+
+  it("selection path: says the profile is being read", () => {
+    expect(selectionBar(d2, { ...read, profile: { status: "loading" } }, lr)).toEqual(status("Loading profile…"));
+  });
+
+  it("selection path: says the reading failed, the first one or a later one", () => {
+    expect(selectionBar(d2, { ...unread, needsValues: true, readFailure: failed }, lr)).toEqual(status(failed));
+    expect(selectionBar(d2, { ...read, freshCounts: null, readFailure: failed }, lr)).toEqual(status(failed));
+  });
+
+  it("selection path: says Lightroom is not connected, on any dive, as before", () => {
+    const away = { connected: false, selected: 5 };
+    expect(selectionBar(d3, unread, away)).toEqual(status("Lightroom not connected: nothing can be written"));
+    expect(selectionBar(d2, read, away)).toEqual(status("Lightroom not connected: nothing can be written"));
   });
 });
 
