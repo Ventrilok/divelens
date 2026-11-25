@@ -15,6 +15,7 @@ import { Icon } from "../ui/Icon";
 import type { DiveLog, Settings } from "../types";
 import { summary, type Applied } from "./rules";
 import type { Journey } from "./state";
+import { StepLayout } from "./StepLayout";
 import { collectionLine, emptyDives, separatelyLabel, summaryNotices, writtenCollections } from "./summary";
 
 export function SummaryStep({
@@ -40,7 +41,33 @@ export function SummaryStep({
   const empty = emptyDives(applied, log.dives);
   const separately = separatelyLabel(empty);
   return (
-    <>
+    <StepLayout
+      bar={
+        <>
+          <div className="selection-text">
+            <span className="muted small">{t("coll.undoHint")}</span>
+          </div>
+          <div className="selection-actions">
+            {applied.path === "catalog" ? (
+              <>
+                {separately && (
+                  <button type="button" className="btn btn-s" onClick={() => onHandleSeparately(empty.map((d) => d.id))}>
+                    {separately}
+                  </button>
+                )}
+                <button type="button" className="btn btn-p" onClick={onDone}>
+                  {t("journey.summary.backToScope")}
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn btn-p" onClick={onDone}>
+                {t("journey.summary.done")}
+              </button>
+            )}
+          </div>
+        </>
+      }
+    >
       <p className="muted">{s.head}</p>
       <div className="result">
         <div className="result-head">
@@ -76,29 +103,6 @@ export function SummaryStep({
           </div>
         ))}
       </div>
-      <div className="card selection-bar apply-bar">
-        <div className="selection-text">
-          <span className="muted small">{t("coll.undoHint")}</span>
-        </div>
-        <div className="selection-actions">
-          {applied.path === "catalog" ? (
-            <>
-              {separately && (
-                <button type="button" className="btn btn-s" onClick={() => onHandleSeparately(empty.map((d) => d.id))}>
-                  {separately}
-                </button>
-              )}
-              <button type="button" className="btn btn-p" onClick={onDone}>
-                {t("journey.summary.backToScope")}
-              </button>
-            </>
-          ) : (
-            <button type="button" className="btn btn-p" onClick={onDone}>
-              {t("journey.summary.done")}
-            </button>
-          )}
-        </div>
-      </div>
-    </>
+    </StepLayout>
   );
 }

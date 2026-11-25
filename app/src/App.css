@@ -148,8 +148,9 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .option-name { flex: 1; white-space: nowrap; }
 .filter-count { margin-left: auto; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-/* List + detail */
-.dives-body { flex: 1; min-height: 0; display: flex; gap: 16px; align-items: stretch; }
+/* List + detail: they fill the height left and scroll on their own; below
+   180 px, the whole step scrolls instead (StepLayout). */
+.dives-body { flex: 1 1 0; min-height: 180px; display: flex; gap: 16px; align-items: stretch; }
 .list-card { flex: 1 1 auto; min-width: 0; overflow: auto; outline: none; }
 .list-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
 .list-empty-under { padding: 32px 16px; }
@@ -205,6 +206,15 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .notes { display: flex; flex-direction: column; gap: 6px; }
 .notes p { font-size: 14px; line-height: 1.5; color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* The steps of the journey (StepLayout): the content scrolls between the step
+   strip and the bottom bar, which stays in view just above the status bar.
+   The content reaches the window's edges, so that its scroll bar does; its
+   spacing sits on an inner block, whose bottom always scrolls into view. The
+   4 px around it keep focus rings whole. */
+.step-body { flex: 1 1 0; min-height: 0; margin: -4px -28px; overflow-y: auto; display: flex; flex-direction: column; }
+.step-content { flex: 1 0 auto; display: flex; flex-direction: column; gap: 16px; padding: 4px 28px; }
+.step-bar { flex: none; }
+
 /* Selection bar */
 .selection-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--raised); border-color: var(--line-strong); }
 .selection-text { display: flex; flex-direction: column; gap: 2px; }
@@ -241,7 +251,6 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 10px; font-size: 13px; }
 .notice-ok { background: var(--accent-soft); color: var(--accent-text); }
 .notice-warn { background: rgba(242, 118, 46, 0.12); color: var(--warn-text); }
-.apply-bar { position: sticky; bottom: 0; z-index: 2; margin-top: auto; }
 .apply-progress { flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px; }
 .apply-progress-text { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
 .bar { height: 6px; border-radius: 3px; background: #2c2e33; }

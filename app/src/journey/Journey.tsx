@@ -19,7 +19,7 @@ import { DivesStep } from "./DivesStep";
 import { PhotosStep } from "./PhotosStep";
 import { ReviewStep } from "./ReviewStep";
 import type { Applied } from "./rules";
-import { appliedFor, looksUpSetAgain, readingDive, screenClass, searchedDives, selectionReads, stripLeadsBack, type Written } from "./shell";
+import { appliedFor, looksUpSetAgain, readingDive, searchedDives, selectionReads, stripLeadsBack, type Written } from "./shell";
 import { reduce, start, stepStates, type Step } from "./state";
 import { SummaryStep } from "./SummaryStep";
 import { useCatalogPhotos } from "./useCatalogPhotos";
@@ -110,7 +110,7 @@ export function Journey({
   const onGo = stripLeadsBack(j, writing) ? (step: Step) => dispatch({ type: "goTo", step }) : undefined;
 
   return (
-    <main className={screenClass(j)}>
+    <main className="screen">
       <Steps states={stepStates(j)} onGo={onGo} />
       {j.step === 1 && <PhotosStep journey={j} dispatch={dispatch} lr={lr} notice={notice} onDismissNotice={onDismissNotice} />}
       {j.step === 2 && path && (

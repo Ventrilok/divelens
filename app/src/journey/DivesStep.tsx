@@ -22,6 +22,7 @@ import type { DiveLog, LightroomStatus } from "../types";
 import { catalogDivesBar, coversNote, selectionDivesBar, selectionHead } from "./choose";
 import { canGoNext } from "./rules";
 import type { Action, Journey, Path } from "./state";
+import { StepLayout } from "./StepLayout";
 import { photosLine } from "./texts";
 import type { SelectionReading } from "./useSelectionPhotos";
 
@@ -83,7 +84,39 @@ export function DivesStep({
   const prompt = (catalogBar ?? selectionBar)?.prompt ?? null;
 
   return (
-    <>
+    <StepLayout
+      bar={
+        <>
+          <div className="selection-text">
+            {catalogBar?.count && (
+              <span className="strong">
+                {catalogBar.count}
+                {catalogBar.hidden && <span className="muted"> ({catalogBar.hidden})</span>}
+              </span>
+            )}
+            {catalogBar?.span && <span className="muted small">{catalogBar.span}</span>}
+            {selectionBar?.choice && <span className="strong">{selectionBar.choice}</span>}
+            {selectionBar?.sub && <span className="muted small">{selectionBar.sub}</span>}
+            {prompt && <span className="muted">{prompt}</span>}
+          </div>
+          <div className="selection-actions">
+            {multi && journey.dives.size > 0 && (
+              <button type="button" className="btn btn-s" onClick={() => dispatch({ type: "setDives", ids: [] })}>
+                {t("sel.clear")}
+              </button>
+            )}
+            <button type="button" className="btn btn-s" onClick={() => dispatch({ type: "back" })}>
+              <Icon name="back" />
+              {t("coll.back")}
+            </button>
+            <button type="button" className="btn btn-p" disabled={!next.allowed} onClick={() => dispatch({ type: "next" })}>
+              {t("sel.next")}
+              <Icon name="arrow" />
+            </button>
+          </div>
+        </>
+      }
+    >
       <header className="screen-head">
         <div className="dives-head">
           {line && <p className="journey-line">{line}</p>}
@@ -144,36 +177,6 @@ export function DivesStep({
         )}
         <DiveDetail log={log.source} dive={focused} units={units} capabilities={capabilities} />
       </div>
-
-      <div className="card selection-bar">
-        <div className="selection-text">
-          {catalogBar?.count && (
-            <span className="strong">
-              {catalogBar.count}
-              {catalogBar.hidden && <span className="muted"> ({catalogBar.hidden})</span>}
-            </span>
-          )}
-          {catalogBar?.span && <span className="muted small">{catalogBar.span}</span>}
-          {selectionBar?.choice && <span className="strong">{selectionBar.choice}</span>}
-          {selectionBar?.sub && <span className="muted small">{selectionBar.sub}</span>}
-          {prompt && <span className="muted">{prompt}</span>}
-        </div>
-        <div className="selection-actions">
-          {multi && journey.dives.size > 0 && (
-            <button type="button" className="btn btn-s" onClick={() => dispatch({ type: "setDives", ids: [] })}>
-              {t("sel.clear")}
-            </button>
-          )}
-          <button type="button" className="btn btn-s" onClick={() => dispatch({ type: "back" })}>
-            <Icon name="back" />
-            {t("coll.back")}
-          </button>
-          <button type="button" className="btn btn-p" disabled={!next.allowed} onClick={() => dispatch({ type: "next" })}>
-            {t("sel.next")}
-            <Icon name="arrow" />
-          </button>
-        </div>
-      </div>
-    </>
+    </StepLayout>
   );
 }

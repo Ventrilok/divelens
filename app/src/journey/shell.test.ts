@@ -1,7 +1,7 @@
 // The journey's shell: what it hands the two photo readings and the step
 // strip, at each step of each path. Fictional dives only.
 import { describe, expect, it } from "vitest";
-import { appliedFor, looksUpSetAgain, readingDive, screenClass, searchedDives, selectionReads, stripLeadsBack } from "./shell";
+import { appliedFor, looksUpSetAgain, readingDive, searchedDives, selectionReads, stripLeadsBack } from "./shell";
 import { reduce, start, type Action, type Journey } from "./state";
 import type { Applied } from "./rules";
 import type { Dive } from "../types";
@@ -125,13 +125,5 @@ describe("looksUpSetAgain: the collection set is looked up again before each rev
     expect(looksUpSetAgain(2, 4)).toBe(false);
     // From the summary ("handle separately"): the lookup starts again anyway, from outside steps 2 to 4.
     expect(looksUpSetAgain(5, 3)).toBe(false);
-  });
-});
-
-describe("screenClass", () => {
-  it("the dive list fills the screen at step 2; the other steps scroll", () => {
-    expect(screenClass(catalogAt2)).toBe("screen");
-    expect(screenClass(start)).toBe("screen screen-scroll");
-    expect(screenClass(catalogAt4)).toBe("screen screen-scroll");
   });
 });
