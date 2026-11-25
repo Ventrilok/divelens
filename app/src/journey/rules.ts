@@ -9,7 +9,7 @@ import { divesChosen, type Journey } from "./state";
 import { pickedLocation, siteDetails, siteSource, writeOptions } from "./rules/shared";
 import type { SelectionReview } from "./rules/review";
 
-export { siteDetails, siteGives, siteSource, writeOptions } from "./rules/shared";
+export { chosenDive, siteDetails, siteGives, siteSource, tickedDives, writeOptions } from "./rules/shared";
 export {
   applyCount,
   barSummary,
