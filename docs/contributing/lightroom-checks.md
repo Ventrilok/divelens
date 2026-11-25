@@ -17,7 +17,7 @@ Play them before a release that touches the plug-in or the catalog writes, and a
   - [Test photos and dives](#test-photos-and-dives)
   - [Shortcuts used in the steps](#shortcuts-used-in-the-steps)
 - [Tests by feature](#tests-by-feature)
-  - [Journey and frame](#journey-and-frame): JRN-01 to JRN-10
+  - [Journey and frame](#journey-and-frame): JRN-01 to JRN-11
   - [Catalog path](#catalog-path): CAT-01 to CAT-11
   - [Selection path](#selection-path): SEL-01 to SEL-09
   - [Camera clock offset](#camera-clock-offset): CLK-01 and CLK-02
@@ -384,6 +384,29 @@ The six test photos are written too fast to click during the write: this test us
   - Lightroom still lists **Create Collections…** and **Tag Selection…**: it reads its menus only when it starts.
   - Write down what choosing **Create Collections…** does: the app comes to the front, or Lightroom shows an error.
 - After step 4: one item, **Open Dive Lens…**; the status bar reads "Lightroom connected".
+
+#### JRN-11 · Lightroom quits during the journey
+
+This test writes nothing.
+
+**Before:** any photos.
+
+**Steps**
+
+1. [Catalog path to step 3](#shortcuts-used-in-the-steps). On the Test Camera A card, type 0:05; under **Include photos taken at the surface**, click **+** twice (10 min).
+2. Quit Lightroom. In the app, click **Next**.
+3. Click **Back**. Start Lightroom again, on the test catalog.
+4. Reset: set Test Camera A to 0:00, and leave without applying.
+
+**Expected**
+
+- After step 2:
+  - the status bar reads "Lightroom not connected";
+  - steps 3 and 4 say "Lightroom not connected: photos cannot be found or written.";
+  - **Apply** is greyed.
+- After step 3:
+  - the status bar reads "Lightroom connected", and the photos are looked for again;
+  - the Test Camera A card is still at 0:05, and the margin still at 10 min.
 
 ### Catalog path
 
@@ -1079,6 +1102,7 @@ Windows <version>, Lightroom Classic <version>
 | JRN-08 Another dive log in Settings starts the journey again | | |
 | JRN-09 Nothing leaves step 4 during a write | | |
 | JRN-10 A plug-in of another version asks to restart Lightroom | | |
+| JRN-11 Lightroom quits during the journey | | |
 | CAT-01 Create collections for two dives | | |
 | CAT-02 Running again duplicates nothing | | |
 | CAT-03 Country and period filters | | |
