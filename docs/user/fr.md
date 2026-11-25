@@ -177,7 +177,7 @@ La barre du bas résume ce qui sera écrit (« N photos · N collections ») et 
 
 ## 4. Ce qui est écrit
 
-- **Créer les collections** : une collection par plongée, nommée **« numéro - site »**, dans l'ensemble de collections **Dive Lens** (l'emplacement se change dans les réglages). Une plongée sans numéro reçoit sa date à la place du numéro.
+- **Créer les collections** : une collection par plongée, nommée **« numéro - site »**, dans l'ensemble de collections **Dive Lens** (l'emplacement se change dans les réglages). Une plongée sans numéro reçoit sa date et son heure de début à la place du numéro.
 - **Détails de la plongée** : sur chaque photo, numéro de plongée, début et fin, durée, profondeur max, températures min et max, note et l'application de plongée d'où viennent les données. Sur les photos prises pendant une plongée qui a une courbe, aussi **la profondeur, la température et le temps écoulé** au moment de la photo, estimés entre les deux points de la courbe qui l'entourent. Et le décalage d'horloge appliqué : sur toutes les photos rangées dans une plongée (**Tout le catalogue**), sur les photos prises pendant la plongée (**Les photos sélectionnées dans Lightroom**).
 - **Détails du site** : pays, ville, lieu et GPS, dans les champs standard de Lightroom.
 

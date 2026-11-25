@@ -177,7 +177,7 @@ The bar at the bottom sums up what will be written ("N photos · N collections")
 
 ## 4. What is written
 
-- **Create collections**: one collection per dive, named **"<dive number> - <site>"**, in the **Dive Lens** collection set (the place can be changed in Settings). A dive without a number gets its date in place of the number.
+- **Create collections**: one collection per dive, named **"<dive number> - <site>"**, in the **Dive Lens** collection set (the place can be changed in Settings). A dive without a number gets its start date and time in place of the number.
 - **Dive details**: on each photo, dive number, start and end, duration, max depth, min and max temperatures, rating and the dive application the data come from. On the photos taken during a dive that has a profile, also the photo's **depth, temperature and time into the dive**, estimated between the two profile points around the moment of the photo. And the clock offset applied: on every photo placed in a dive (**Entire catalog**), on the photos taken during the dive (**Lightroom selection**).
 - **Site details**: country, city, location and GPS, in Lightroom's standard fields.
 
