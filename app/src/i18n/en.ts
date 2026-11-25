@@ -377,7 +377,7 @@ export const en = {
   "settings.feet": "Feet",
   "settings.collections": "Collections",
   "settings.parent": "Place in",
-  "settings.parentHint": "Where Create Collections puts the collections.",
+  "settings.parentHint": "Where the \"Create collections\" option puts the collections.",
   "settings.root": "Catalog root",
   "settings.parentMissing": "{path} (not found)",
   "settings.parentMissingHint": "This collection set is no longer in the catalog: choose another.",
