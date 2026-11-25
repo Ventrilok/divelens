@@ -8,24 +8,15 @@
 // each camera gets a clock offset as in Create Collections, and Apply
 // writes only if the selection is still the one described.
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  findSelectionPhotos,
-  onApplyProgress,
-  onSelectionPreview,
-  selectionPreview,
-  suggestTagOffsets,
-  tagPreview,
-  tagSelection,
-} from "../api";
-import { clampOffset, keepOffsets } from "../apply/cameras";
-import { coveringDive } from "./covers";
-import { logRef, nextSearchNumber } from "../diveLog";
+import { useEffect, useState } from "react";
+import { onApplyProgress, onSelectionPreview, selectionPreview, tagSelection } from "../api";
+import { logRef } from "../diveLog";
 import { sourceName } from "../sourceText";
 import { CameraClock } from "../apply/CameraClock";
-import { applyFailure, searchFailure } from "../apply/failure";
+import { applyFailure } from "../apply/failure";
 import { ProgressBar } from "../apply/ProgressBar";
-import { DiveDetail, useProfile } from "../dives/DiveDetail";
+import { DiveDetail } from "../dives/DiveDetail";
+import { useSelectionPhotos } from "../journey/useSelectionPhotos";
 import { LogNotice } from "../ui/LogNotice";
 import { DiveList } from "../dives/DiveList";
 import { FilterBar } from "../dives/FilterBar";
@@ -36,19 +27,8 @@ import { useDiveBrowser } from "../dives/useDiveBrowser";
 import type { Sort } from "../dives/filters";
 import { formatInt, t, tn } from "../i18n";
 import { gpsInput } from "./sites";
-import { canApplyTag, describeAgain, gpsRefused, readingAfterFailure, tagBlocker, tagSummary } from "./rules";
-import type {
-  ApplyError,
-  Dive,
-  DiveLog,
-  LightroomStatus,
-  SelectionPhotos,
-  SelectionPreview,
-  Settings,
-  Site,
-  TagChoice,
-  TagPreview,
-} from "../types";
+import { canApplyTag, describeAgain, gpsRefused, tagBlocker, tagSummary } from "./rules";
+import type { ApplyError, Dive, DiveLog, LightroomStatus, SelectionPreview, Settings, Site, TagChoice } from "../types";
 
 const THUMBNAILS = 6;
 
@@ -57,18 +37,6 @@ type Run =
   | { state: "writing"; done: number; total: number }
   | { state: "done"; count: number }
   | { state: "failed"; message: string };
-
-/** The selection described photo by photo, for the per-photo values; `version`: the selection's. */
-interface Described {
-  photos: SelectionPhotos;
-  version: number;
-}
-
-/** Live counts, and the description they were computed for. */
-interface Counts {
-  search: number;
-  preview: TagPreview;
-}
 
 function siteLine(site: Site): string {
   return [site.name, site.location, site.country].filter(Boolean).join(", ");
@@ -127,122 +95,23 @@ export function TagScreen({
   const thumbnails = preview.version === lr.selectionVersion ? preview.thumbnails : [];
 
   const chosen: Dive | null = withDive ? (dives.find((d) => d.id === chosenId) ?? null) : null;
-  const chosenRef = useRef(chosenId);
-  chosenRef.current = chosenId;
-  const span = chosen && { start: chosen.start, end: chosen.end };
-  const spanKey = span ? `${span.start}|${span.end}` : "";
 
-  // Per-photo values: for a dive with a profile, unless it cannot be read
-  // (the dive data are then written alone, as before per-photo values).
-  const profile = useProfile(logRef(log.source), chosen);
-  const hasProfile = chosen !== null && chosen.hasProfile;
-  const unreadable = hasProfile && profile.status === "error";
-  const needsValues = hasProfile && !unreadable;
-  const profileLoading = needsValues && profile.status === "loading";
-
-  // The selection photo by photo, described for such a dive, again whenever
-  // the selection changes, and its cameras: each keeps the offset shown, a
-  // new one starts from the offset last applied to it (spec F8). The last
-  // description and counts stay on screen until the new ones arrive.
-  const [described, setDescribed] = useState<Described | null>(null);
-  const [reading, setReading] = useState(false);
-  const [readFailure, setReadFailure] = useState<string | null>(null);
-  const [again, setAgain] = useState(0);
-  // The selection version already described again after a lost description: at most once each.
-  const retried = useRef<number | null>(null);
-  const [offsets, setOffsets] = useState<Record<string, number>>({});
-  const [touched, setTouched] = useState<Set<string>>(new Set());
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [counts, setCounts] = useState<Counts | null>(null);
-  const wanted = needsValues && lr.connected && lr.selected > 0;
-  useEffect(() => {
-    if (!wanted) {
-      setDescribed(null);
-      setCounts(null);
-      setReading(false);
-      setReadFailure(null);
-      return;
-    }
-    let live = true;
-    const version = lr.selectionVersion;
-    setReading(true);
-    setReadFailure(null);
-    findSelectionPhotos(logRef(log.source), nextSearchNumber())
-      .then((photos) => {
-        if (!live) return;
-        const keys = new Set(photos.cameras.map((c) => c.key));
-        setOffsets((o) => keepOffsets(o, photos.cameras));
-        setTouched((s) => new Set([...s].filter((k) => keys.has(k))));
-        setNotes((n) => Object.fromEntries(Object.entries(n).filter(([k]) => keys.has(k))));
-        setDescribed({ photos, version });
-        setReading(false);
-      })
-      .catch((e: ApplyError) => {
-        const after = readingAfterFailure(e, live, retried.current === version);
-        if (!after) return;
-        setReadFailure(after.message !== undefined ? after.message : searchFailure(e, "tag"));
-        setReading(after.reading);
-        if (after.describeAgain) {
-          retried.current = version;
-          setAgain((n) => n + 1);
-        }
-      });
-    return () => {
-      live = false;
-    };
-  }, [wanted, lr.selectionVersion, again]);
-  // The description Apply may use: of the selection shown, and done.
-  const current =
-    described && described.version === lr.selectionVersion && !reading && !readFailure ? described.photos : null;
-
-  // Live counts for the dive chosen and the offsets shown: the latest answer
-  // wins. Refused once a newer description replaced this one: the last
-  // counts stay until the newer ones arrive.
-  const asked = useRef(0);
-  useEffect(() => {
-    if (!described) return;
-    const n = ++asked.current;
-    const search = described.photos.search;
-    tagPreview(search, span, offsets)
-      .then((preview) => n === asked.current && setCounts({ search, preview }))
-      .catch(() => {});
-  }, [described, offsets, spanKey]);
-  const shownCounts = counts?.preview ?? null;
-  const freshCounts = counts && current && counts.search === current.search ? counts.preview : null;
-
-  // A note on a camera (no offset found) belongs to the dive it was asked for.
-  useEffect(() => setNotes({}), [chosenId]);
+  // The selection photo by photo, described for a dive whose profile can be
+  // read (per-photo values), again whenever the selection changes, its
+  // cameras with their offsets, and the live counts (spec F8). Not `active`:
+  // this screen reads the selection only for such a dive, as before.
+  const photos = useSelectionPhotos(log, lr, chosen, false, 0);
+  const { described, current, readFailure, offsets, touched, notes, needsValues, unreadable, covering } = photos;
+  const shownCounts = photos.counts;
+  const freshCounts = photos.freshCounts;
+  const profileLoading = needsValues && photos.profile.status === "loading";
 
   // The dive covering the selection is pointed out, never chosen for the
-  // user. It follows the offsets shown once the selection is described for
-  // a dive with a profile; before, the offsets last applied. It is shown in
-  // the detail card only until a dive is chosen: then the detail stays.
-  const coverFrom = described && shownCounts ? shownCounts.coverFrom : lr.coverFrom;
-  const coverTo = described && shownCounts ? shownCounts.coverTo : lr.coverTo;
-  const covering = useMemo(() => coveringDive(dives, coverFrom, coverTo), [dives, coverFrom, coverTo]);
+  // user. It is shown in the detail card only until a dive is chosen: then
+  // the detail stays.
   useEffect(() => {
     if (covering && chosenId === null) setFocusedId(covering.id);
   }, [covering]);
-
-  const setOffset = (key: string, min: number) => {
-    setOffsets((o) => ({ ...o, [key]: clampOffset(min) }));
-    setTouched((s) => new Set(s).add(key));
-    setNotes((n) => ({ ...n, [key]: "" }));
-  };
-  const suggest = (key: string) => {
-    if (!current || !span) return;
-    const forDive = chosenId;
-    suggestTagOffsets(current.search, span, [key])
-      .then((found) => {
-        // Another dive chosen meanwhile: this suggestion was for the previous one.
-        if (forDive !== chosenRef.current) return;
-        const value = found[key];
-        if (value !== null && value !== undefined) setOffsets((o) => ({ ...o, [key]: value }));
-        setNotes((n) => ({ ...n, [key]: value === null ? t("tag.perPhoto.noSuggestion") : "" }));
-      })
-      // Refused once a newer description replaced this one: nothing to suggest.
-      .catch(() => {});
-  };
 
   const diveSiteUsable = chosen !== null && chosen.site.id !== null;
   const usesDiveSite = withPlace && placeKind === "diveSite" && diveSiteUsable;
@@ -296,14 +165,14 @@ export function TagScreen({
       .then(({ count }) => {
         setRun({ state: "done", count });
         // Described again: the offsets applied are now the remembered ones.
-        if (needsValues) setAgain((n) => n + 1);
-        setTouched(new Set());
+        if (needsValues) photos.describeAgain();
+        photos.clearTouched();
       })
       .catch((e: ApplyError) => {
         setRun({ state: "failed", message: applyFailure(e, "tag") });
         // Described again: the offsets applied may be the remembered ones now,
         // or the selection changed meanwhile.
-        if (describeAgain(e, needsValues)) setAgain((n) => n + 1);
+        if (describeAgain(e, needsValues)) photos.describeAgain();
       });
   };
 
@@ -393,7 +262,7 @@ export function TagScreen({
                   {readFailure ? (
                     <div className="notice notice-warn" role="alert">
                       <span>{readFailure}</span>
-                      <button type="button" className="btn btn-g" onClick={() => setAgain((n) => n + 1)}>
+                      <button type="button" className="btn btn-g" onClick={photos.describeAgain}>
                         {t("coll.retry")}
                       </button>
                     </div>
@@ -414,8 +283,8 @@ export function TagScreen({
                           notes={notes}
                           counts={(key) => shownCounts.cameras.find((k) => k.key === key)}
                           gauge={(inDives) => t("tag.perPhoto.inDive", { n: formatInt(inDives) })}
-                          onChange={setOffset}
-                          onSuggest={suggest}
+                          onChange={photos.setOffset}
+                          onSuggest={photos.suggest}
                           disabled={writing}
                         />
                       )}

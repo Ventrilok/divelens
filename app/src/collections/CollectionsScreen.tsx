@@ -4,30 +4,21 @@
 // Lightroom (one Undo step) and the summary. Only shown with at least one
 // dive checked.
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { applyCollections, collectionSets, collectionsPreview, findCollectionPhotos, onApplyProgress, suggestOffsets } from "../api";
-import { clampMargin, clampOffset, initialOffsets, MARGIN_STEP_MIN, MAX_MARGIN_MIN } from "../apply/cameras";
+import { useEffect, useMemo, useState } from "react";
+import { applyCollections, collectionSets, onApplyProgress } from "../api";
+import { MARGIN_STEP_MIN, MAX_MARGIN_MIN } from "../apply/cameras";
 import { placeLabel, setExists } from "./collectionPlace";
-import { barText, canApplyCollections, collectionsBlocker, writesNote, type Search } from "./rules";
-import { logRef, nextSearchNumber } from "../diveLog";
+import { barText, canApplyCollections, collectionsBlocker, writesNote } from "./rules";
+import { logRef } from "../diveLog";
 import { CameraClock } from "../apply/CameraClock";
-import { applyFailure, searchFailure } from "../apply/failure";
+import { applyFailure } from "../apply/failure";
+import { useCatalogPhotos } from "../journey/useCatalogPhotos";
 import { ProgressBar } from "../apply/ProgressBar";
 import { Icon } from "../ui/Icon";
 import { Steps } from "../ui/Steps";
 import { formatDay, formatRange, formatRowSpan } from "../ui/format";
 import { formatInt, t, tn } from "../i18n";
-import type {
-  ApplyError,
-  Camera,
-  CollectionChoices,
-  CollectionsPreview,
-  CollectionsResult,
-  Dive,
-  DiveLog,
-  LightroomStatus,
-  Settings,
-} from "../types";
+import type { ApplyError, Camera, CollectionChoices, CollectionsResult, Dive, DiveLog, LightroomStatus, Settings } from "../types";
 
 /** Where step 2 stands, for the app around it. */
 export type Phase = "adjust" | "writing" | "summary";
@@ -37,11 +28,6 @@ type Run =
   | { state: "writing"; done: number; total: number }
   | { state: "done"; result: CollectionsResult; choices: CollectionChoices; cameras: Camera[] }
   | { state: "failed"; message: string };
-
-/** The entries of `o` whose key is in `keys`. */
-function pick(o: Record<string, number>, keys: Set<string>): Record<string, number> {
-  return Object.fromEntries(Object.entries(o).filter(([k]) => keys.has(k)));
-}
 
 function diveName(d: Dive): string {
   return [d.number !== null ? String(d.number) : null, d.site.name].filter(Boolean).join(" ");
@@ -168,19 +154,11 @@ export function CollectionsScreen({
     () => log.dives.filter((d) => chosen.has(d.id)).sort((a, b) => (a.start < b.start ? -1 : 1)),
     [log.dives, chosen],
   );
-  const diveKey = dives.map((d) => d.id).join(",");
-
-  const [search, setSearch] = useState<Search>({ state: "idle" });
-  const [again, setAgain] = useState(0);
-  const [offsets, setOffsets] = useState<Record<string, number>>({});
-  const [ignored, setIgnored] = useState<Set<string>>(new Set());
-  const [touched, setTouched] = useState<Set<string>>(new Set());
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [margin, setMargin] = useState(0);
-  const [preview, setPreview] = useState<CollectionsPreview | null>(null);
-  const [previewFailed, setPreviewFailed] = useState(false);
+  const ids = useMemo(() => [...chosen], [chosen]);
+  // The photos, their cameras, offsets, ignored cameras, margin and live counts.
+  const photos = useCatalogPhotos(log, lr, ids, 0);
+  const { search, period, cameras, offsets, ignored, touched, notes, margin, preview, previewFailed, choices } = photos;
   const [run, setRun] = useState<Run>({ state: "idle" });
-  const searchedFor = useRef<string | null>(null);
 
   // The collection set chosen in Settings must still be in the catalog
   // (spec F2): checked when Lightroom connects, never replaced silently.
@@ -199,57 +177,6 @@ export function CollectionsScreen({
     };
   }, [lr.connected, lr.catalog, parentKey]);
 
-  // Photos of the period, found again when the dives change or Lightroom
-  // comes back (its photo ids only hold for one link session).
-  useEffect(() => {
-    if (!diveKey || !lr.connected) {
-      setSearch({ state: "idle" });
-      return;
-    }
-    let live = true;
-    setSearch({ state: "searching" });
-    setPreview(null);
-    setPreviewFailed(false);
-    findCollectionPhotos(logRef(log.source), nextSearchNumber(), diveKey.split(","))
-      .then((period) => {
-        if (!live) return;
-        // Same dives found again (link restarted): the user's settings stay.
-        const keep = searchedFor.current === diveKey;
-        searchedFor.current = diveKey;
-        const keys = new Set(period.cameras.map((c) => c.key));
-        const kept = <T,>(set: Set<T>) => new Set([...set].filter((k) => keys.has(k as string)));
-        setOffsets((o) => (keep ? { ...initialOffsets(period.cameras), ...pick(o, keys) } : initialOffsets(period.cameras)));
-        setIgnored((s) => (keep ? kept(s) : new Set()));
-        setTouched((s) => (keep ? kept(s) : new Set()));
-        if (!keep) setNotes({});
-        setSearch({ state: "ready", period });
-      })
-      .catch((e: ApplyError) => live && setSearch({ state: "failed", message: searchFailure(e, "collections") }));
-    return () => {
-      live = false;
-    };
-  }, [diveKey, lr.connected, again]);
-
-  const choices: CollectionChoices = useMemo(
-    () => ({ offsets, ignored: [...ignored], marginMin: margin }),
-    [offsets, ignored, margin],
-  );
-
-  // Live counts: the latest answer wins.
-  const asked = useRef(0);
-  useEffect(() => {
-    if (search.state !== "ready") return;
-    const n = ++asked.current;
-    setPreviewFailed(false);
-    collectionsPreview(search.period.search, choices)
-      .then((p) => n === asked.current && setPreview(p))
-      .catch(() => {
-        if (n !== asked.current) return;
-        setPreview(null);
-        setPreviewFailed(true);
-      });
-  }, [choices, search]);
-
   useEffect(() => {
     const stop = onApplyProgress((done, total) =>
       setRun((r) => (r.state === "writing" ? { state: "writing", done, total } : r)),
@@ -265,45 +192,6 @@ export function CollectionsScreen({
     return () => onPhase("adjust");
   }, [phase, onPhase]);
 
-  const period = search.state === "ready" ? search.period : null;
-  const cameras = period?.cameras ?? [];
-
-  const setOffset = (key: string, min: number) => {
-    setOffsets((o) => ({ ...o, [key]: clampOffset(min) }));
-    setTouched((s) => new Set(s).add(key));
-    setNotes((n) => ({ ...n, [key]: "" }));
-  };
-
-  const setIgnoredCamera = (key: string, on: boolean) => {
-    setIgnored((s) => {
-      const next = new Set(s);
-      if (on) next.add(key);
-      else next.delete(key);
-      return next;
-    });
-  };
-
-  const suggest = (keys: string[]) => {
-    if (keys.length === 0 || !period) return;
-    suggestOffsets(period.search, keys)
-      .then((found) => {
-        setOffsets((o) => {
-          const next = { ...o };
-          for (const k of keys) if (found[k] !== null && found[k] !== undefined) next[k] = found[k] as number;
-          return next;
-        });
-        setNotes((n) => {
-          const next = { ...n };
-          for (const k of keys) next[k] = found[k] === null ? t("coll.noSuggestion") : "";
-          return next;
-        });
-      })
-      // Refused once a newer search replaced this one: nothing to suggest.
-      .catch(() => {});
-  };
-  // "Suggest for all" leaves ignored cameras and hand-set offsets alone.
-  const suggestAll = () => suggest(cameras.filter((c) => !ignored.has(c.key) && !touched.has(c.key)).map((c) => c.key));
-
   const apply = () => {
     if (!preview || !period) return;
     const cams = period.cameras;
@@ -313,7 +201,7 @@ export function CollectionsScreen({
       .then((result) => setRun({ state: "done", result, choices, cameras: cams }))
       .catch((e: ApplyError) => {
         setRun({ state: "failed", message: applyFailure(e, "collections") });
-        if (e.error === "noPhotos" || (e.error === "lightroom" && e.reason === "staleSearch")) setAgain((n) => n + 1);
+        if (e.error === "noPhotos" || (e.error === "lightroom" && e.reason === "staleSearch")) photos.searchAgain();
       });
   };
 
@@ -372,7 +260,7 @@ export function CollectionsScreen({
       {search.state === "failed" && (
         <div className="notice notice-warn" role="alert">
           <span>{search.message}</span>
-          <button type="button" className="btn btn-g" onClick={() => setAgain((n) => n + 1)}>
+          <button type="button" className="btn btn-g" onClick={photos.searchAgain}>
             {t("coll.retry")}
           </button>
         </div>
@@ -387,7 +275,7 @@ export function CollectionsScreen({
                 <p className="muted small">{t("coll.clock.text")}</p>
               </div>
               {cameras.length > 0 && (
-                <button type="button" className="btn btn-s" onClick={suggestAll} disabled={writing}>
+                <button type="button" className="btn btn-s" onClick={photos.suggestAll} disabled={writing}>
                   <Icon name="spark" />
                   {t("coll.suggestAll")}
                 </button>
@@ -406,9 +294,9 @@ export function CollectionsScreen({
                   inDives === 0 ? t("coll.noneInDives") : t("coll.inDives", { n: formatInt(inDives), out: formatInt(outside) })
                 }
                 ignored={ignored}
-                onChange={setOffset}
-                onIgnore={setIgnoredCamera}
-                onSuggest={(key) => suggest([key])}
+                onChange={photos.setOffset}
+                onIgnore={photos.setIgnored}
+                onSuggest={photos.suggest}
                 disabled={writing}
               />
             )}
@@ -426,7 +314,7 @@ export function CollectionsScreen({
                 className="step"
                 aria-label={t("coll.margin.less")}
                 disabled={margin <= 0}
-                onClick={() => setMargin((m) => clampMargin(m - MARGIN_STEP_MIN))}
+                onClick={() => photos.setMargin(margin - MARGIN_STEP_MIN)}
               >
                 −
               </button>
@@ -436,7 +324,7 @@ export function CollectionsScreen({
                 className="step"
                 aria-label={t("coll.margin.more")}
                 disabled={margin >= MAX_MARGIN_MIN}
-                onClick={() => setMargin((m) => clampMargin(m + MARGIN_STEP_MIN))}
+                onClick={() => photos.setMargin(margin + MARGIN_STEP_MIN)}
               >
                 +
               </button>
