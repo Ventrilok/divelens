@@ -4,7 +4,7 @@ The automatic tests cannot prove that Lightroom accepts what Dive Lens writes to
 
 Play them before a release that touches the plug-in or the catalog writes, and after a large refactoring. Compare the result with the previous run: a difference is a finding, even if it looks harmless.
 
-**How to read a test.** Each test has an id (TAG-01, COL-02…) and a title that says what it checks. **Before** gives the state to start from, **Steps** what to do, **Expected** what you should see. Fill in the [results sheet](#results-sheet) as you go.
+**How to read a test.** Each test has an id (JRN-01, CAT-02…) and a title that says what it checks. **Before** gives the state to start from, **Steps** what to do, **Expected** what you should see. Fill in the [results sheet](#results-sheet) as you go. The tests of earlier versions, which named the two former screens, are listed with their new ids under [Old identifiers](#old-identifiers).
 
 ## Contents
 
@@ -13,15 +13,20 @@ Play them before a release that touches the plug-in or the catalog writes, and a
   - [Prepare Lightroom: Windows](#prepare-lightroom-windows)
   - [Test catalog and settings](#test-catalog-and-settings)
   - [Clean photos](#clean-photos)
+  - [Clean start](#clean-start)
   - [Test photos and dives](#test-photos-and-dives)
+  - [Shortcuts used in the steps](#shortcuts-used-in-the-steps)
 - [Tests by feature](#tests-by-feature)
-  - [Tag Selection](#tag-selection): TAG-01 to TAG-08
-  - [Create Collections](#create-collections): COL-01 to COL-04
+  - [Journey and frame](#journey-and-frame): JRN-01 to JRN-10
+  - [Catalog path](#catalog-path): CAT-01 to CAT-11
+  - [Selection path](#selection-path): SEL-01 to SEL-09
   - [Camera clock offset](#camera-clock-offset): CLK-01 and CLK-02
-  - [Units and altitude](#units-and-altitude): UNIT-01 and UNIT-02
-  - [Settings screens](#settings-screens): SET-01 and SET-02
+  - [Units and altitude](#units-and-altitude): UNIT-01 to UNIT-03
+  - [Settings](#settings): SET-01 to SET-04
+  - [Undo](#undo): UNDO-01 to UNDO-03
 - [After the tests](#after-the-tests)
 - [Results sheet](#results-sheet)
+- [Old identifiers](#old-identifiers)
 
 ## Before you start
 
@@ -34,13 +39,13 @@ Play on a development build. The installed plug-in and the one in the repository
 3. From `app/`, build the app: `npm run tauri build -- --bundles app`.
 4. Open Lightroom: **File › Plug-in Manager › Add**, choose `plugin/DiveLens.lrdevplugin`.
 
-Every test is played on macOS.
+Every test is played on macOS. JRN-10 alone needs installed copies instead of the development build: its **Before** says how.
 
 ### Prepare Lightroom: Windows
 
 The installed version is enough: the reference, or a trial installer from a manual Release workflow run on a branch other than `main`.
 
-On Windows, **TAG-01, TAG-02, COL-01 and COL-02 are required**: they check that one Undo takes back both catalog writes. The other tests are welcome but optional.
+On Windows, **UNDO-01, UNDO-02, UNDO-03 and CAT-08 are required**: they check that one Undo takes back both catalog writes, GPS and altitude included. The other tests are welcome but optional.
 
 If the reference shows on Windows that one Undo does not take back both writes, stop and report it: it is not fixed by a refactoring.
 
@@ -57,16 +62,17 @@ If the reference shows on Windows that one Undo does not take back both writes, 
 | Dive log › log file | `core/fixtures/subsurface/fictional.xml` |
 | Display › Depth | Metres |
 | Display › Temperature | °C |
-| Writing on photos › Copy depth to GPS altitude | **Off** |
 | Collections › Place in | Catalog root |
 | Collections › Group in the set | Dive Lens |
-| Camera cards › clock offset of Test Camera A and Test Camera B | 0:00 |
+| Step 3, Clocks › clock offset of Test Camera A and Test Camera B | 0:00 |
 
-The language, the log level and the automatic update check have no effect on the tests.
+The language, the log level and the automatic update check have no effect on the tests, except where a test changes the language itself.
+
+Copying the depth to the GPS altitude is no longer a setting: it is the option **Copy depth to GPS altitude** of step 4, unticked on every run. The tests that need it tick it.
 
 Every test uses the base settings. A test that needs another setting changes it in its steps and sets it back in its last step.
 
-Dive Lens remembers each camera's last clock offset outside the catalog, so a new catalog does not reset it. If a camera card in **Tag Selection** or **Create Collections** shows another offset than 0:00 (left by an earlier run), set it to 0:00 before **Apply**.
+Dive Lens remembers each camera's last clock offset outside the catalog, so a new catalog does not reset it. If a camera card at step 3 (**Clocks**) shows another offset than 0:00 (left by an earlier run), set it to 0:00 before **Apply**.
 
 ### Clean photos
 
@@ -80,141 +86,344 @@ Create the preset once:
 
 To clean the photos: select all the test photos (**Edit › Select All**), then in the Metadata panel choose **Preset › Clear Dive Lens**.
 
+### Clean start
+
+A clean start is [clean photos](#clean-photos) and no collection written by Dive Lens: in the Collections panel, delete the "Dive Lens" collection set if there is one (right-click › **Delete**). The preset clears fields, not collections.
+
 ### Test photos and dives
 
-| Photo | Taken | Dive | Photo's own depth |
-|---|---|---|---|
-| A1 | 2025-06-14 09:40:00 | 101 | 18.0 m |
-| A2 | 2025-06-14 09:50:00 | 101 | 15.0 m |
-| A3 | 2025-06-14 10:00:00 | 101 | 10.0 m |
-| B1 | 2025-06-14 14:10:00 | 102 | 12.0 m (first dive computer, Mares Genius; the second computer of dive 102 is not used for photo depth) |
-| B2 | 2025-06-14 14:20:00 | 102 | (no value to check) |
-| X1 | 2025-06-14 12:00:00 | none (between the two dives) | none |
+| Photo | Camera | Taken | Dive | Photo's own depth |
+|---|---|---|---|---|
+| A1 | Test Camera A | 2025-06-14 09:40:00 | 101 | 18.0 m |
+| A2 | Test Camera A | 2025-06-14 09:50:00 | 101 | 15.0 m |
+| A3 | Test Camera A | 2025-06-14 10:00:00 | 101 | 10.0 m |
+| B1 | Test Camera B | 2025-06-14 14:10:00 | 102 | 12.0 m (first dive computer, Mares Genius; the second computer of dive 102 is not used for photo depth) |
+| B2 | Test Camera B | 2025-06-14 14:20:00 | 102 | (no value to check) |
+| X1 | Test Camera A | 2025-06-14 12:00:00 | none (between the two dives) | none |
 
-The fictional dive log holds two dives that day:
+The fictional dive log holds ten dives. Two of them are on the day of the photos:
 
 | Dive | Time | Site | GPS |
 |---|---|---|---|
 | 101 | 09:30 to 10:12:30 | Atlantis / North Reef / Coral Garden | 12.5, -45.25 |
-| 102 | 14:00 to 14:35 | Glacier Wall | -64.125, -60.5 |
+| 102 | 14:00 to 14:35 | Glacier Wall (Atlantis, Frostville) | -64.125, -60.5 |
+
+X1 is taken 108 minutes after the end of dive 101 (rounded up to the minute) and 120 minutes before the start of dive 102. The other dives used here: 103 (Shark Point / Bay, on 2025-06-15, no profile, no photo), 104 (Lemuria), 106 and 107 (both on 2025-06-17; 107 is rated 5★), 108 (31.2 m). The site used as another site is Récif d'Émeraude, country Atlantide, location Île Verte, GPS -20.5, 57.25.
 
 Dive Lens fields are read in Lightroom's Metadata panel (Dive Lens section); the location fields in its IPTC / Location fields.
+
+### Shortcuts used in the steps
+
+- **Catalog path to step 3**: **Library › Plug-in Extras › Open Dive Lens…**; at step 1 choose **Entire catalog**, then **Next**; at step 2 tick dives 101 and 102, then **Next**.
+- **Catalog path to step 4**: the same, then **Next** at step 3.
+- **Selection path with dive N**: with the photos selected in Lightroom, **Library › Plug-in Extras › Open Dive Lens…**; at step 1 choose the **Lightroom selection** card, then **Next**; at step 2 click dive N, then **Next**; at step 3, **Next**. You are at step 4.
 
 ## Tests by feature
 
 Within a feature, play the tests in order: some start from the state the previous one left.
 
-### Tag Selection
+### Journey and frame
 
-#### TAG-01 · Tag three photos with one dive
+Nobody has looked at the real window of the journey yet: JRN-01 and JRN-02 come first. They walk once through the five steps of each path, only to see that every screen appears and reads right, in English and in French. The other tests check what is written.
 
-**Before:** [clean photos](#clean-photos). Select A1, A2, A3.
+#### JRN-01 · Every screen of the catalog path, in English and in French
 
-**Steps**
-
-1. **Library › Plug-in Extras › Tag Selection…**
-2. Choose dive 101.
-3. Click **Apply**.
-
-**Expected**
-
-- Dive Lens fields: dive 101, `MaxDepth` 18.4 m.
-- Photo depth: A1 18.0 m, A2 15.0 m, A3 10.0 m.
-- Location: country "Atlantis", city "North Reef", location "Coral Garden".
-- GPS 12°30'N 45°15'W.
-- GPS altitude empty.
-
-#### TAG-02 · One Undo takes the tag back
-
-**Before:** after TAG-01.
+**Before:** [clean start](#clean-start). Nothing selected in Lightroom (**Edit › Select None**).
 
 **Steps**
 
-1. **Edit › Undo**, once.
+1. **Library › Plug-in Extras › Open Dive Lens…**. Read step 1.
+2. Choose **Entire catalog**, then **Next**. Read step 2, tick dives 101 and 102, then **Next**.
+3. Read step 3, then **Next**.
+4. Read step 4, then click **Apply to 5 photos**.
+5. Read the summary, then click **Back to dives**.
+6. Click the gear, set **Display › Language** to Français, then **Retour**.
+7. Click **Précédent** to reach step 1, and play steps 2 to 5 again, in French.
+8. Reset: set the language back to its base value, then make a [clean start](#clean-start).
 
 **Expected**
 
-- A1, A2, A3: Dive Lens fields, location and GPS empty.
+- On every screen, in both languages: nothing cut off or overlapping, no raw text key (such as `journey.opt.dive`), no English left on the French screens.
+- Everywhere: at the top, "Dive Lens" and the gear (tooltip "Settings" / « Réglages »); the strip "Photos › Dives › Clocks › Review & Apply › Summary" / « Photos › Plongées › Horloges › Vérifier et appliquer › Récapitulatif », with the current step highlighted; at the bottom, the status bar: "Lightroom connected", "Catalog: <name>", "Catalog size: 6 items", "Selected photos: none", "Dive log app: Subsurface", "Dives logged: 10" / « Lightroom connecté », « Catalogue : … », « Taille du catalogue : 6 éléments », « Photos sélectionnées : aucune », « Application de carnet : Subsurface », « Plongées enregistrées : 10 ».
+- Step 1: the title "Which photos to work on?" / « Sur quelles photos travailler ? »; two cards separated by "or" / « ou »: "Entire catalog" / « Tout le catalogue », and, greyed, "Lightroom selection" / « Les photos sélectionnées dans Lightroom » with "No photos selected" / « Aucune photo sélectionnée ». Once **Entire catalog** is chosen, the bar reads "Entire catalog" and "Next step: tick the dives" / « Tout le catalogue », « Étape suivante : cocher les plongées », next to "Next" / « Suivant ».
+- Step 2: the line "Photos: entire catalog · tick the dives, Dive Lens finds the photos taken during each one · Change" / « Photos : tout le catalogue · cochez les plongées, Dive Lens retrouve les photos prises pendant chacune · Modifier »; the dive list grouped by month, with its search, filters, sort and detail card. Before any tick, "Next" is greyed with "Check one or more dives" / « Cochez une ou plusieurs plongées ». With 101 and 102 ticked: "2 dives selected" and "From 14 Jun 2025 to 14 Jun 2025 · photos looked for in the entire catalog" / « 2 plongées sélectionnées », « Du 14 juin 2025 au 14 juin 2025 · photos cherchées dans tout le catalogue », then "Deselect all", "Back", "Next" / « Tout désélectionner », « Précédent », « Suivant ».
+- Step 3: the line "Photos: entire catalog, from 14 Jun 2025 to 14 Jun 2025 · 6 photos from 2 cameras · 2 dives ticked" / « Photos : tout le catalogue, du 14 juin 2025 au 14 juin 2025 · 6 photos de 2 appareils · 2 plongées cochées ».
+  - "Camera clocks" / « Horloge des appareils », with "Suggest for all" / « Suggérer pour tous ».
+  - Two cards: Test Camera A ("3 in the dives · 1 outside" / « 3 dans les plongées · 1 hors ») and Test Camera B ("2 in the dives · 0 outside"), each with "Suggest" / « Suggérer » and "Ignore" / « Ignorer ».
+  - "Include photos taken at the surface" / « Inclure les photos prises en surface », at 0 min.
+  - "Preview by dive" / « Aperçu par plongée »: 101 with 3 photos and 102 with 2, both "Depth · temp. · time" / « Profondeur · temp. · temps ».
+  - "Outside the dives · 1 photo" / « Hors plongée · 1 photo », with "1 Test Camera A".
+  - The bar: "5 photos in 2 dives · 1 outside the dives" / « 5 photos dans 2 plongées · 1 hors plongée ».
+- Step 4: the title "What Dive Lens writes in Lightroom" / « Ce que Dive Lens écrit dans Lightroom ».
+  - Under "Metadata" / « Métadonnées »: "Dive details" ticked, "5 photos · 5 with depth" / « Détails de la plongée », « 5 photos · 5 avec profondeur »; under it "Copy depth to GPS altitude" unticked, "No" / « Profondeur dans l'altitude GPS », « Non »; "Site details" ticked, "5 photos · location and GPS" / « Détails du site », « 5 photos · lieu et GPS », with "Each dive's site" chosen or "Other site, the same for all photos…" / « Site de chaque plongée », « Autre site, le même pour toutes les photos… », then "Location" and "GPS" / « Lieu », « GPS ».
+  - Under "Collections": "Create collections" ticked, its text ending "for example Dive Lens › 101 - Coral Garden.", "2 collections", and the link "Place in Settings" / « Créer les collections », « par exemple Dive Lens › 101 - Coral Garden. », « 2 collections », « Emplacement dans Réglages ».
+  - "Good to know before applying" / « À savoir avant d'appliquer »: "1 photo outside the dives gets nothing: on land, on the boat…" and "Units: m, °C" / « 1 photo hors plongée ne reçoit rien : à terre, sur le bateau… », « Unités : m, °C ».
+  - The bar: "5 photos · 2 collections", "Undone in one step in Lightroom, GPS and altitude included", "Back", "Apply to 5 photos" / « 5 photos · 2 collections », « Annulable en une fois dans Lightroom, GPS et altitude compris », « Précédent », « Appliquer à 5 photos ».
+- Step 5: "From 14 Jun 2025 to 14 Jun 2025 · 2 cameras · dive details, site details, collections" / « Du 14 juin 2025 au 14 juin 2025 · 2 appareils · détails de la plongée, détails du site, collections ».
+  - "Written in Lightroom" / « Écrit dans Lightroom », with "Photos tagged" 5, "With depth" 5 and "Collections" 2 / « Photos taguées », « Avec profondeur », « Collections ».
+  - Under "Dive Lens": "101 - Coral Garden", "3 photos · created" and "102 - Glacier Wall", "2 photos · created". The French run reads « complétée » instead.
+  - "1 photo outside the dives got nothing." / « 1 photo hors plongée n'a rien reçu. ».
+  - "To undo: Edit › Undo in Lightroom, in one step, GPS and altitude included." / « Pour tout défaire : Édition › Annuler dans Lightroom, en une seule fois, GPS et altitude compris. ».
+  - "Back to dives" / « Retour aux plongées ». A click on a step of the strip does nothing here.
 
-#### TAG-03 · Tag a photo again with another dive
+#### JRN-02 · Every screen of the selection path, in English and in French
 
-**Before:** A1, A2, A3 tagged with dive 101 (play TAG-01 again, since TAG-02 undid it). Select A1.
+**Before:** [clean start](#clean-start). Select A1, A2, A3 and X1.
 
 **Steps**
 
-1. **Library › Plug-in Extras › Tag Selection…**
-2. Choose dive 102.
-3. Click **Apply**.
+1. **Library › Plug-in Extras › Open Dive Lens…**. Read step 1.
+2. Choose the **Lightroom selection** card, then **Next**. Read step 2, click dive 101, then **Next**.
+3. Read step 3, then **Next**.
+4. Read step 4, then click **Apply to 4 photos**.
+5. Read the summary, then click **Done**.
+6. Click the gear, set **Display › Language** to Français, then **Retour**.
+7. Play steps 1 to 5 again, in French.
+8. Reset: set the language back to its base value, then make a [clean start](#clean-start).
 
 **Expected**
 
-- No refusal.
-- Dive Lens fields: dive 102, Glacier Wall.
-- GPS -64.125, -60.5.
-- Photo depth, photo temperature, elapsed time and clock offset empty.
+- As in JRN-01: nothing cut off or overlapping, no raw text key, no English on the French screens; the status bar reads "Selected photos: 4" / « Photos sélectionnées : 4 ».
+- Step 1: the card "Lightroom selection" / « Les 4 photos sélectionnées dans Lightroom » is lit, with "Test Camera A · Saturday 14 June 2025" / « Test Camera A · samedi 14 juin 2025 », "You choose one dive: all 4 photos are attached to it, whatever their time." / « Vous choisissez une plongée : les 4 photos y sont toutes rattachées, quelle que soit leur heure. » and four thumbnails. The "Entire catalog" card adds "The Lightroom selection is ignored." / « La sélection Lightroom est ignorée. ». Once the card is chosen, the bar reads "The 4 selected photos" and "Next step: choose their dive" / « Les 4 photos sélectionnées », « Étape suivante : choisir leur plongée ».
+- Step 2:
+  - The line "Photos: the 4 selected in Lightroom · Test Camera A · Saturday 14 June 2025 · Change" / « Photos : les 4 sélectionnées dans Lightroom · Test Camera A · samedi 14 juin 2025 · Modifier ».
+  - "Choose their dive: all 4 photos will be attached to it, whatever their time. Without a dive, you will only set a location, chosen at step 4." / « Choisissez leur plongée : les 4 photos y seront toutes rattachées, quelle que soit leur heure. Sans plongée, vous poserez seulement un lieu, choisi à l'étape 4. ».
+  - The counter "10 dives · only one to choose" / « 10 plongées · une seule à choisir ».
+  - The first row "No dive — location only", "chosen at step 4: boat, beach…" / « Aucune plongée — lieu seulement », « choisi à l'étape 4 : bateau, plage… ».
+  - Before a choice, "Next" is greyed with "Choose a dive" / « Choisissez une plongée ». With 101 chosen, the bar reads "101 Coral Garden" and "The 4 selected photos will be attached to it" / « Les 4 photos sélectionnées y seront rattachées ».
+- Step 3:
+  - The line "Photos: the 4 selected in Lightroom · 1 camera · dive 101 Coral Garden" / « Photos : les 4 sélectionnées dans Lightroom · 1 appareil · plongée 101 Coral Garden ».
+  - The note "The 4 photos are attached to 101 Coral Garden, whatever their time. The clock only gives them a depth: only those taken during the dive get one." / « Les 4 photos sont rattachées à 101 Coral Garden, quelle que soit leur heure. L'horloge sert seulement à leur donner une profondeur : seules celles prises pendant la plongée en reçoivent une. ».
+  - "Camera clocks" with one card, Test Camera A, "3 in the dive · 1 outside" / « 3 dans la plongée · 1 hors », "Suggest" and "Suggest for all"; no "Ignore", no "Include photos taken at the surface".
+  - "Preview by dive": 101 with 4 photos.
+  - "Outside the dive's times · 1 photo" / « Hors de l'horaire de la plongée · 1 photo »: "Taken at 12:00, 108 minutes after getting out of the water. Attached to the dive anyway: it gets its data and its location, without depth." / « Prise à 12:00, 108 minutes après la sortie de l'eau. Rattachée quand même à la plongée : elle reçoit ses infos et son lieu, sans profondeur. ».
+  - The bar: "4 photos attached to 101 Coral Garden · 3 with depth" and "Nothing else to set." / « 4 photos rattachées à 101 Coral Garden · 3 avec profondeur », « Rien d'autre à régler. ».
+- Step 4: the same title, groups and options as in JRN-01, with these differences.
+  - "Dive details": "4 photos · 3 with depth".
+  - The site: "Dive's site: Coral Garden" chosen, or "Other site…" / « Site de la plongée : Coral Garden », « Autre site… ». "Site details": "4 photos · location and GPS".
+  - "Create collections": "The dive's "number - site" collection: Dive Lens › 101 - Coral Garden." / « La collection « numéro - site » de la plongée : Dive Lens › 101 - Coral Garden. », and "1 collection".
+  - "Good to know before applying": "1 photo taken after getting out of the water (12:00): dive data and location, without depth." / « 1 photo prise après la sortie de l'eau (12:00) : infos de la plongée et lieu, sans profondeur. », and "Units: m, °C".
+  - The bar: "4 photos · 1 collection" and "Apply to 4 photos".
+- Step 5:
+  - "The 4 selected photos · dive 101 Coral Garden · dive details, site details, collection" / « Les 4 photos sélectionnées · plongée 101 Coral Garden · détails de la plongée, détails du site, collection ».
+  - "Photos tagged" 4, "With depth" 3, "Collection" 1.
+  - Under "Dive Lens": "101 - Coral Garden", "4 photos · created" (the French run: « complétée »).
+  - "1 photo without depth: taken after getting out of the water." / « 1 photo sans profondeur : prise après la sortie de l'eau. ».
+  - The Undo reminder, then "Done" / « Terminer », which leads to step 1.
 
-#### TAG-04 · Tagging again with the same dive changes nothing
+#### JRN-03 · One menu item, enabled without a selection
 
-**Before:** after TAG-03. Select A1.
+This test writes nothing.
+
+**Before:** Dive Lens app closed.
 
 **Steps**
 
-1. **Library › Plug-in Extras › Tag Selection…**
-2. Choose dive 102 again.
-3. Click **Apply**.
+1. In Lightroom, **Edit › Select None**, then open **Library › Plug-in Extras**.
+2. Choose **Open Dive Lens…**.
+3. In the app, go to step 2 (**Entire catalog**, **Next**). Then, in Lightroom, choose **Library › Plug-in Extras › Open Dive Lens…** again.
+4. Choose **Help › Plug-in Extras › Dive Lens Settings…**.
+5. **File › Plug-in Manager…**, choose Dive Lens: click **Open Dive Lens**, then **Open Settings**.
 
 **Expected**
 
-- No change.
+- After step 1: one Dive Lens item, **Open Dive Lens…**, enabled although nothing is selected. No **Create Collections…** or **Tag Selection…**.
+- After step 2: the app opens at step 1; the selection card is greyed.
+- After step 3: the app's window comes to the front at step 1, with **Entire catalog** still chosen.
+- After step 4: the app shows Settings.
+- After step 5: **Open Dive Lens** shows step 1; **Open Settings** shows Settings.
+- In a French Lightroom, the two items read « Ouvrir Dive Lens… » and « Réglages de Dive Lens… » (optional).
 
-#### TAG-05 · No photo selected: nothing is written
+#### JRN-04 · Step 1 follows the Lightroom selection live
+
+This test writes nothing.
 
 **Before:** any photos.
 
 **Steps**
 
-1. Select one photo.
-2. **Library › Plug-in Extras › Tag Selection…** (the menu item is disabled when no photo is selected).
-3. In Lightroom, deselect everything: **Edit › Select None**.
-4. Note what the app shows.
+1. In Lightroom, **Edit › Select None**. **Library › Plug-in Extras › Open Dive Lens…**.
+2. In Lightroom, select A1, A2, A3.
+3. Select all six test photos.
+4. In the app, choose the **Lightroom selection** card. Then, in Lightroom, **Edit › Select None**.
 
 **Expected**
 
-- Nothing is written.
+- After step 1: the selection card is greyed, with "Lightroom selection", "No photos selected" and "Select photos there to attach them all to a dive of your choice." The **Entire catalog** card does not say "The Lightroom selection is ignored." The status bar reads "Selected photos: none".
+- After step 2: the selection card lights up: "Lightroom selection", "Test Camera A · Saturday 14 June 2025", "You choose one dive: all 3 photos are attached to it, whatever their time.", three thumbnails. The **Entire catalog** card adds "The Lightroom selection is ignored." The status bar reads "Selected photos: 3".
+- After step 3: "Test Camera A, Test Camera B · Saturday 14 June 2025" and six thumbnails.
+- After step 4: the card is greyed again; **Next** is greyed, and the bar shows "Select photos in Lightroom".
 
-#### TAG-06 · The selection changes before Apply
+#### JRN-05 · The catalog size matches All Photographs
 
-**Before:** any photos. Select A1.
+**Before:** the six test photos in the catalog.
 
 **Steps**
 
-1. **Library › Plug-in Extras › Tag Selection…**
-2. In Lightroom, select B1 instead.
-3. Click **Apply** in the app.
+1. **Library › Plug-in Extras › Open Dive Lens…**. Compare the status bar with the count Lightroom shows next to **Catalog › All Photographs**.
+2. Choose **Entire catalog**, then **Next**.
+3. In Lightroom, select X1 and choose **Photo › Remove Photo…**, then **Remove** (from the catalog only, not from the disk).
+4. In the app, click **Back** to reach step 1.
+5. Put X1 back: **Edit › Undo** in Lightroom; if Lightroom cannot undo it, import X1 again from the copied folder with **Add**.
+6. In the app, **Next**, then **Back**.
 
 **Expected**
 
-- B1 never gets A1's values: either a refusal and nothing written, or the app switches to B1 and writes B1's values.
+- After step 1: "Catalog size: 6 items", the same number as All Photographs.
+- After step 4: "Catalog size: 5 items", the same number as All Photographs.
+- After step 6: "Catalog size: 6 items" again.
 
-#### TAG-07 · The dive that covers the selection is marked
+#### JRN-06 · "Open Dive Lens…" during the journey goes back to step 1
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to step 3](#shortcuts-used-in-the-steps).
+2. **Library › Plug-in Extras › Open Dive Lens…**.
+3. In the app, **Next**.
+4. **Next**, **Next**, then **Apply to 5 photos**.
+5. On the summary, **Library › Plug-in Extras › Open Dive Lens…**, then **Next** in the app.
+6. In Lightroom, select A1. [Selection path with dive 101](#shortcuts-used-in-the-steps), then **Apply to 1 photo**.
+7. On the summary, **Library › Plug-in Extras › Open Dive Lens…**, then **Next** in the app.
+8. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 2: step 1, **Entire catalog** still chosen.
+- After step 3: step 2, dives 101 and 102 still ticked.
+- After step 5: step 2 with no dive ticked.
+- After step 7: step 2 with no dive chosen.
+
+#### JRN-07 · Settings, then Back, keep the step and the choices
 
 This test writes nothing.
 
-**Before:** any photos. Select A1, A2, A3.
+**Before:** any photos.
 
 **Steps**
 
-1. **Library › Plug-in Extras › Tag Selection…**, without choosing a dive.
-2. With the app still open, select X1 alone in Lightroom.
-3. Then select A1 and B1 together.
+1. [Catalog path to step 3](#shortcuts-used-in-the-steps). On the Test Camera A card, type 0:05 in the offset field.
+2. Click the gear.
+3. Click **Back**.
+4. **Next**. At step 4, untick **Site details**. Click the link **Place in Settings**, then **Back**.
+5. In Lightroom, **Help › Plug-in Extras › Dive Lens Settings…**. Set **Display › Depth** to Feet and **Language** to Français, then click **Retour**.
+6. Reset: click the gear, set **Depth** back to Metres and the language back to its base value, then **Back**. Go **Back** to step 3, set Test Camera A to 0:00, and leave without applying.
 
 **Expected**
 
-- After step 1: dive 101 marked "Covers the selection" and shown in detail.
-- After step 2: no dive marked.
-- After step 3: no dive marked.
+- After step 2: Settings fill the window, with a **Back** button; the status bar stays.
+- After step 3: step 3, dives 101 and 102 ticked, Test Camera A at 0:05.
+- After step 4: step 4 again, **Site details** still unticked.
+- After step 5: step 4 in French, **Détails du site** still unticked, and « Unités : ft, °C ».
 
-#### TAG-08 · Search and rating filters
+#### JRN-08 · Another dive log in Settings starts the journey again
+
+This test writes nothing.
+
+**Before:** copy `core/fixtures/subsurface/fictional.xml` into the test folder, next to the test catalog.
+
+**Steps**
+
+1. [Catalog path to step 3](#shortcuts-used-in-the-steps).
+2. Click the gear. **Dive log**: **Choose a file…** and choose that copy.
+3. In Lightroom, click another photo.
+4. In the app, click **Back**.
+5. Reset: in Settings, **Choose a file…** and choose `core/fixtures/subsurface/fictional.xml` of the repository, then **Back**.
+
+**Expected**
+
+- After step 4: step 1, no card chosen. Going on, no dive is ticked at step 2. No orange notice. The status bar reads "Dives logged: 10".
+
+#### JRN-09 · Nothing leaves step 4 during a write
+
+The six test photos are written too fast to click during the write: this test uses a second, throwaway catalog with many photos.
+
+**Before**
+
+1. **File › New Catalog…**, in another temporary folder. Import the test folder with **Copy**.
+2. Select all the photos and choose **Photo › Create Virtual Copy**. Repeat seven times, each time with every photo selected: 768 photos.
+
+**Steps**
+
+1. Select all the photos. [Selection path with dive 101](#shortcuts-used-in-the-steps), then click **Apply to 768 photos**.
+2. While the app shows "Writing in Lightroom…" and its progress bar:
+   1. choose **Library › Plug-in Extras › Open Dive Lens…**;
+   2. choose **Help › Plug-in Extras › Dive Lens Settings…**;
+   3. click the gear;
+   4. click a step of the strip.
+3. Go back to the test catalog: **File › Open Recent**.
+
+**Expected**
+
+- During the write: nothing leaves step 4, and the gear is greyed.
+- At the end: the summary of the write.
+- If the update notice shows (installed copies only), its **See** does nothing during the write either.
+- If the write ends before you can click, note **not played**.
+
+#### JRN-10 · A plug-in of another version asks to restart Lightroom
+
+**Before:** this test uses installed copies, not the development build.
+
+1. Remove the development plug-in in the Plug-in Manager.
+2. Install Dive Lens 2.1.1 with its installer, then restart Lightroom.
+3. Have a trial installer of the version under test ready (manual Release workflow run, see [Prepare Lightroom: Windows](#prepare-lightroom-windows)).
+
+**Steps**
+
+1. Leave Lightroom open. Install the version under test with the trial installer.
+2. Open the new app from the plug-in folder: `~/Library/Application Support/Adobe/Lightroom/Modules/DiveLens.lrplugin`, right-click › **Show Package Contents**, then open **Dive Lens.app**.
+3. In Lightroom, open **Library › Plug-in Extras** and choose **Create Collections…**.
+4. Quit Lightroom and start it again.
+5. Reset: put the development build back ([Prepare Lightroom: macOS](#prepare-lightroom-macos)).
+
+**Expected**
+
+- After step 2: the status bar reads "Restart Lightroom", and the notice "Restart Lightroom to finish updating Dive Lens." shows. Nothing can be written.
+- After step 3:
+  - Lightroom still lists **Create Collections…** and **Tag Selection…**: it reads its menus only when it starts.
+  - Write down what choosing **Create Collections…** does: the app comes to the front, or Lightroom shows an error.
+- After step 4: one item, **Open Dive Lens…**; the status bar reads "Lightroom connected".
+
+### Catalog path
+
+#### CAT-01 · Create collections for two dives
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to step 4](#shortcuts-used-in-the-steps).
+2. Click **Apply to 5 photos**.
+
+**Expected**
+
+- A "Dive Lens" set with one collection per dive: "101 - Coral Garden" (A1, A2, A3) and "102 - Glacier Wall" (B1, B2).
+- Dive Lens fields:
+  - A1, A2, A3: dive 101, `MaxDepth` 18.4 m;
+  - B1, B2: dive 102;
+  - on the five photos: Clock Offset +00:00, Source "Subsurface".
+- Photo depth: A1 18.0 m, A2 15.0 m, A3 10.0 m, B1 12.0 m.
+- Location and GPS:
+  - A1, A2, A3: country "Atlantis", city "North Reef", location "Coral Garden", GPS 12°30'N 45°15'W;
+  - B1, B2: location "Glacier Wall", GPS -64.125, -60.5.
+- GPS altitude empty.
+- X1 untouched: no field, in no collection.
+
+#### CAT-02 · Running again duplicates nothing
+
+**Before:** after CAT-01.
+
+**Steps**
+
+1. [Catalog path to step 4](#shortcuts-used-in-the-steps), then **Apply to 5 photos**.
+
+**Expected**
+
+- Nothing duplicated: one "Dive Lens" set, each collection holds its photos once.
+- The summary lists both collections "added to".
+
+#### CAT-03 · Country and period filters
 
 This test writes nothing.
 
@@ -222,69 +431,7 @@ This test writes nothing.
 
 **Steps**
 
-1. **Library › Plug-in Extras › Tag Selection…**
-2. Type "Glacier" in the search field.
-3. Click **Clear filters**.
-4. Set **Rating** to "5★ and more".
-5. Click **Clear filters**.
-
-**Expected**
-
-- After step 2: dive 102 only.
-- After step 4: dive 107 only.
-- After steps 3 and 5: every dive back.
-
-### Create Collections
-
-#### COL-01 · Create collections for two dives
-
-**Before:** [clean photos](#clean-photos). Select A1, A2, A3, B1, B2.
-
-**Steps**
-
-1. **Library › Plug-in Extras › Create Collections…**
-2. Tick dives 101 and 102, then **Next**.
-3. Click **Apply**.
-
-**Expected**
-
-- A "Dive Lens" set with one collection per dive (101, 102).
-- Each photo in its dive's collection, Dive Lens fields filled.
-
-#### COL-02 · One Undo takes the collections back
-
-**Before:** after COL-01.
-
-**Steps**
-
-1. **Edit › Undo**, once.
-
-**Expected**
-
-- Everything COL-01 wrote is undone.
-- A "Dive Lens" set created by COL-01 needs a second Undo.
-
-#### COL-03 · Running again duplicates nothing
-
-**Before:** the state after COL-01 (play COL-01 again, since COL-02 undid it).
-
-**Steps**
-
-1. Run **Create Collections…** again, as in COL-01.
-
-**Expected**
-
-- Nothing duplicated.
-
-#### COL-04 · Country and period filters
-
-This test writes nothing.
-
-**Before:** any selection.
-
-**Steps**
-
-1. **Library › Plug-in Extras › Create Collections…**, and stay on the first step.
+1. **Library › Plug-in Extras › Open Dive Lens…**, choose **Entire catalog**, **Next**, and stay on step 2.
 2. Set **Country** to Lemuria.
 3. Click **Clear filters**.
 4. Set **Period** from 2025-06-17 to 2025-06-17.
@@ -296,6 +443,359 @@ This test writes nothing.
 - After step 4: dives 106 and 107 only.
 - After steps 3 and 5: every dive back.
 
+#### CAT-04 · A dive without photos, handled separately
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. **Library › Plug-in Extras › Open Dive Lens…**, choose **Entire catalog**, **Next**. Tick dives 101 and 103, then **Next**.
+2. **Next**, then **Apply to 3 photos**.
+3. On the summary, click **Handle dive 103 Shark Point / Bay separately**.
+4. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- Step 3:
+  - the preview row of dive 103 is orange, with "No photo — clock changed?";
+  - the bar adds "Dive 103 Shark Point / Bay: no photo — clock changed?".
+- Step 4:
+  - "Good to know before applying" starts with "Dive 103 Shark Point / Bay: no photo, no collection.", in orange;
+  - **Create collections** reads "1 collection".
+- Summary:
+  - only "101 - Coral Garden" is created;
+  - the warning "Dive 103 Shark Point / Bay: no photo, no collection created. If the clock changed that day, handle it separately with its own offset.".
+- After step 3: step 3, with only dive 103 ticked and the photos looked for again: "No photo in the catalog over this period."
+
+#### CAT-05 · Dive details unticked
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to step 4](#shortcuts-used-in-the-steps).
+2. Untick **Dive details**.
+3. Click **Apply to 5 photos**.
+4. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 2: **Copy depth to GPS altitude** greyed; **Dive details** reads "Nothing"; the button still reads "Apply to 5 photos".
+- After step 3:
+  - No Dive Lens field on the five photos: no dive number, Source, Clock Offset or photo depth.
+  - Location and GPS of each photo's dive, as in CAT-01.
+  - The two collections, as in CAT-01.
+  - The summary reads "With depth" 0.
+
+#### CAT-06 · Site details unticked
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to step 4](#shortcuts-used-in-the-steps).
+2. Untick **Site details**.
+3. Click **Apply to 5 photos**.
+4. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 2: **Location** and **GPS** unticked and greyed, with the choice of the site; **Site details** reads "Nothing".
+- After step 3: Dive Lens fields and collections as in CAT-01; no country, city, location or GPS on any photo.
+
+#### CAT-07 · Create collections unticked
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to step 4](#shortcuts-used-in-the-steps).
+2. Untick **Create collections**.
+3. Click **Apply to 5 photos**.
+4. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 2: **Create collections** reads "None"; the bar reads "5 photos · no collection".
+- After step 3:
+  - Dive Lens fields, location and GPS as in CAT-01;
+  - no "Dive Lens" set and no collection;
+  - the summary reads "Collections" 0 and lists no collection.
+
+#### CAT-08 · GPS alone, taken back by one Undo
+
+Required on Windows.
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to step 4](#shortcuts-used-in-the-steps).
+2. Untick **Dive details**, **Location** and **Create collections**: only **GPS** stays ticked.
+3. Click **Apply to 5 photos**.
+4. Open Lightroom's **Edit** menu, then choose **Undo Dive Lens**, once.
+5. Open the **Edit** menu again.
+
+**Expected**
+
+- After step 2: **Site details** reads "5 photos · GPS"; the bar reads "5 photos · no collection".
+- After step 3:
+  - only the GPS: A1, A2, A3 at 12°30'N 45°15'W, B1, B2 at -64.125, -60.5;
+  - no Dive Lens field, no country, city or location, no collection.
+- After step 4: no GPS left on any of the five photos.
+- After step 5: the next Undo item is the one from before Apply (your clean start), not Dive Lens.
+- If the GPS stays after one Undo, or a second **Undo Dive Lens** is offered, write it down.
+
+#### CAT-09 · Another site for every photo
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to step 4](#shortcuts-used-in-the-steps).
+2. Choose **Other site, the same for all photos…**.
+3. Choose the country Atlantide, the location Île Verte and the site Récif d'Émeraude.
+4. Type 95 as the **Latitude**.
+5. Type -20.6 as the **Latitude**.
+6. Click **Apply to 5 photos**.
+7. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 2: **Apply** greyed, with "Choose a site".
+- After step 3: the site's GPS in the fields, -20.5 and 57.25; **Apply** enabled.
+- After step 4: "Latitude between -90 and 90, longitude between -180 and 180, or both empty." and **Apply** greyed.
+- After step 6:
+  - On the five photos: country "Atlantide", city "Île Verte", location "Récif d'Émeraude", GPS 20°36'S 57°15'E.
+  - Dive Lens fields of each photo's own dive, as in CAT-01.
+  - The collections keep their names, "101 - Coral Garden" and "102 - Glacier Wall".
+
+#### CAT-10 · Collections alone
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to step 4](#shortcuts-used-in-the-steps). Untick **Dive details** and **Site details**.
+2. Click **Apply to 5 photos**.
+3. Play steps 1 and 2 again.
+4. Choose **Edit › Undo Dive Lens**, once.
+5. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 1: the bar reads "2 collections · nothing is written on the photos"; the button reads "Apply to 5 photos".
+- After step 2:
+  - a "Dive Lens" set with "101 - Coral Garden" (A1, A2, A3) and "102 - Glacier Wall" (B1, B2);
+  - no field, location or GPS on any photo;
+  - the summary reads "Photos tagged" 5, "With depth" 0, "Collections" 2, both "created".
+- After step 3: the summary lists both collections "added to"; nothing changes in Lightroom.
+- After step 4:
+  - nothing changes: both collections still hold their photos (this Undo takes back the second run only, which added nothing);
+  - write down what the Edit menu showed.
+
+#### CAT-11 · A surface photo goes to the closer dive
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to step 3](#shortcuts-used-in-the-steps).
+2. Under **Include photos taken at the surface**, click **+** until it reads 120 min.
+3. **Next**, then **Apply to 6 photos**.
+4. On the summary, **Back to dives**. Tick dives 101 and 102, then **Next**.
+5. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 2:
+  - the block "Outside the dives" goes away;
+  - the preview shows 4 photos for dive 101 and 2 for dive 102;
+  - the Test Camera A card reads "4 in the dives · 0 outside".
+- After step 3: X1 is in "101 - Coral Garden", not in "102 - Glacier Wall". It has:
+  - dive 101's fields, location and GPS;
+  - Clock Offset +00:00;
+  - no photo depth, temperature or elapsed time.
+- After step 4: the margin is back to 0 min.
+
+### Selection path
+
+#### SEL-01 · Tag three photos with one dive
+
+**Before:** [clean start](#clean-start). Select A1, A2, A3.
+
+**Steps**
+
+1. [Selection path with dive 101](#shortcuts-used-in-the-steps).
+2. Click **Apply to 3 photos**.
+
+**Expected**
+
+- Dive Lens fields: dive 101, `MaxDepth` 18.4 m.
+- Photo depth: A1 18.0 m, A2 15.0 m, A3 10.0 m.
+- Location: country "Atlantis", city "North Reef", location "Coral Garden".
+- GPS 12°30'N 45°15'W.
+- GPS altitude empty.
+- A "Dive Lens" set with "101 - Coral Garden", holding A1, A2, A3; the summary lists it "created".
+
+#### SEL-02 · The dive's collection is completed, without duplicates
+
+**Before:** after SEL-01. Select A1, A2, A3 and X1.
+
+**Steps**
+
+1. [Selection path with dive 101](#shortcuts-used-in-the-steps). On the way, read step 3.
+2. Click **Apply to 4 photos**.
+
+**Expected**
+
+- Step 3:
+  - "Outside the dive's times · 1 photo";
+  - "Taken at 12:00, 108 minutes after getting out of the water. Attached to the dive anyway: it gets its data and its location, without depth.".
+- Summary:
+  - "101 - Coral Garden", "4 photos · added to";
+  - "1 photo without depth: taken after getting out of the water.".
+- "101 - Coral Garden" holds A1, A2, A3 and X1, each once.
+- X1:
+  - dive 101's fields, location and GPS;
+  - no photo depth, temperature, elapsed time or clock offset.
+- A1, A2, A3 keep the values of SEL-01.
+
+#### SEL-03 · Tag a photo again with another dive
+
+**Before:** after SEL-02. Select A1.
+
+**Steps**
+
+1. [Selection path with dive 102](#shortcuts-used-in-the-steps).
+2. Click **Apply to 1 photo**.
+
+**Expected**
+
+- No refusal.
+- Dive Lens fields: dive 102, Glacier Wall.
+- City "Frostville"; GPS -64.125, -60.5.
+- Photo depth, photo temperature, elapsed time and clock offset empty.
+- A1 is in a new "102 - Glacier Wall" and still in "101 - Coral Garden".
+
+#### SEL-04 · Tagging again with the same dive changes nothing
+
+**Before:** after SEL-03. Select A1.
+
+**Steps**
+
+1. [Selection path with dive 102](#shortcuts-used-in-the-steps).
+2. Click **Apply to 1 photo**.
+
+**Expected**
+
+- No change on A1.
+- The summary lists "102 - Glacier Wall", "1 photo · added to"; the collection holds A1 once.
+
+#### SEL-05 · The selection emptied: nothing is written
+
+This test writes nothing.
+
+**Before:** any photos. Select A1.
+
+**Steps**
+
+1. [Selection path with dive 101](#shortcuts-used-in-the-steps).
+2. In Lightroom, deselect everything: **Edit › Select None**.
+3. In the app, click **Photos** in the strip.
+
+**Expected**
+
+- After step 2:
+  - the app stays at step 4;
+  - **Apply** is greyed, with "Select photos in Lightroom";
+  - the status bar reads "Selected photos: none".
+- After step 3: the selection card is greyed, "No photos selected", and **Next** is greyed.
+- Nothing is written.
+
+#### SEL-06 · The selection changes before Apply
+
+**Before:** any photos. Select A1.
+
+**Steps**
+
+1. [Selection path with dive 101](#shortcuts-used-in-the-steps).
+2. In Lightroom, select B1 instead.
+3. Click **Apply** in the app.
+4. Reset: if B1 was written, [clean](#clean-photos) it.
+
+**Expected**
+
+- B1 never gets A1's values. Either:
+  - a refusal, "The selection changed in Lightroom. Nothing was written: check the per-photo data, then apply again.", and nothing written;
+  - or the app follows B1 and writes B1's values: dive 101, without photo depth (B1 is taken after the dive).
+
+#### SEL-07 · The dive that covers the selection is marked
+
+This test writes nothing.
+
+**Before:** any photos. Select A1, A2, A3.
+
+**Steps**
+
+1. **Library › Plug-in Extras › Open Dive Lens…**, choose the **Lightroom selection** card, **Next**, without choosing a dive.
+2. With the app still open, select X1 alone in Lightroom.
+3. Then select A1 and B1 together.
+
+**Expected**
+
+- After step 1:
+  - dive 101 marked "Covers the selection" and shown in the detail card;
+  - when Test Camera A has a remembered offset, under the row: "Covers the selection: 3 of the 3 photos fall in this dive, with the remembered offset of the Test Camera A (0:00).".
+- After step 2: no dive marked.
+- After step 3: no dive marked.
+
+#### SEL-08 · Search and rating filters
+
+This test writes nothing.
+
+**Before:** any selection of at least one photo.
+
+**Steps**
+
+1. **Library › Plug-in Extras › Open Dive Lens…**, choose the **Lightroom selection** card, **Next**.
+2. Type "Glacier" in the search field.
+3. Click **Clear filters**.
+4. Set **Rating** to "5★ and more".
+5. Click **Clear filters**.
+
+**Expected**
+
+- After step 2: dive 102 only, under the row "No dive — location only".
+- After step 4: dive 107 only.
+- After steps 3 and 5: every dive back.
+
+#### SEL-09 · No dive — location only
+
+**Before:** [clean start](#clean-start). Select X1.
+
+**Steps**
+
+1. **Library › Plug-in Extras › Open Dive Lens…**, choose the **Lightroom selection** card, **Next**.
+2. Click **No dive — location only**, then **Next**.
+3. Click **Back**, then **Next** again.
+4. Choose the country Atlantide, the location Île Verte and the site Récif d'Émeraude.
+5. Click **Apply to 1 photo**, then **Done** on the summary.
+
+**Expected**
+
+- After step 2:
+  - step 4, with **Clocks** greyed in the strip;
+  - **Dive details** and **Create collections** greyed and unticked;
+  - "Dive's site: no dive chosen" greyed, **Other site…** chosen;
+  - **Apply** greyed, with "Choose a site".
+- After step 3: **Back** leads to step 2, and **Next** to step 4.
+- After step 5:
+  - X1: country "Atlantide", city "Île Verte", location "Récif d'Émeraude", GPS 20°30'S 57°15'E;
+  - no Dive Lens field (no dive number, no Source) and no collection;
+  - the summary reads "The selected photo · site details", "Photos tagged" 1, "With depth" 0, "Collections" 0;
+  - **Done** leads to step 1.
+
 ### Camera clock offset
 
 Play these two tests one after the other: CLK-02 ends by setting Test Camera B back to 0:00, which the other tests need.
@@ -306,10 +806,10 @@ Play these two tests one after the other: CLK-02 ends by setting Test Camera B b
 
 **Steps**
 
-1. **Library › Plug-in Extras › Tag Selection…**
-2. Choose dive **101** (not the one marked "Covers the selection").
+1. **Library › Plug-in Extras › Open Dive Lens…**, choose the **Lightroom selection** card, **Next**.
+2. Click dive **101** (not the one marked "Covers the selection"), then **Next**.
 3. On the Test Camera B card, click **Suggest**.
-4. Click **Apply**.
+4. **Next**, then **Apply to 2 photos**.
 
 **Expected**
 
@@ -317,20 +817,20 @@ Play these two tests one after the other: CLK-02 ends by setting Test Camera B b
 - B1 and B2: dive 101, Clock Offset -04:30.
 - Photo depth: B1 18.0 m, B2 15.0 m.
 
-#### CLK-02 · The offset is remembered
+#### CLK-02 · The offset is remembered, on both paths
 
 **Before:** after CLK-01. Select B1, B2.
 
 **Steps**
 
-1. **Library › Plug-in Extras › Tag Selection…**, look, and close without applying.
-2. **Library › Plug-in Extras › Create Collections…**, tick dive 101, then **Next** to reach the camera cards. Look, and close without applying.
-3. Reset: **Tag Selection…** on B1, B2, choose dive 102, set Test Camera B to 0:00, **Apply**.
+1. **Library › Plug-in Extras › Open Dive Lens…**, choose the **Lightroom selection** card, **Next**: look at step 2. Click dive 101, **Next**: look at the Test Camera B card.
+2. **Library › Plug-in Extras › Open Dive Lens…**, choose **Entire catalog**, **Next**, tick dive 101, **Next**: look at the Test Camera B card. Leave without applying.
+3. Reset: [selection path](#shortcuts-used-in-the-steps) on B1, B2 with dive 102, but at step 3 set Test Camera B to 0:00 before **Next**; then **Apply to 2 photos**.
 
 **Expected**
 
-- After step 1: dive 101 marked "Covers the selection"; Test Camera B card at −4:30 with "remembered offset".
-- After step 2: Test Camera B card at −4:30 with "remembered offset".
+- After step 1: dive 101 marked "Covers the selection"; the Test Camera B card at −4:30 with "remembered offset".
+- After step 2: the Test Camera B card at −4:30 with "remembered offset".
 
 ### Units and altitude
 
@@ -340,17 +840,37 @@ Play these two tests one after the other: CLK-02 ends by setting Test Camera B b
 
 **Steps**
 
-1. In Dive Lens settings, set **Display › Depth** to Feet and **Writing on photos › Copy depth to GPS altitude** to On.
-2. **Library › Plug-in Extras › Tag Selection…**, choose dive 101, **Apply**.
-3. Reset: set Depth back to Metres and the altitude copy back to Off.
+1. Click the gear, set **Display › Depth** to Feet, then **Back**.
+2. [Selection path with dive 101](#shortcuts-used-in-the-steps). At step 4, tick **Copy depth to GPS altitude**, then **Apply to 3 photos**.
+3. Reset: set Depth back to Metres.
 
 **Expected**
 
+- At step 4: "Units: ft, °C"; **Copy depth to GPS altitude** reads "3 photos".
 - Photo depth: A1 about 59 ft.
 - Max depth about 60 ft.
 - GPS altitude about -18 m (Lightroom may show it in feet).
 
-#### UNIT-02 · Depths in the dive list, in feet and in metres
+#### UNIT-02 · The altitude option is unticked on every run
+
+**Before:** after UNIT-01. Select A1, A2, A3.
+
+**Steps**
+
+1. [Selection path with dive 101](#shortcuts-used-in-the-steps). Look at **Copy depth to GPS altitude**.
+2. Untick **Dive details**, then tick it again.
+3. Click **Apply to 3 photos** without ticking the altitude.
+4. Reset: [clean photos](#clean-photos).
+
+**Expected**
+
+- After step 1: **Copy depth to GPS altitude** unticked, reading "No".
+- During step 2: unticking **Dive details** greys it.
+- After step 3:
+  - the GPS altitude UNIT-01 copied stays, about -18 m on A1;
+  - photo depth A1 18.0 m, in metres again.
+
+#### UNIT-03 · Depths in the dive list, in feet and in metres
 
 This test writes nothing.
 
@@ -358,8 +878,8 @@ This test writes nothing.
 
 **Steps**
 
-1. In Dive Lens settings, set **Display › Depth** to Feet.
-2. Open **Tag Selection…** and read the depths in the dive list.
+1. Click the gear, set **Display › Depth** to Feet, then **Back**.
+2. **Library › Plug-in Extras › Open Dive Lens…**, choose **Entire catalog**, **Next**, and read the depths in the dive list.
 3. Set Depth back to Metres and read them again.
 
 **Expected**
@@ -367,7 +887,7 @@ This test writes nothing.
 - After step 2: dive 101 60 ft, dive 108 102 ft.
 - After step 3: dive 101 18.4 m, dive 108 31.2 m.
 
-### Settings screens
+### Settings
 
 #### SET-01 · Dive log not found
 
@@ -380,13 +900,13 @@ This test writes nothing.
 1. In Dive Lens settings, **Dive log**: **Choose a file…** and choose that copy.
 2. Quit Dive Lens.
 3. Rename the copy.
-4. Open **Tag Selection…**.
+4. **Library › Plug-in Extras › Open Dive Lens…**.
 5. On the screen shown, **Choose a file…** and choose `core/fixtures/subsurface/fictional.xml` of the repository.
 
 **Expected**
 
 - After step 4: a screen "Subsurface dive log not found", with the copy's former path, the buttons **Choose a file…** and **Choose a folder…**, and no **Try again**.
-- After step 5: the dive list.
+- After step 5: step 1 of the journey.
 
 #### SET-02 · Check for updates
 
@@ -405,6 +925,132 @@ This test writes nothing.
 
 A development build never looks for updates by itself (only an installed copy does, at most once a day): on a development build, no update notice on opening proves nothing. SET-02 asks GitHub on any build.
 
+#### SET-03 · No altitude line in Settings; an older settings file still imports
+
+This test writes nothing.
+
+**Before**
+
+1. With the base settings, in Dive Lens settings: **Export or import › Export…**.
+2. In a text editor, add `"depthToAltitude": true,` right after the first `{` of that file, as Dive Lens 2.1.1 and earlier wrote it, and save.
+
+**Steps**
+
+1. In Dive Lens settings, look at the sections.
+2. **Export or import › Import…**, choose that file, then **Replace**.
+3. **Export…** again, to a new file, and open it in the text editor.
+4. **Library › Plug-in Extras › Open Dive Lens…**, [catalog path to step 4](#shortcuts-used-in-the-steps), and leave without applying.
+
+**Expected**
+
+- After step 1: the sections Dive log, Display, Collections, Settings backup, Updates, Diagnostics, About, in that order. No "Writing on photos", no "Copy depth to GPS altitude".
+- After step 2: "Settings imported."; every setting as before.
+- After step 3: the new file has no `depthToAltitude`.
+- After step 4: **Copy depth to GPS altitude** unticked.
+
+#### SET-04 · The collection set chosen in Settings is missing
+
+This test writes nothing.
+
+**Before:** in Lightroom's Collections panel, create a collection set named "Trips" at the catalog root (**+** › **Create Collection Set…**).
+
+**Steps**
+
+1. In Dive Lens settings, **Collections › Place in**: choose Trips, then **Back**.
+2. [Catalog path to step 4](#shortcuts-used-in-the-steps).
+3. Leave the app at step 4. In Lightroom, delete the "Trips" set.
+4. In the app: **Back**, **Back**, **Next**, **Next** (from step 4 to step 2, then on to step 4).
+5. Untick **Create collections**.
+6. Tick it again, then click **Open Settings**.
+7. Reset: **Place in**: Catalog root, then **Back**; leave without applying.
+
+**Expected**
+
+- After step 2: the text of **Create collections** reads "…for example Trips › Dive Lens › 101 - Coral Garden.".
+- After step 4:
+  - "The collection set chosen in Settings (Trips) is no longer in the catalog. Choose another place in Settings.";
+  - **Apply** greyed;
+  - an **Open Settings** button.
+- After step 5: the message goes; **Apply** is enabled.
+- After step 6:
+  - Settings show "Trips (not found)";
+  - with "This collection set is no longer in the catalog: choose another.".
+- After step 7: step 4, **Apply** enabled.
+
+### Undo
+
+#### UNDO-01 · Catalog path: one Undo takes everything back, GPS and altitude included
+
+Required on Windows.
+
+**Before:** [clean start](#clean-start): no "Dive Lens" set.
+
+**Steps**
+
+1. [Catalog path to step 4](#shortcuts-used-in-the-steps). Tick **Copy depth to GPS altitude**, then **Apply to 5 photos**.
+2. Look at the photos and at Lightroom's **Edit** menu.
+3. **Edit › Undo Dive Lens**, once.
+4. Look at the **Edit** menu again, then choose **Undo Dive Lens** once more.
+
+**Expected**
+
+- After step 2:
+  - GPS altitude: A1 -18.0 m, A2 -15.0 m, A3 -10.0 m, B1 -12.0 m;
+  - the Edit menu reads **Undo Dive Lens** (in a French Lightroom, **Édition › Annuler Dive Lens**).
+- After step 3:
+  - on the five photos, the Dive Lens fields, country, city, location, GPS and GPS altitude are empty;
+  - the two collections are gone;
+  - the "Dive Lens" set is still there, empty.
+- After step 4:
+  - the Edit menu reads **Undo Dive Lens** again: this is the creation of the set, an Undo step of its own, named after the set;
+  - it removes the empty set.
+
+#### UNDO-02 · Selection path: one Undo takes everything back, GPS and altitude included
+
+Required on Windows.
+
+**Before:** [clean start](#clean-start), then create an empty collection set named "Dive Lens" at the catalog root yourself (Collections panel, **+** › **Create Collection Set…**). Select A1, A2, A3.
+
+**Steps**
+
+1. [Selection path with dive 101](#shortcuts-used-in-the-steps). At step 4, tick **Copy depth to GPS altitude**, then **Apply to 3 photos**.
+2. **Edit › Undo Dive Lens**, once.
+3. Open the **Edit** menu again.
+4. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 1:
+  - GPS altitude: A1 -18.0 m, A2 -15.0 m, A3 -10.0 m;
+  - "101 - Coral Garden" created inside your "Dive Lens" set;
+  - the Edit menu reads **Undo Dive Lens**.
+- After step 2:
+  - on A1, A2, A3, the Dive Lens fields, location, GPS and GPS altitude are empty;
+  - "101 - Coral Garden" is gone; your "Dive Lens" set stays.
+- After step 3: the next Undo item is no longer Dive Lens's.
+
+#### UNDO-03 · The first "Dive Lens" set is a separate Undo step
+
+Required on Windows.
+
+**Before:** [clean start](#clean-start): no "Dive Lens" set. Select A1.
+
+**Steps**
+
+1. [Selection path with dive 101](#shortcuts-used-in-the-steps), then **Apply to 1 photo**.
+2. **Edit › Undo Dive Lens**.
+3. **Edit › Undo Dive Lens** again.
+
+**Expected**
+
+- After step 2:
+  - A1 has no Dive Lens field, location or GPS left;
+  - "101 - Coral Garden" is gone;
+  - the "Dive Lens" set is still there, empty.
+- After step 3: the "Dive Lens" set is gone.
+
+The set is created before the write. If Lightroom then refuses the write (Lightroom busy, or an error), the set stays, empty, and one **Undo Dive Lens** removes it. The checks cannot cause such a refusal on purpose: should one happen during any test, write down what you see.
+
 ## After the tests
 
 1. In Dive Lens settings, import your own settings back (**Export or import › Import…**).
@@ -412,7 +1058,7 @@ A development build never looks for updates by itself (only an installed copy do
 
 ## Results sheet
 
-Copy this sheet into the pull request and fill it in. Write **OK**, **not played**, or the difference described in words. On Windows, TAG-01, TAG-02, COL-01 and COL-02 are required.
+Copy this sheet into the pull request and fill it in. Write **OK**, **not played**, or the difference described in words. On Windows, UNDO-01, UNDO-02, UNDO-03 and CAT-08 are required.
 
 Describe differences in words only. No real dive data, no screenshot of a real catalog.
 
@@ -423,22 +1069,71 @@ Windows <version>, Lightroom Classic <version>
 
 | Test | macOS | Windows |
 |---|---|---|
-| TAG-01 Tag three photos with one dive | | |
-| TAG-02 One Undo takes the tag back | | |
-| TAG-03 Tag a photo again with another dive | | |
-| TAG-04 Tagging again with the same dive changes nothing | | |
-| TAG-05 No photo selected: nothing is written | | |
-| TAG-06 The selection changes before Apply | | |
-| TAG-07 The dive that covers the selection is marked | | |
-| TAG-08 Search and rating filters | | |
-| COL-01 Create collections for two dives | | |
-| COL-02 One Undo takes the collections back | | |
-| COL-03 Running again duplicates nothing | | |
-| COL-04 Country and period filters | | |
+| JRN-01 Every screen of the catalog path, in English and in French | | |
+| JRN-02 Every screen of the selection path, in English and in French | | |
+| JRN-03 One menu item, enabled without a selection | | |
+| JRN-04 Step 1 follows the Lightroom selection live | | |
+| JRN-05 The catalog size matches All Photographs | | |
+| JRN-06 "Open Dive Lens…" during the journey goes back to step 1 | | |
+| JRN-07 Settings, then Back, keep the step and the choices | | |
+| JRN-08 Another dive log in Settings starts the journey again | | |
+| JRN-09 Nothing leaves step 4 during a write | | |
+| JRN-10 A plug-in of another version asks to restart Lightroom | | |
+| CAT-01 Create collections for two dives | | |
+| CAT-02 Running again duplicates nothing | | |
+| CAT-03 Country and period filters | | |
+| CAT-04 A dive without photos, handled separately | | |
+| CAT-05 Dive details unticked | | |
+| CAT-06 Site details unticked | | |
+| CAT-07 Create collections unticked | | |
+| CAT-08 GPS alone, taken back by one Undo | | |
+| CAT-09 Another site for every photo | | |
+| CAT-10 Collections alone | | |
+| CAT-11 A surface photo goes to the closer dive | | |
+| SEL-01 Tag three photos with one dive | | |
+| SEL-02 The dive's collection is completed, without duplicates | | |
+| SEL-03 Tag a photo again with another dive | | |
+| SEL-04 Tagging again with the same dive changes nothing | | |
+| SEL-05 The selection emptied: nothing is written | | |
+| SEL-06 The selection changes before Apply | | |
+| SEL-07 The dive that covers the selection is marked | | |
+| SEL-08 Search and rating filters | | |
+| SEL-09 No dive — location only | | |
 | CLK-01 Suggest a clock offset | | |
-| CLK-02 The offset is remembered | | |
+| CLK-02 The offset is remembered, on both paths | | |
 | UNIT-01 Writing in feet, with the depth copied to the altitude | | |
-| UNIT-02 Depths in the dive list, in feet and in metres | | |
+| UNIT-02 The altitude option is unticked on every run | | |
+| UNIT-03 Depths in the dive list, in feet and in metres | | |
 | SET-01 Dive log not found | | |
 | SET-02 Check for updates | | |
+| SET-03 No altitude line in Settings; an older settings file still imports | | |
+| SET-04 The collection set chosen in Settings is missing | | |
+| UNDO-01 Catalog path: one Undo takes everything back, GPS and altitude included | | |
+| UNDO-02 Selection path: one Undo takes everything back, GPS and altitude included | | |
+| UNDO-03 The first "Dive Lens" set is a separate Undo step | | |
 ```
+
+## Old identifiers
+
+Until version 2.1.1, the tests named the two former screens, Tag Selection and Create Collections. Each of them is played again here, through the journey. None was removed.
+
+| Old identifier | New identifier | What changed |
+|---|---|---|
+| TAG-01 Tag three photos with one dive | SEL-01 | The photos now also go in the dive's collection (option ticked by default). |
+| TAG-02 One Undo takes the tag back | UNDO-02 | With the depth copied to the altitude, so that the altitude's Undo is checked too. |
+| TAG-03 Tag a photo again with another dive | SEL-03 | |
+| TAG-04 Tagging again with the same dive changes nothing | SEL-04 | |
+| TAG-05 No photo selected: nothing is written | SEL-05 | The menu item is now enabled without a selection (JRN-03): the selection is emptied once the journey is open. |
+| TAG-06 The selection changes before Apply | SEL-06 | |
+| TAG-07 The dive that covers the selection is marked | SEL-07 | |
+| TAG-08 Search and rating filters | SEL-08 | |
+| COL-01 Create collections for two dives | CAT-01 | |
+| COL-02 One Undo takes the collections back | UNDO-01 | With the depth copied to the altitude; the second Undo for the set is now described. |
+| COL-03 Running again duplicates nothing | CAT-02 | |
+| COL-04 Country and period filters | CAT-03 | |
+| CLK-01 Suggest a clock offset | CLK-01 | |
+| CLK-02 The offset is remembered | CLK-02 | |
+| UNIT-01 Writing in feet, with the depth copied to the altitude | UNIT-01 | The altitude is ticked at step 4, no longer in Settings. |
+| UNIT-02 Depths in the dive list, in feet and in metres | UNIT-03 | |
+| SET-01 Dive log not found | SET-01 | |
+| SET-02 Check for updates | SET-02 | |
