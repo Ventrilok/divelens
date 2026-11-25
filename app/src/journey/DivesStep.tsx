@@ -6,7 +6,7 @@
 // is pointed out, never chosen for the diver.
 //
 // Rendered inside the journey's screen, under the step strip: it brings the
-// line "Photos: …" with "Change", the list and the bottom bar.
+// line "Photos: …", the list and the bottom bar ("Back" returns to step 1).
 
 import { useEffect, useMemo } from "react";
 import { DiveDetail } from "../dives/DiveDetail";
@@ -86,14 +86,7 @@ export function DivesStep({
     <>
       <header className="screen-head">
         <div className="dives-head">
-          {line && (
-            <p className="journey-line">
-              {line} ·{" "}
-              <button type="button" className="link" onClick={() => dispatch({ type: "goTo", step: 1 })}>
-                {t("journey.change")}
-              </button>
-            </p>
-          )}
+          {line && <p className="journey-line">{line}</p>}
           {!multi && <p className="muted small">{selectionHead(lr)}</p>}
         </div>
         <label className="sort">

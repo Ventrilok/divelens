@@ -225,7 +225,6 @@ export const fr: Record<Key, string> = {
   "journey.steps.dives": "Plongées",
   "journey.steps.clocks": "Horloges",
   "journey.steps.review": "Vérifier et appliquer",
-  "journey.change": "Modifier",
 
   "journey.photos.title": "Sur quelles photos travailler ?",
   "journey.photos.hint": "Le choix décide où Dive Lens cherche les photos, et si vous choisissez ensuite plusieurs plongées ou une seule.",

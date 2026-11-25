@@ -223,7 +223,6 @@ export const en = {
   "journey.steps.dives": "Dives",
   "journey.steps.clocks": "Clocks",
   "journey.steps.review": "Review & Apply",
-  "journey.change": "Change",
 
   "journey.photos.title": "Which photos to work on?",
   "journey.photos.hint": "This choice decides where Dive Lens looks for the photos, and whether you then choose several dives or only one.",
