@@ -93,7 +93,7 @@ export const tagSelection = (log: LogRef, choice: TagChoice) =>
  */
 export const findSelectionPhotos = (log: LogRef, search: number) =>
   onLog(invoke<SelectionPhotos>("find_selection_photos", { log, search }));
-/** Tag Selection's live counts for description `search`; rejects with noPhotos once a newer one replaced it. */
+/** The selection path's live counts for description `search`; rejects with noPhotos once a newer one replaced it. */
 export const tagPreview = (search: number, dive: DiveSpan | null, offsets: Record<string, number>) =>
   invoke<TagPreview>("tag_preview", { search, dive, offsets });
 /** Suggested offset (minutes) per camera key of description `search`, for `dive`; null when no offset fits. */

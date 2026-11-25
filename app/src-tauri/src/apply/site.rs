@@ -1,6 +1,6 @@
-//! Another site of the dive log for the photos ("Tag Selection" and "Create
-//! Collections" both offer it): checked and found in one place, so both
-//! refuse in the same order.
+//! Another site of the dive log for the photos (both paths of the journey
+//! offer it): checked and found in one place, so both refuse in the same
+//! order.
 
 use divelens_core::tags::{LocationTags, valid_gps};
 use divelens_core::{Error, Site};

@@ -168,7 +168,7 @@ export interface SelectionPreview {
 /** Where a location written comes from: the chosen dive's site, or another site of the log with its position possibly edited. */
 export type LocationChoice = { kind: "diveSite" } | { kind: "site"; siteId: string; lat: number | null; lon: number | null };
 
-/** What Tag Selection writes (app/src-tauri/src/tag.rs, TagChoice). */
+/** What the selection path writes (app/src-tauri/src/tag.rs, TagChoice). */
 export interface TagChoice {
   /** The chosen dive, even when its details are unticked (it gives the site and the collection's name); null: no dive. */
   diveId: string | null;
@@ -191,7 +191,7 @@ export interface WriteOptions {
   collections: boolean;
 }
 
-/** The photos selected in Lightroom, described for Tag Selection's per-photo values (app/src-tauri/src/tag/selection.rs). */
+/** The photos selected in Lightroom, described for the selection path's per-photo values (app/src-tauri/src/tag/selection.rs). */
 export interface SelectionPhotos {
   /** Number of the description: the counts, Suggest and Apply name it (a newer one replaces it). */
   search: number;
@@ -202,13 +202,13 @@ export interface SelectionPhotos {
   cameras: Camera[];
 }
 
-/** The chosen dive as the counts and Suggest of Tag Selection take it. */
+/** The chosen dive as the counts and Suggest of the selection path take it. */
 export interface DiveSpan {
   start: string;
   end: string;
 }
 
-/** Tag Selection's live counts for the offsets shown. */
+/** The selection path's live counts for the offsets shown. */
 export interface TagPreview {
   total: number;
   /** Photos taken during the chosen dive (0 without one). */
@@ -233,7 +233,7 @@ export interface OutsidePhoto {
   minutes: number;
 }
 
-/** What Tag Selection wrote: the number of photos tagged. */
+/** What the selection path wrote: the number of photos tagged. */
 export interface TagApplied {
   count: number;
   /** Of which with per-photo values and a depth; 0 with the dive details unticked. */
@@ -243,8 +243,8 @@ export interface TagApplied {
 }
 
 /**
- * Why a Tag Selection or Create Collections command failed (app/src-tauri/src/apply/): the same
- * shape for both screens.
+ * Why a command of the selection path or the catalog path failed (app/src-tauri/src/apply/):
+ * the same shape for both paths.
  */
 export type ApplyError =
   | {
@@ -281,7 +281,7 @@ export type ApplyError =
       detail: string | null;
     };
 
-// --- Create Collections (app/src-tauri/src/collections.rs, collections/plan.rs) ------------------
+// --- The catalog path (app/src-tauri/src/collections.rs, collections/plan.rs) --------------------
 
 export interface Camera {
   key: string;

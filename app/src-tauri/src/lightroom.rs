@@ -101,7 +101,7 @@ pub struct Status {
     /// to these).
     pub selection_cameras: Vec<CameraRange>,
     /// The selection's range moved by each camera's remembered clock offset
-    /// (Tag Selection's "covers the selection" hint); filled by the app.
+    /// (the selection path's "covers the selection" hint); filled by the app.
     pub cover_from: Option<String>,
     pub cover_to: Option<String>,
     /// Lightroom runs a Dive Lens plug-in of another version than this app,
@@ -167,7 +167,7 @@ pub struct PhotoSearch {
     pub photos: Vec<FoundPhoto>,
 }
 
-/// What "Tag Selection" answers once the plugin applied it.
+/// What a write of the selection path answers once the plugin applied it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TagWritten {
     /// The number of photos written.
@@ -176,7 +176,7 @@ pub struct TagWritten {
     pub collection: Option<WrittenCollection>,
 }
 
-/// One collection written by "Create Collections" or "Tag Selection".
+/// One collection written on the catalog path or the selection path.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WrittenCollection {
@@ -234,7 +234,7 @@ pub enum Command {
         to: String,
         reply: Sender<Result<PhotoSearch, ApplyOutcome>>,
     },
-    /// The photos selected in Lightroom now (Tag Selection's per-photo
+    /// The photos selected in Lightroom now (the selection path's per-photo
     /// values). The plugin keeps them: an "Apply" naming this search writes
     /// only if the selection is still exactly these photos.
     DescribeSelection {

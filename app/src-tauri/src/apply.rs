@@ -1,4 +1,4 @@
-//! What "Create Collections" and "Tag Selection" share when they write to
+//! What the catalog path and the selection path share when they write to
 //! Lightroom: the clock offsets, the kept photo searches, the errors, and the
 //! requests to the plugin link.
 

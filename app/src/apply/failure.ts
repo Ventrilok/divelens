@@ -1,6 +1,6 @@
-// Why a search or a write of Tag Selection or Create Collections failed, in words
-// for the diver: one translator for both screens. `feature` chooses the texts that
-// belong to each screen ("selection" or "photos found"); both name the same Undo
+// Why a search or a write of the selection path or the catalog path failed, in words
+// for the diver: one translator for both paths. `feature` chooses the texts that
+// belong to each path ("selection" or "photos found"); both name the same Undo
 // step, "Dive Lens" (the plug-in's CatalogWrite.UNDO_NAME).
 
 import { t } from "../i18n";
@@ -91,7 +91,7 @@ export function searchFailure(e: ApplyError, feature: ApplyFeature): string | nu
   if (feature === "tag") {
     switch (e.error) {
       case "noPhotos":
-      case "logChanged": // the app reads the log again and starts the screen again
+      case "logChanged": // the app reads the log again and starts the journey again
         return null;
       case "notConnected":
       case "linkLost":

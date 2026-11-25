@@ -1,12 +1,12 @@
-//! Tag Selection's per-photo values (spec F8, F6): the photos selected in
-//! Lightroom and their cameras, one clock offset each as in Create
-//! Collections, the live counts and "Suggest" for the chosen dive, and the
-//! values written on the photos taken during it. Nothing here talks to
-//! Lightroom; the Tag Selection commands (`tag.rs`) do.
+//! The selection path's per-photo values (spec F8, F6): the photos selected
+//! in Lightroom and their cameras, one clock offset each as on the catalog
+//! path, the live counts and "Suggest" for the chosen dive, and the values
+//! written on the photos taken during it. Nothing here talks to Lightroom;
+//! the selection path's commands (`tag.rs`) do.
 //!
 //! A photo is in the dive when its capture time corrected by its camera's
-//! offset falls between the dive's start and end, exactly as in Create
-//! Collections without a margin. Only those photos get per-photo values and
+//! offset falls between the dive's start and end, exactly as on the catalog
+//! path without a margin. Only those photos get per-photo values and
 //! the clock offset; the others get the dive data alone.
 
 use std::collections::{BTreeMap, HashMap};
@@ -223,8 +223,8 @@ impl Selection {
     }
 
     /// Suggested offset of each camera `keys` names: the one that puts the
-    /// most of its selected photos in `dive` (same search as Create
-    /// Collections, spec F5).
+    /// most of its selected photos in `dive` (same search as on the catalog
+    /// path, spec F5).
     pub fn suggest(&self, dive: Span, keys: &[String]) -> HashMap<String, Option<i32>> {
         self.shots.suggest(&[dive], keys)
     }
@@ -244,8 +244,8 @@ impl Selection {
 }
 
 /// Per-photo values (spec F6) of `photos`, taken during `dive`, from its
-/// profile: depth, temperature and elapsed time interpolated as Create
-/// Collections does, and the clock offset applied.
+/// profile: depth, temperature and elapsed time interpolated as on the
+/// catalog path, and the clock offset applied.
 pub fn photo_tags(
     dive: &Dive,
     profile: &[Sample],
@@ -269,7 +269,7 @@ pub fn photo_tags(
 }
 
 /// The offset applied to each camera with a photo taken during the dive:
-/// remembered once written, shared with Create Collections (spec F5). A
+/// remembered once written, shared with the catalog path (spec F5). A
 /// camera without one had no offset applied.
 pub fn applied_offsets(photos: &[InDive]) -> BTreeMap<String, i32> {
     photos
@@ -278,7 +278,7 @@ pub fn applied_offsets(photos: &[InDive]) -> BTreeMap<String, i32> {
         .collect()
 }
 
-/// What Tag Selection writes per photo, for a dive with a profile.
+/// What the selection path writes per photo, for a dive with a profile.
 #[derive(Debug)]
 pub enum PerPhoto {
     /// Per-photo values for the selection described (the plugin's number
@@ -293,7 +293,7 @@ pub enum PerPhoto {
     Unreadable(Error),
 }
 
-/// Why Tag Selection writes nothing.
+/// Why the selection path writes nothing.
 #[derive(Debug)]
 pub enum Refusal {
     /// The profile reads, but the screen did not describe the selection: it
@@ -650,7 +650,7 @@ mod tests {
         assert_eq!(remembered.get("GoPro|"), None);
         assert_eq!(remembered.get("Nikon|"), Some(60), "other cameras kept");
 
-        // Saved in the application's own file, the one Create Collections
+        // Saved in the application's own file, the one the catalog path
         // reads: another application does not see it.
         assert_eq!(Offsets::load(&dir, ss).get("TG-7|A1"), Some(240));
         assert_eq!(Offsets::load(&dir, md).get("TG-7|A1"), None);

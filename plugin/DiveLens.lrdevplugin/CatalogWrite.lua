@@ -1,5 +1,5 @@
 --[[
-What Tag Selection (ApplyTags.lua) and Create Collections
+What the selection path (ApplyTags.lua) and the catalog path
 (ApplyCollections.lua) share to write in the catalog: the one Undo name of
 their writes, Lightroom's date format, one photo's changes, what the photos
 carry before a write, the progress messages to the app, the envelope of an

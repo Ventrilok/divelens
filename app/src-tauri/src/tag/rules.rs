@@ -1,4 +1,4 @@
-//! Tag Selection's rules: what a choice made on the screen writes, and
+//! The selection path's rules: what a choice made in the journey writes, and
 //! which refusal wins when several apply. Nothing here reads the dive log,
 //! the settings or Lightroom: those reads are handed in, as closures where
 //! a rule decides whether they happen, so they happen exactly when they
@@ -111,7 +111,7 @@ pub(super) fn apply_per_photo(
 }
 
 /// Where the selection goes when the collections are ticked: the collection
-/// of the chosen dive, named as Create Collections names it. Without the
+/// of the chosen dive, named as the catalog path names it. Without the
 /// tick, or without a dive to name it, no collection. `settings` gives the
 /// collection settings' parent and group, read only when a collection goes.
 pub(super) fn collection_place(
@@ -146,7 +146,7 @@ pub(super) struct Ticked {
     pub collection: Option<CollectionPlace>,
 }
 
-/// The request Tag Selection sends, in the order the refusals win: the dive
+/// The request the selection path sends, in the order the refusals win: the dive
 /// data and location, then what the diver ticked (nothing left to write is
 /// refused before anything is read), then, for a dive with a profile, the
 /// per-photo values (`described` gives the selection the screen shows,
@@ -197,7 +197,7 @@ pub(super) fn build_request(
 }
 
 /// The depth copied to the GPS altitude of the whole request when `on`, as
-/// Create Collections does: a request without per-photo values has nothing
+/// the catalog path does: a request without per-photo values has nothing
 /// to copy.
 pub(super) fn with_altitude(req: &mut TagRequest, on: bool) {
     if on {
@@ -430,7 +430,7 @@ mod tests {
         }
     }
 
-    /// What today's Tag Selection screen sends with the dive data and the
+    /// What the selection path sends with the dive data and the
     /// location ticked: everything but a collection, the altitude given.
     fn everything(altitude: bool) -> Ticked {
         Ticked {

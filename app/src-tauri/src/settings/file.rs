@@ -19,7 +19,7 @@ pub const FILE_NAME: &str = "settings.json";
 /// 4: one location per application, in `source.locations`.
 const CURRENT_VERSION: u32 = 4;
 
-/// Name of the collection set "Create Collections" uses by default
+/// Name of the collection set "Create collections" uses by default
 /// (compatibility contract: never translated, never renamed).
 pub const DEFAULT_GROUP: &str = "Dive Lens";
 
@@ -197,7 +197,7 @@ pub enum DiveSort {
     Depth,
 }
 
-/// Where "Create Collections" puts the collections.
+/// Where the "Create collections" option puts the collections.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CollectionsPlace {

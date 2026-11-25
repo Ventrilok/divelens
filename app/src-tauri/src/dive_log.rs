@@ -188,7 +188,7 @@ pub(crate) struct DiveLog {
     format: &'static str,
     capabilities: Capabilities,
     dives: Vec<Dive>,
-    /// Every named site of the log (Tag Selection › other site).
+    /// Every named site of the log (the journey's other site).
     sites: Vec<Site>,
     /// Units of the dive application's preferences (the settings may force
     /// others).

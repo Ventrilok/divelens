@@ -1,4 +1,4 @@
-//! "Create Collections" (spec F5): the photos found in Lightroom for the
+//! The catalog path (spec F5): the photos found in Lightroom for the
 //! chosen dives, their cameras, live counts and the request to write.
 //! Nothing here talks to Lightroom; the collections commands (`collections.rs`) do.
 

@@ -1,4 +1,4 @@
-//! "Tag Selection" (spec F8): the commands the screen calls. The photos
+//! The selection path (spec F8): the commands the journey calls. The photos
 //! selected in Lightroom and their per-photo values are in `selection`; what
 //! a choice writes, and which refusal wins, in `rules`.
 
@@ -23,7 +23,7 @@ use crate::lightroom::{Command, WrittenCollection};
 use crate::settings::{Settings, units_in_use};
 use selection::{DiveSpan, Selection, SelectionPhotos, TagPreview};
 
-/// Where the location written by Tag Selection comes from.
+/// Where the location written on the selection path comes from.
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum LocationChoice {
@@ -60,7 +60,7 @@ pub(crate) struct TagChoice {
     options: WriteOptions,
 }
 
-/// What "Tag Selection › Apply" wrote: the number of photos tagged, of which
+/// What Apply wrote on the selection path: the number of photos tagged, of which
 /// with per-photo values and a depth (0 with the dive details unticked), and
 /// the collection the selection was put in, if one was written.
 #[derive(Debug, Serialize)]
@@ -81,8 +81,8 @@ impl From<usize> for TagApplied {
     }
 }
 
-/// Tag Selection's descriptions of the Lightroom selection: the latest one
-/// only is kept (its own, never Create Collections' photo search).
+/// The selection path's descriptions of the Lightroom selection: the latest
+/// one only is kept (its own, never the catalog path's photo search).
 #[derive(Default)]
 pub(crate) struct TagState {
     selections: Mutex<Searches<Selection>>,
@@ -151,7 +151,7 @@ fn tag_request(
 /// the dive has a profile, the photos taken during it also get their
 /// per-photo values and clock offset, computed for the selection the
 /// screen shows; the plugin refuses if the selection changed since. The
-/// offsets applied are then remembered, as Create Collections does (also
+/// offsets applied are then remembered, as on the catalog path (also
 /// when only the GPS and altitude could not be written).
 #[tauri::command]
 pub(crate) async fn tag_selection(
@@ -187,7 +187,7 @@ pub(crate) async fn tag_selection(
     .expect("tagging task failed")
 }
 
-/// Describes the photos selected in Lightroom now, for Tag Selection's
+/// Describes the photos selected in Lightroom now, for the selection path's
 /// per-photo values: their cameras, each with the offset last applied to it
 /// for the application of `log`, the dive log the screen shows. `search`
 /// numbers the description, higher than any the screen asked for before:

@@ -1,10 +1,10 @@
 --[[
-Create Collections, for the DiveLens app: finds the photos captured between
+The catalog path, for the DiveLens app: finds the photos captured between
 two days (find), writes each dive's collection, its data and location on
 its photos, and each photo's own values (run), and lists the catalog's
 collection sets for the app's settings (listSets). What goes on each photo
-is decided by Tagging.lua; the write helpers it shares with Tag Selection
-are in CatalogWrite.lua.
+is decided by Tagging.lua; the write helpers it shares with the selection
+path are in CatalogWrite.lua.
 
 Part of DiveLens, GPL-3.0-or-later.
 ]]
@@ -50,15 +50,15 @@ function ApplyCollections.find(s, message)
     Selection.sendPhotos(s, id, list)
 end
 
--- Writes a "Create Collections" request: each dive's collection where the
+-- Writes a catalog-path request: each dive's collection where the
 -- app's settings say (by default in a "Dive Lens" set at the root, created
 -- if needed), its data and location on its photos, and each photo's own
--- values. Two catalog writes under one Undo name, the same as Tag
--- Selection's (CatalogWrite.UNDO_NAME), the GPS and altitude in the second
+-- values. Two catalog writes under one Undo name, the same as the
+-- selection path's (CatalogWrite.UNDO_NAME), the GPS and altitude in the second
 -- (Tagging.splitGps, CatalogWrite.writeGpsLater), so one Undo reverts it
 -- all. Which groups make or complete their collection is decided by
 -- Tagging.collectionWrites. What each photo carries is read inside the
--- first write, as Tag Selection does: an altitude Dive Lens wrote from a
+-- first write, as on the selection path: an altitude Dive Lens wrote from a
 -- depth now cleared, or from another dive's, is cleared in the second
 -- write (Tagging.photoWrites). Always answers the app.
 function ApplyCollections.run(s, message)

@@ -652,8 +652,8 @@ fn apply_half_written_is_a_failure() {
     plugin.join().unwrap();
     let outcome = outcome_rx.recv().unwrap().unwrap_err();
     assert!(outcome.half_written());
-    // `ApplyOutcome`'s own JSON, no longer sent to a screen: Tag Selection's
-    // screen reads `ApplyError::Lightroom` (apply/errors.rs).
+    // `ApplyOutcome`'s own JSON, no longer sent to the journey: the selection
+    // path reads `ApplyError::Lightroom` (apply/errors.rs).
     assert_eq!(
         serde_json::to_value(&outcome).unwrap(),
         serde_json::json!({ "outcome": "failed", "reason": "gpsNotWritten", "detail": "aborted" })

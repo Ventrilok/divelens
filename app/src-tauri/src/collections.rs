@@ -1,4 +1,4 @@
-//! "Create Collections" (spec F5): the commands the screen calls. The plan
+//! The catalog path (spec F5): the commands the journey calls. The plan
 //! (photos found, live counts, what to write) is in `plan`.
 
 pub(crate) mod plan;
@@ -23,7 +23,7 @@ use crate::settings::{Settings, units_in_use};
 use crate::tag::LocationChoice;
 use plan::{Choices, Period, Preview, Session};
 
-/// Photos found for "Create Collections", kept until the next search.
+/// Photos found on the catalog path, kept until the next search.
 #[derive(Default)]
 pub(crate) struct CollectionsState {
     searches: Mutex<Searches<Session>>,
@@ -138,7 +138,7 @@ pub(crate) async fn suggest_offsets(
     .expect("suggestion task failed")
 }
 
-/// What "Create Collections › Apply" wrote.
+/// What Apply wrote on the catalog path.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct CollectionsResult {

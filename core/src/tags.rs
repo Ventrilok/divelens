@@ -69,7 +69,7 @@ pub struct LocationTags {
     pub lon: Option<f64>,
 }
 
-/// Where "Tag Selection" puts the selected photos: the collection, inside
+/// Where the selection path puts the selected photos: the collection, inside
 /// the collection set `parent` leads to.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,7 +83,7 @@ pub struct CollectionPlace {
     pub group: Option<String>,
 }
 
-/// Everything one "Tag Selection › Apply" writes. At least one of `dive`,
+/// Everything one Apply of the selection path writes. At least one of `dive`,
 /// `location` and `collection` is present.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -126,7 +126,7 @@ pub struct PhotoTags {
     pub depth_m: Option<f64>,
 }
 
-/// One dive of a "Create Collections" write: its collection, its data and
+/// One dive of a catalog-path write: its collection, its data and
 /// location, and its photos.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -198,7 +198,7 @@ impl PhotoTags {
     }
 }
 
-/// Everything one "Create Collections › Apply" writes, in one Undo step.
+/// Everything one Apply of the catalog path writes, in one Undo step.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionsRequest {
@@ -273,12 +273,12 @@ impl TagRequest {
     }
 
     /// Copies the depth of each photo taken during the dive to its GPS
-    /// altitude, negative (spec F7), as Create Collections does.
+    /// altitude, negative (spec F7), as on the catalog path.
     pub fn copy_depth_to_altitude(&mut self) {
         copy_depth_to_altitude(&mut self.photos);
     }
 
-    /// Photos that get a depth, as Create Collections counts them (none
+    /// Photos that get a depth, as the catalog path counts them (none
     /// with the dive details unticked).
     pub fn with_depth(&self) -> usize {
         with_depth(&self.photos)

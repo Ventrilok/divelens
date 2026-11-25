@@ -1,8 +1,8 @@
 --[[
-Tag Selection's "Apply", for an "apply" message from the DiveLens app:
+The selection path's "Apply", for an "apply" message from the DiveLens app:
 writes a dive, its site and each photo's own values on the photos selected
 in Lightroom (ApplyTags.run). What goes on each photo is decided by
-Tagging.lua; the write helpers it shares with Create Collections are in
+Tagging.lua; the write helpers it shares with the catalog path are in
 CatalogWrite.lua.
 
 Part of DiveLens, GPL-3.0-or-later.
@@ -18,8 +18,8 @@ local Tagging = require "Tagging"
 local ApplyTags = {}
 
 -- Tags the photos selected in Lightroom now (not when the app last looked),
--- in two catalog writes under one Undo name, the same as Create
--- Collections' (CatalogWrite.UNDO_NAME), the GPS and altitude in the
+-- in two catalog writes under one Undo name, the same as the catalog
+-- path's (CatalogWrite.UNDO_NAME), the GPS and altitude in the
 -- second (Tagging.splitGps, CatalogWrite.writeGpsLater), so one Undo
 -- reverts it all. A photo that carried another dive also loses that dive's
 -- own values (Tagging.retagChanges), read from the photo inside the first
