@@ -88,6 +88,32 @@ export function marginAfterSearch(margin: number, keep: boolean, firstOfRun: boo
   return keep || firstOfRun ? margin : 0;
 }
 
+/**
+ * The cameras once Settings forgot the offset remembered for `keys`: none of them is shown
+ * as remembered any more ("remembered offset", the sentence under "Covers the selection").
+ * The offset shown stays as it is: what the diver sees is never wiped. The same array when
+ * none of them had one, so that nothing is counted again.
+ */
+export function forgetting(cameras: Camera[], keys: string[]): Camera[] {
+  const forgotten = new Set(keys);
+  if (!cameras.some((c) => forgotten.has(c.key) && c.remembered !== null)) return cameras;
+  return cameras.map((c) => (forgotten.has(c.key) ? { ...c, remembered: null } : c));
+}
+
+/** The catalog path's photos found, once Settings forgot offsets (see `forgetting`); a search under way is left to itself. */
+export function searchForgetting(search: Search, keys: string[]): Search {
+  if (search.state !== "ready") return search;
+  const cameras = forgetting(search.period.cameras, keys);
+  return cameras === search.period.cameras ? search : { ...search, period: { ...search.period, cameras } };
+}
+
+/** The selection described, once Settings forgot offsets (see `forgetting`). */
+export function describedForgetting(described: Described | null, keys: string[]): Described | null {
+  if (!described) return null;
+  const cameras = forgetting(described.photos.cameras, keys);
+  return cameras === described.photos.cameras ? described : { ...described, photos: { ...described.photos, cameras } };
+}
+
 /** "Suggest for all": the cameras neither ignored nor set by hand. */
 export function camerasToSuggest(cameras: Camera[], touched: Set<string>, ignored?: Set<string>): string[] {
   return cameras.filter((c) => !ignored?.has(c.key) && !touched.has(c.key)).map((c) => c.key);

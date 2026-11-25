@@ -4,6 +4,7 @@
 //! shown with their offsets. One small JSON file per dive application in the app
 //! config folder: the same dive may start at another time in another
 //! application's log (seen after importing a MacDive log into Subsurface).
+//! Settings lists them and forgets one camera at a time.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -20,6 +21,26 @@ const CURRENT_VERSION: u32 = 1;
 /// otherwise.
 pub fn camera_key(model: Option<&str>, serial: Option<&str>) -> String {
     format!("{}|{}", model.unwrap_or(""), serial.unwrap_or(""))
+}
+
+/// The model and serial number a [`camera_key`] was made of; an empty part
+/// is none. A key without its separator (edited by hand) is a model alone.
+pub fn camera_of_key(key: &str) -> (Option<String>, Option<String>) {
+    let (model, serial) = key.rsplit_once('|').unwrap_or((key, ""));
+    let part = |s: &str| (!s.is_empty()).then(|| s.to_string());
+    (part(model), part(serial))
+}
+
+/// A camera whose clock offset is remembered, as Settings lists it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Remembered {
+    /// The camera key, as the offsets file holds it: what "Forget" names.
+    pub key: String,
+    pub model: Option<String>,
+    pub serial: Option<String>,
+    /// Minutes.
+    pub offset: i32,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -46,6 +67,35 @@ impl Offsets {
     pub fn get(&self, key: &str) -> Option<i32> {
         self.cameras.get(key).copied()
     }
+
+    /// Every camera remembered, by key (Settings sorts them by name).
+    pub fn remembered(&self) -> Vec<Remembered> {
+        self.cameras
+            .iter()
+            .map(|(key, offset)| {
+                let (model, serial) = camera_of_key(key);
+                Remembered {
+                    key: key.clone(),
+                    model,
+                    serial,
+                    offset: *offset,
+                }
+            })
+            .collect()
+    }
+}
+
+/// Forgets the offset remembered for camera `key` in the offsets file of
+/// `app` in `dir` (Settings, spec F2), leaving the other cameras as they
+/// are, and returns the offsets left. The file is written only when it held
+/// that camera: a camera not remembered, a missing file or one that does not
+/// read (none, as [`Offsets::load`] reads it) leave it as it is.
+pub(crate) fn forget(dir: &Path, app: &DiveApp, key: &str) -> std::io::Result<Offsets> {
+    let mut offsets = Offsets::load(dir, app);
+    if offsets.cameras.remove(key).is_some() {
+        offsets.save(dir, app)?;
+    }
+    Ok(offsets)
 }
 
 /// Whether the offsets `applied` are remembered once Lightroom gave `answer`: when it wrote, even if only the GPS and altitude were left out
@@ -120,6 +170,96 @@ mod tests {
         assert_eq!(camera_key(Some("TG-7"), Some("A1")), "TG-7|A1");
         assert_eq!(camera_key(Some("TG-7"), None), "TG-7|");
         assert_eq!(camera_key(None, None), "|");
+    }
+
+    #[test]
+    fn camera_keys_read_back() {
+        for (model, serial) in [
+            (Some("TG-7"), Some("A1")),
+            (Some("TG-7"), None),
+            (None, Some("A1")),
+            (None, None),
+        ] {
+            let key = camera_key(model, serial);
+            let (m, s) = camera_of_key(&key);
+            assert_eq!((m.as_deref(), s.as_deref()), (model, serial), "{key}");
+        }
+        // A key edited by hand, without its separator: the model alone.
+        assert_eq!(camera_of_key("TG-7"), (Some("TG-7".into()), None));
+    }
+
+    fn remembered(key: &str, model: Option<&str>, serial: Option<&str>, offset: i32) -> Remembered {
+        Remembered {
+            key: key.into(),
+            model: model.map(Into::into),
+            serial: serial.map(Into::into),
+            offset,
+        }
+    }
+
+    #[test]
+    fn lists_the_cameras_remembered() {
+        assert_eq!(Offsets::default().remembered(), Vec::new());
+        let mut offsets = Offsets::default();
+        offsets.cameras.insert("TG-7|A1".into(), 240);
+        offsets.cameras.insert("TG-7|B2".into(), -30);
+        offsets.cameras.insert("Nikon Z6|".into(), 61);
+        offsets.cameras.insert("|".into(), 0);
+        assert_eq!(
+            offsets.remembered(),
+            vec![
+                remembered("Nikon Z6|", Some("Nikon Z6"), None, 61),
+                remembered("TG-7|A1", Some("TG-7"), Some("A1"), 240),
+                remembered("TG-7|B2", Some("TG-7"), Some("B2"), -30),
+                remembered("|", None, None, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn forgets_one_camera_and_keeps_the_others() {
+        let dir = std::env::temp_dir().join(format!("divelens-forget-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let md = &divelens_core::macdive::APP;
+        let ss = &divelens_core::subsurface::APP;
+        let bytes = |app: &DiveApp| std::fs::read(dir.join(app.offsets_file)).ok();
+
+        // No file: nothing to forget, and no file created.
+        assert_eq!(forget(&dir, md, "TG-7|A1").unwrap(), Offsets::default());
+        assert_eq!(bytes(md), None);
+
+        let mut offsets = Offsets::default();
+        offsets.cameras.insert("TG-7|A1".into(), 240);
+        offsets.cameras.insert("TG-7|B2".into(), -30);
+        offsets.cameras.insert("Nikon Z6|".into(), 61);
+        offsets.save(&dir, md).unwrap();
+        offsets.save(&dir, ss).unwrap();
+        let subsurface = bytes(ss);
+
+        // One body of the TG-7 forgotten: the other one and the Nikon stay.
+        let after = forget(&dir, md, "TG-7|A1").unwrap();
+        let mut expected = offsets.clone();
+        expected.cameras.remove("TG-7|A1");
+        assert_eq!(after.cameras, expected.cameras);
+        assert_eq!(Offsets::load(&dir, md).cameras, expected.cameras);
+        assert_eq!(Offsets::load(&dir, md).version, CURRENT_VERSION);
+        assert!(!dir.join(format!("{}.tmp", md.offsets_file)).exists());
+        // The other application's offsets are its own: untouched.
+        assert_eq!(bytes(ss), subsurface);
+
+        // A camera not remembered (forgotten already): not an error, the file stays as it is.
+        let before = bytes(md);
+        assert_eq!(
+            forget(&dir, md, "TG-7|A1").unwrap().cameras,
+            expected.cameras
+        );
+        assert_eq!(bytes(md), before);
+
+        // An unreadable file reads as none, as `load` reads it: kept as it is.
+        std::fs::write(dir.join(md.offsets_file), "{broken").unwrap();
+        assert_eq!(forget(&dir, md, "Nikon Z6|").unwrap(), Offsets::default());
+        assert_eq!(bytes(md).as_deref(), Some(&b"{broken"[..]));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

@@ -11,6 +11,10 @@
 // ignored cameras and margin; a new `run` throws away what was found and set,
 // except the surface margin when the run goes on with dives ticked ("handle
 // separately", as in 2.1.1), so that its first search keeps it.
+//
+// `forgotten`: the cameras whose remembered offset Settings forgot, in order, never
+// shortened. Each one is no longer shown as remembered on the photos found; the offset
+// shown stays, and the next search reads the offsets file again.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collectionsPreview, findCollectionPhotos, suggestOffsets } from "../api";
@@ -35,6 +39,7 @@ import {
   marginAfterRun,
   marginAfterSearch,
   offsetsAfterSearch,
+  searchForgetting,
   suggestionNotes,
   withSuggestions,
   type Search,
@@ -73,6 +78,7 @@ export function useCatalogPhotos(
   lr: Pick<LightroomStatus, "connected">,
   diveIds: string[],
   run: number,
+  forgotten: string[],
 ): CatalogReading {
   const idsKey = diveIds.join(",");
   const diveKey = useMemo(() => searchedDives(log.dives, diveIds), [log.dives, idsKey]);
@@ -138,6 +144,14 @@ export function useCatalogPhotos(
       live = false;
     };
   }, [diveKey, lr.connected, again, run]);
+
+  // Offsets forgotten in Settings since the last time: no longer shown as remembered.
+  const forgottenSeen = useRef(forgotten.length);
+  useEffect(() => {
+    const keys = forgotten.slice(forgottenSeen.current);
+    forgottenSeen.current = forgotten.length;
+    if (keys.length > 0) setSearch((s) => searchForgetting(s, keys));
+  }, [forgotten]);
 
   const choices: CollectionChoices = useMemo(
     () => ({ offsets, ignored: [...ignored], marginMin: margin }),

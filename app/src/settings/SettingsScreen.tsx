@@ -1,11 +1,21 @@
 // Settings screen (spec F2, F3, F7, F10, F11, F13). Every change is saved at once;
-// the app follows it live (language, units, dive log location).
+// the app follows it live (language, units, dive log location, remembered clock offsets).
 
 import { useEffect, useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { checkSettingsFile, checkUpdate, collectionSets, exportSettings, importSettings, installUpdate } from "../api";
+import {
+  checkSettingsFile,
+  checkUpdate,
+  collectionSets,
+  exportSettings,
+  forgetOffset,
+  importSettings,
+  installUpdate,
+  rememberedOffsets,
+} from "../api";
 import { fileName, importErrorText } from "./backup";
+import { offsetLines } from "./offsets";
 import { flattenSets, pathKey, placeLabel, setExists } from "../collections/collectionPlace";
 import { Icon } from "../ui/Icon";
 import { changeErrorText } from "../diveLog";
@@ -24,10 +34,12 @@ import { failureText, isBusy, stateLine } from "../updates/updates";
 import type {
   AppInfo,
   CollectionSet,
+  DiveApp,
   DiveLog,
   ImportCheck,
   LightroomStatus,
   LoadError,
+  RememberedOffset,
   Settings,
   SourceInfo,
   UpdateStatus,
@@ -245,6 +257,81 @@ function CollectionsSection({ settings, lr, onChange }: { settings: Settings; lr
           <span className="set-note">{t("settings.moveNote")}</span>
         </div>
       </Row>
+    </section>
+  );
+}
+
+/**
+ * Remembered clock offsets (spec F2): the cameras whose offset is remembered for the
+ * dive application in use, each with "Forget", which removes it from the offsets file
+ * at once. Read when Settings open, again for another application and after each
+ * "Forget". Nothing in Lightroom changes.
+ */
+function OffsetsSection({ app, onForgotten }: { app: DiveApp; onForgotten: (key: string) => void }) {
+  const [remembered, setRemembered] = useState<RememberedOffset[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    setRemembered(null);
+    setError(null);
+    rememberedOffsets()
+      .then((r) => live && setRemembered(r))
+      .catch((e: unknown) => live && setError(t("settings.offsetsUnread", { detail: String(e) })));
+    return () => {
+      live = false;
+    };
+  }, [app.id]);
+
+  const forget = async (key: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      setRemembered(await forgetOffset(key));
+      onForgotten(key);
+    } catch (e) {
+      setError(t("settings.forgetError", { detail: String(e) }));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const lines = remembered ? offsetLines(remembered) : [];
+
+  return (
+    <section className="card" aria-labelledby="s-offsets">
+      <h2 id="s-offsets" className="sec">
+        {t("settings.offsets")}
+      </h2>
+      <p className="sec-hint">{t("settings.offsetsHint", { app: app.name })}</p>
+      {error && (
+        <div className="set">
+          <div className="notice notice-warn set-full" role="alert">
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
+      {remembered !== null && lines.length === 0 && (
+        <div className="set">
+          <span className="set-note">{t("settings.offsetsNone")}</span>
+        </div>
+      )}
+      {lines.map((l) => (
+        <Row key={l.key} title={l.name} hint={l.serial ?? undefined}>
+          <div className="set-actions set-offset">
+            <span className="set-offset-n">{l.offset}</span>
+            <button
+              type="button"
+              className="btn btn-s btn-small"
+              disabled={busy}
+              aria-label={t("settings.forgetLabel", { camera: l.serial ? `${l.name} ${l.serial}` : l.name })}
+              onClick={() => forget(l.key)}
+            >
+              {t("settings.forget")}
+            </button>
+          </div>
+        </Row>
+      ))}
     </section>
   );
 }
@@ -492,6 +579,7 @@ export function SettingsScreen({
   writing,
   error,
   onChange,
+  onForgotten,
   onBack,
 }: {
   settings: Settings;
@@ -504,12 +592,15 @@ export function SettingsScreen({
   /** Why the last change was not made (a ChangeError), or null. */
   error: unknown;
   onChange: (patch: Patch) => void;
+  /** A camera's remembered clock offset was forgotten (its key). */
+  onForgotten: (key: string) => void;
   /** Back to the screen Settings were opened from. */
   onBack: () => void;
 }) {
-  const appName = appOf(
+  const app = appOf(
     logState.status === "ok" ? logState.log.source.kind : logState.status === "error" ? logState.failure.source.kind : settings.source.kind,
-  ).name;
+  );
+  const appName = app.name;
   const sourceUnits = logState.status === "ok" ? logState.log.sourceUnits : null;
   const asSource = (unit: string | null) =>
     unit ? t("settings.asSource", { source: appName, unit }) : t("settings.asSourceBare", { source: appName });
@@ -575,6 +666,8 @@ export function SettingsScreen({
         </section>
 
         <CollectionsSection settings={settings} lr={lr} onChange={onChange} />
+
+        <OffsetsSection app={app} onForgotten={onForgotten} />
 
         <BackupSection settings={settings} logState={logState} writing={writing} onChange={onChange} />
 

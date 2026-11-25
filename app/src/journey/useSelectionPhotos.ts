@@ -9,6 +9,10 @@
 // or as soon as `active` (the journey's selection path from step 2 on, so that
 // "Covers the selection" can count; choice no. 3). A new `run` throws away
 // what was read and set.
+//
+// `forgotten`: the cameras whose remembered offset Settings forgot, in order, never
+// shortened. Each one is no longer shown as remembered on the selection described; the
+// offset shown stays, and the next description reads the offsets file again.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { findSelectionPhotos, suggestTagOffsets, tagPreview } from "../api";
@@ -23,6 +27,7 @@ import type { SelectionReview } from "./rules";
 import {
   camerasToSuggest,
   currentDescription,
+  describedForgetting,
   freshCountsOf,
   notesOfCameras,
   onlyCameras,
@@ -73,6 +78,7 @@ export function useSelectionPhotos(
   dive: Dive | null,
   active: boolean,
   run: number,
+  forgotten: string[],
 ): SelectionReading {
   const span = dive && { start: dive.start, end: dive.end };
   const spanKey = span ? `${span.start}|${span.end}` : "";
@@ -157,6 +163,14 @@ export function useSelectionPhotos(
     };
   }, [wanted, lr.selectionVersion, again, run]);
   const current = currentDescription(described, lr.selectionVersion, reading, readFailure);
+
+  // Offsets forgotten in Settings since the last time: no longer shown as remembered.
+  const forgottenSeen = useRef(forgotten.length);
+  useEffect(() => {
+    const keys = forgotten.slice(forgottenSeen.current);
+    forgottenSeen.current = forgotten.length;
+    if (keys.length > 0) setDescribed((d) => describedForgetting(d, keys));
+  }, [forgotten]);
 
   // Live counts for the dive chosen and the offsets shown: the latest answer
   // wins. Refused once a newer description replaced this one: the last

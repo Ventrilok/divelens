@@ -38,6 +38,7 @@ export function Journey({
   onWriting,
   menu,
   logChanges,
+  forgotten,
 }: {
   /** The last dive log read: a new one (same log read again) drops the dives it lost. */
   log: DiveLog;
@@ -56,6 +57,8 @@ export function Journey({
   menu: number;
   /** Another dive log read (application or location), counted: each one starts the journey again. */
   logChanges: number;
+  /** The cameras whose remembered clock offset Settings forgot, in order: no longer shown as remembered. */
+  forgotten: string[];
 }) {
   const [j, dispatch] = useReducer(reduce, start);
   const [writing, setWriting] = useState(false);
@@ -75,8 +78,8 @@ export function Journey({
   }
 
   // The two photo readings, each mounted once for the whole journey.
-  const catalog = useCatalogPhotos(log, lr, searchedDives(j), j.run);
-  const selection = useSelectionPhotos(log, lr, readingDive(j, log.dives), selectionReads(j), j.run);
+  const catalog = useCatalogPhotos(log, lr, searchedDives(j), j.run, forgotten);
+  const selection = useSelectionPhotos(log, lr, readingDive(j, log.dives), selectionReads(j), j.run, forgotten);
   // From step 2 on, so that step 4 opens knowing whether the collection set is still there;
   // again on each arrival at step 3 from step 2, counted.
   const [collectionSetRound, setCollectionSetRound] = useState(0);

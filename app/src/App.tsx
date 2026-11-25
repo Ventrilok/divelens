@@ -78,6 +78,10 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   }, []);
   // "Back": the journey, at the step it was on, with its choices.
   const closeSettings = useCallback(() => setScreen("journey"), []);
+  // The cameras whose remembered clock offset Settings forgot, in order: the
+  // journey no longer shows them as remembered.
+  const [forgotten, setForgotten] = useState<string[]>([]);
+  const onForgotten = useCallback((key: string) => setForgotten((keys) => [...keys, key]), []);
   const [state, setState] = useState<LogState>({ status: "loading" });
   const [settings, setSettings] = useState<Settings>(initialSettings);
   // What the settings file holds: the screen may show a change not saved yet.
@@ -263,6 +267,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
             writing={writing}
             error={saveError}
             onChange={change}
+            onForgotten={onForgotten}
             onBack={closeSettings}
           />
         )}
@@ -289,6 +294,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
               onWriting={setJourneyWriting}
               menu={menu}
               logChanges={logChanges}
+              forgotten={forgotten}
             />
           </div>
         )}

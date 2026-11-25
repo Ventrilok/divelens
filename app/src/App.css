@@ -406,6 +406,10 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .set-full { flex: 1 1 100%; }
 .set-error { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); font-size: 13px; }
 .btn-small { min-height: 32px; padding: 0 10px; font-size: 13px; }
+/* Under a section's title, as a row's hint: what the section is about. */
+.sec-hint { margin: -6px 20px 14px; font-size: 13px; color: var(--muted); }
+.set-offset { align-items: center; gap: 16px; }
+.set-offset-n { min-width: 56px; text-align: right; font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 .seg { display: inline-flex; flex-wrap: wrap; padding: 3px; border-radius: 9px; background: var(--bg-input); border: 1px solid var(--line-strong); }
 .seg label { display: inline-flex; align-items: center; min-height: 32px; padding: 0 14px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--text-3); cursor: pointer; }
 .seg label:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }

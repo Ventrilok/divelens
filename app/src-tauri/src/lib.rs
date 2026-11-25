@@ -45,6 +45,8 @@ pub fn run() {
             settings::export_settings,
             settings::check_settings_file,
             settings::import_settings,
+            settings::remembered_offsets,
+            settings::forget_offset,
             dive_log::load_dives,
             dive_log::dive_profile,
             dive_log::set_source_path,

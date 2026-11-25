@@ -1,5 +1,6 @@
 //! The settings: the file ([`mod@file`]), the units the dive application shows
-//! ([`units`]), and the commands the Settings screen calls.
+//! ([`units`]), and the commands the Settings screen calls, the remembered
+//! clock offsets' among them (their file is the journey's, `apply::offsets`).
 
 mod file;
 mod units;
@@ -17,7 +18,10 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::applog;
-use crate::dive_log::{LogId, SourceInfo, WriteInProgress, Writes, guarded_change, source_info_of};
+use crate::apply::offsets::{self, Offsets, Remembered};
+use crate::dive_log::{
+    LogId, SourceInfo, WriteInProgress, Writes, guarded_change, source_info, source_info_of,
+};
 use crate::files::config_dir;
 use crate::lightroom::commands::send_log_level;
 use crate::update::check_update;
@@ -78,6 +82,28 @@ pub(crate) fn export_settings(app: AppHandle, path: PathBuf) -> Result<(), Strin
         })?;
     log::info!("settings exported to {}", path.display());
     Ok(())
+}
+
+/// The clock offsets remembered for the dive application in use, the one
+/// the journey pre-fills them from (spec F2, F5). A file that does not read
+/// holds none, as on the journey.
+#[tauri::command]
+pub(crate) fn remembered_offsets(app: AppHandle) -> Vec<Remembered> {
+    Offsets::load(&config_dir(&app), source_info(&app).app).remembered()
+}
+
+/// Forgets the clock offset remembered for `camera` (its key) for the dive
+/// application in use, and returns the offsets left. Nothing in Lightroom
+/// changes: the offset already written on photos stays.
+#[tauri::command]
+pub(crate) fn forget_offset(app: AppHandle, camera: String) -> Result<Vec<Remembered>, String> {
+    let dive_app = source_info(&app).app;
+    let left = offsets::forget(&config_dir(&app), dive_app, &camera).map_err(|e| {
+        log::error!("clock offset of {camera} not forgotten: {e}");
+        e.to_string()
+    })?;
+    log::info!("clock offset of {camera} forgotten ({})", dive_app.name);
+    Ok(left.remembered())
 }
 
 /// A settings file's dive log: the application it means on this computer,

@@ -15,6 +15,7 @@ import type {
   LocationChoice,
   LogRef,
   Period,
+  RememberedOffset,
   Sample,
   SelectionPhotos,
   SelectionPreview,
@@ -60,6 +61,10 @@ export const exportSettings = (path: string) => invoke<void>("export_settings", 
 export const checkSettingsFile = (path: string) => invoke<ImportCheck>("check_settings_file", { path });
 /** Replaces every setting with those of the file; rejects with an ImportError. */
 export const importSettings = (path: string) => invoke<ImportCheck>("import_settings", { path });
+/** The clock offsets remembered for the dive application in use. */
+export const rememberedOffsets = () => invoke<RememberedOffset[]>("remembered_offsets");
+/** Forgets the clock offset remembered for `camera` (its key); resolves with those left, rejects with the reason. */
+export const forgetOffset = (camera: string) => invoke<RememberedOffset[]>("forget_offset", { camera });
 /** Calls `handler` whenever the settings change (here or in the app's back end). */
 export const onSettingsChanged = (handler: (s: Settings) => void): Promise<UnlistenFn> =>
   listen<Settings>("settings-changed", (e) => handler(e.payload));

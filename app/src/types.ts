@@ -381,6 +381,16 @@ export type ImportError =
 /** Why a setting was not changed; writeInProgress: it would switch the dive log during a write to Lightroom. */
 export type ChangeError = { kind: "notSaved"; detail: string } | { kind: "writeInProgress" };
 
+/** A camera whose clock offset is remembered for the dive application in use (apply/offsets.rs). */
+export interface RememberedOffset {
+  /** The camera key, as the Clocks step names it: what "Forget" names. */
+  key: string;
+  model: string | null;
+  serial: string | null;
+  /** Minutes. */
+  offset: number;
+}
+
 /** A collection set of the Lightroom catalog. */
 export interface CollectionSet {
   name: string;

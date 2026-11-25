@@ -5,7 +5,9 @@ import {
   camerasToSuggest,
   currentDescription,
   describeAgain,
+  describedForgetting,
   diveKey,
+  forgetting,
   freshCountsOf,
   keysAfterSearch,
   marginAfterRun,
@@ -15,6 +17,7 @@ import {
   onlyCameras,
   readingAfterFailure,
   readsSelection,
+  searchForgetting,
   selectionChanged,
   suggestionNotes,
   withSuggestions,
@@ -89,6 +92,47 @@ describe("what the diver set, after the selection was described", () => {
     const cameras = [camera("TG-6")];
     expect(onlyCameras(new Set(["TG-6", "Z9"]), cameras)).toEqual(new Set(["TG-6"]));
     expect(notesOfCameras({ "TG-6": "", Z9: "none" }, cameras)).toEqual({ "TG-6": "" });
+  });
+});
+
+describe("an offset forgotten in Settings", () => {
+  const cameras = [camera("TG-6", 240), camera("Z9", 60), camera("GoPro")];
+  const period = { search: 2, from: "2026-03-06", to: "2026-03-08", photos: 30, undated: 0, cameras };
+  const described = { photos: { search: 3, photos: 30, undated: 0, cameras }, version: 5 };
+
+  it("is no longer shown as remembered; the other cameras keep theirs", () => {
+    const after = forgetting(cameras, ["TG-6"]);
+    expect(after.map((c) => [c.key, c.remembered])).toEqual([
+      ["TG-6", null],
+      ["Z9", 60],
+      ["GoPro", null],
+    ]);
+    expect(forgetting(cameras, ["TG-6", "Z9"]).every((c) => c.remembered === null)).toBe(true);
+  });
+
+  it("changes nothing for a camera not shown, or shown without a remembered offset", () => {
+    expect(forgetting(cameras, ["Nikon"])).toBe(cameras);
+    expect(forgetting(cameras, ["GoPro"])).toBe(cameras);
+    expect(forgetting(cameras, [])).toBe(cameras);
+  });
+
+  it("reaches the photos found on the catalog path, once found", () => {
+    const found = searchForgetting({ state: "ready", period }, ["Z9"]);
+    expect(found.state === "ready" && found.period.cameras.map((c) => c.remembered)).toEqual([240, null, null]);
+    expect(found.state === "ready" && found.period.search).toBe(2);
+    const searching = { state: "searching" as const };
+    expect(searchForgetting(searching, ["Z9"])).toBe(searching);
+    const same = { state: "ready" as const, period };
+    expect(searchForgetting(same, ["Nikon"])).toBe(same);
+  });
+
+  it("reaches the selection described, once described", () => {
+    const after = describedForgetting(described, ["TG-6"]);
+    expect(after?.photos.cameras.map((c) => c.remembered)).toEqual([null, 60, null]);
+    expect(after?.version).toBe(5);
+    expect(after?.photos.search).toBe(3);
+    expect(describedForgetting(described, ["Nikon"])).toBe(described);
+    expect(describedForgetting(null, ["TG-6"])).toBeNull();
   });
 });
 
