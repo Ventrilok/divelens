@@ -1,7 +1,7 @@
 // The journey's shell: what it hands the two photo readings and the step
 // strip, at each step of each path. Fictional dives only.
 import { describe, expect, it } from "vitest";
-import { appliedFor, readingDive, screenClass, searchedDives, selectionReads, stripLeadsBack } from "./shell";
+import { appliedFor, looksUpSetAgain, readingDive, screenClass, searchedDives, selectionReads, stripLeadsBack } from "./shell";
 import { reduce, start, type Action, type Journey } from "./state";
 import type { Applied } from "./rules";
 import type { Dive } from "../types";
@@ -103,6 +103,28 @@ describe("appliedFor: what the summary shows", () => {
     const again = reduce(selectionAt5, { type: "done" });
     expect(appliedFor({ run: selectionAt5.run, applied }, again)).toBeNull();
     expect(appliedFor(null, selectionAt5)).toBeNull();
+  });
+});
+
+describe("looksUpSetAgain: the collection set is looked up again before each review", () => {
+  it("on each arrival at step 3 from step 2, on either path", () => {
+    expect(looksUpSetAgain(catalogAt2.step, catalogAt3.step)).toBe(true);
+    const selectionAt3 = reduce(selectionAt2, { type: "next" });
+    expect(looksUpSetAgain(selectionAt2.step, selectionAt3.step)).toBe(true);
+    // Back at step 2 and forward again: once more.
+    const back = reduce(catalogAt3, { type: "back" });
+    expect(looksUpSetAgain(back.step, reduce(back, { type: "next" }).step)).toBe(true);
+  });
+
+  it("not on the other moves between steps", () => {
+    expect(looksUpSetAgain(1, 2)).toBe(false);
+    expect(looksUpSetAgain(3, 4)).toBe(false);
+    expect(looksUpSetAgain(4, 3)).toBe(false);
+    expect(looksUpSetAgain(3, 2)).toBe(false);
+    // "No dive" skips the clocks: no collection is created, the set does not matter.
+    expect(looksUpSetAgain(2, 4)).toBe(false);
+    // From the summary ("handle separately"): the lookup starts again anyway, from outside steps 2 to 4.
+    expect(looksUpSetAgain(5, 3)).toBe(false);
   });
 });
 

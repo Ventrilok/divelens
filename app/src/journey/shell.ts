@@ -4,7 +4,7 @@
 
 import type { Dive } from "../types";
 import { chosenDive, type Applied } from "./rules";
-import type { Journey } from "./state";
+import type { Journey, Step } from "./state";
 
 /**
  * The dives the catalog path's photo search looks for: those ticked, at steps 3 and 4
@@ -29,6 +29,16 @@ export function readingDive(j: Journey, dives: Dive[]): Dive | null {
 /** The steps already done lead back, as "Back" does: never from the summary, never while Lightroom is written to. */
 export function stripLeadsBack(j: Journey, writing: boolean): boolean {
   return j.step !== 5 && !writing;
+}
+
+/**
+ * The collection set chosen in Settings is looked up again on each arrival at step 3
+ * from step 2, as 2.1.1 did on each entry to its adjust step: a set deleted in Lightroom
+ * meanwhile is noticed before Apply. Entering steps 2 to 4 from elsewhere starts a
+ * lookup anyway.
+ */
+export function looksUpSetAgain(was: Step, now: Step): boolean {
+  return was === 2 && now === 3;
 }
 
 /** What Apply wrote, kept with the run it belongs to. */

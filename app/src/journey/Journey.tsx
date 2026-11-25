@@ -19,7 +19,7 @@ import { DivesStep } from "./DivesStep";
 import { PhotosStep } from "./PhotosStep";
 import { ReviewStep } from "./ReviewStep";
 import type { Applied } from "./rules";
-import { appliedFor, readingDive, screenClass, searchedDives, selectionReads, stripLeadsBack, type Written } from "./shell";
+import { appliedFor, looksUpSetAgain, readingDive, screenClass, searchedDives, selectionReads, stripLeadsBack, type Written } from "./shell";
 import { reduce, start, stepStates, type Step } from "./state";
 import { SummaryStep } from "./SummaryStep";
 import { useCatalogPhotos } from "./useCatalogPhotos";
@@ -77,10 +77,13 @@ export function Journey({
   // The two photo readings, each mounted once for the whole journey.
   const catalog = useCatalogPhotos(log, lr, searchedDives(j), j.run);
   const selection = useSelectionPhotos(log, lr, readingDive(j, log.dives), selectionReads(j), j.run);
-  // From step 2 on, so that step 4 opens knowing whether the collection set is still there.
-  const parentMissing = useParentMissing(lr, settings.collections.parent, j.step >= 2 && j.step <= 4);
+  // From step 2 on, so that step 4 opens knowing whether the collection set is still there;
+  // again on each arrival at step 3 from step 2, counted.
+  const [collectionSetRound, setCollectionSetRound] = useState(0);
+  const parentMissing = useParentMissing(lr, settings.collections.parent, j.step >= 2 && j.step <= 4, collectionSetRound);
 
   // Leaving step 1 clears the notice of a changed dive log; landing on it counts the catalog again (spec F1).
+  // Step 3 reached from step 2 looks the collection set up again.
   const stepBefore = useRef(j.step);
   useEffect(() => {
     const was = stepBefore.current;
@@ -88,6 +91,7 @@ export function Journey({
     if (was === j.step) return;
     if (was === 1) onDismissNotice();
     if (j.step === 1) refreshCatalogSize().catch(() => {});
+    if (looksUpSetAgain(was, j.step)) setCollectionSetRound((n) => n + 1);
   }, [j.step]);
 
   const runNow = useRef(j.run);
