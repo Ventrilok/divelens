@@ -8,8 +8,3 @@ export type Screen = RequestedScreen;
 export function isReadyScreen(id: string): id is RequestedScreen {
   return id === "journey" || id === "settings";
 }
-
-/** The screen a request opens: "journey" the journey (at step 1, its choices kept), "settings" Settings. */
-export function requestedScreen(id: RequestedScreen): Screen {
-  return id;
-}
