@@ -6,6 +6,7 @@
 
 import { Fragment, useEffect, useRef, type ReactNode } from "react";
 import { formatDepth, formatDuration, formatMonth, formatRowDate, formatTemp, monthKey } from "../ui/format";
+import { hasGps, hasNotes } from "./filters";
 import { t } from "../i18n";
 import type { Capabilities, Dive, Units } from "../types";
 import { Icon } from "../ui/Icon";
@@ -64,7 +65,9 @@ export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, o
   const shownSelected = multi && selected ? dives.filter((d) => selected.has(d.id)).length : 0;
   const allChecked = dives.length > 0 && shownSelected === dives.length;
   const someChecked = shownSelected > 0 && !allChecked;
-  const columns = 8 + (capabilities.temperature ? 1 : 0) + (capabilities.rating ? 1 : 0) + (capabilities.profile ? 1 : 0);
+  // The notes column is always there: every dive application gives notes.
+  const columns =
+    9 + (capabilities.temperature ? 1 : 0) + (capabilities.rating ? 1 : 0) + (capabilities.profile ? 1 : 0) + (capabilities.gps ? 1 : 0);
 
   let lastMonth = "";
   return (
@@ -99,6 +102,8 @@ export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, o
             {capabilities.temperature && <th className="num">{t("col.temp")}</th>}
             {capabilities.rating && <th>{t("col.rating")}</th>}
             {capabilities.profile && <th>{t("col.profile")}</th>}
+            {capabilities.gps && <th>{t("col.gps")}</th>}
+            <th>{t("col.notes")}</th>
           </tr>
         </thead>
         <tbody ref={bodyRef}>
@@ -186,6 +191,22 @@ export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, o
                       )}
                     </td>
                   )}
+                  {capabilities.gps && (
+                    <td>
+                      {hasGps(d) ? (
+                        <Icon name="pin" className="accent" label={t("list.hasGps")} />
+                      ) : (
+                        <Icon name="pin" className="dim" label={t("list.noGps")} />
+                      )}
+                    </td>
+                  )}
+                  <td>
+                    {hasNotes(d) ? (
+                      <Icon name="note" className="accent" label={t("list.hasNotes")} />
+                    ) : (
+                      <Icon name="note" className="dim" label={t("list.noNotes")} />
+                    )}
+                  </td>
                 </tr>
                 {mark?.id === d.id && mark.note && (
                   <tr className="mark-note">

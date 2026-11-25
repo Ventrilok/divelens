@@ -142,14 +142,17 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .popover { position: absolute; top: calc(100% + 6px); left: 0; z-index: 10; padding: 12px; min-width: 220px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
 .form-row { display: flex; gap: 12px; }
 .form-row label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
-.option-list { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
+/* The list scrolls on its own, short enough that the popover stays within the step's
+   scrolling area at the smallest window. */
+.option-list { display: flex; flex-direction: column; max-height: min(320px, 40vh); overflow-y: auto; overscroll-behavior: contain; }
 .option { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 6px; border-radius: 6px; font-size: 13px; color: var(--text-2); cursor: pointer; }
 .option:hover { background: var(--btn); }
 .option-name { flex: 1; white-space: nowrap; }
 .filter-count { margin-left: auto; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-/* List + detail */
-.dives-body { flex: 1; min-height: 0; display: flex; gap: 16px; align-items: stretch; }
+/* List + detail: they fill the height left and scroll on their own; below
+   180 px, the whole step scrolls instead (StepLayout). */
+.dives-body { flex: 1 1 0; min-height: 180px; display: flex; gap: 16px; align-items: stretch; }
 .list-card { flex: 1 1 auto; min-width: 0; overflow: auto; outline: none; }
 .list-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
 .list-empty-under { padding: 32px 16px; }
@@ -205,6 +208,15 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .notes { display: flex; flex-direction: column; gap: 6px; }
 .notes p { font-size: 14px; line-height: 1.5; color: var(--text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* The steps of the journey (StepLayout): the content scrolls between the step
+   strip and the bottom bar, which stays in view just above the status bar.
+   The content reaches the window's edges, so that its scroll bar does; its
+   spacing sits on an inner block, whose bottom always scrolls into view. The
+   4 px around it keep focus rings whole. */
+.step-body { flex: 1 1 0; min-height: 0; margin: -4px -28px; overflow-y: auto; display: flex; flex-direction: column; }
+.step-content { flex: 1 0 auto; display: flex; flex-direction: column; gap: 16px; padding: 4px 28px; }
+.step-bar { flex: none; }
+
 /* Selection bar */
 .selection-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--raised); border-color: var(--line-strong); }
 .selection-text { display: flex; flex-direction: column; gap: 2px; }
@@ -241,7 +253,6 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .notice { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 10px; font-size: 13px; }
 .notice-ok { background: var(--accent-soft); color: var(--accent-text); }
 .notice-warn { background: rgba(242, 118, 46, 0.12); color: var(--warn-text); }
-.apply-bar { position: sticky; bottom: 0; z-index: 2; margin-top: auto; }
 .apply-progress { flex: 1 1 320px; display: flex; flex-direction: column; gap: 6px; }
 .apply-progress-text { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
 .bar { height: 6px; border-radius: 3px; background: #2c2e33; }
@@ -295,7 +306,12 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .coll-table-scroll { overflow-x: auto; }
 .coll-table .tbl th:first-child, .coll-table .tbl td:first-child { padding-left: 20px; }
 .coll-table .tbl th:last-child, .coll-table .tbl td:last-child { padding-right: 20px; }
+/* Each heading aligned as its cells (.tbl th would put it left); the photo counts centred. */
+.coll-table .tbl th.num { text-align: right; }
+.coll-table .tbl .ctr { text-align: center; font-variant-numeric: tabular-nums; }
 .tbl tr.row-warn td { background: rgba(242, 118, 46, 0.07); }
+/* A dive without photos: its count and text in orange (.tbl td would keep them grey). */
+.tbl td.warn { color: var(--warn-text); }
 
 /* The journey, step 1: two cards separated by "or" */
 .photos-head { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
@@ -392,6 +408,10 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .set-full { flex: 1 1 100%; }
 .set-error { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); font-size: 13px; }
 .btn-small { min-height: 32px; padding: 0 10px; font-size: 13px; }
+/* Under a section's title, as a row's hint: what the section is about. */
+.sec-hint { margin: -6px 20px 14px; font-size: 13px; color: var(--muted); }
+.set-offset { align-items: center; gap: 16px; }
+.set-offset-n { min-width: 56px; text-align: right; font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 .seg { display: inline-flex; flex-wrap: wrap; padding: 3px; border-radius: 9px; background: var(--bg-input); border: 1px solid var(--line-strong); }
 .seg label { display: inline-flex; align-items: center; min-height: 32px; padding: 0 14px; border-radius: 7px; font-size: 13px; font-weight: 600; color: var(--text-3); cursor: pointer; }
 .seg label:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }

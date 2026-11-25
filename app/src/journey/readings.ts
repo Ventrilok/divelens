@@ -88,6 +88,63 @@ export function marginAfterSearch(margin: number, keep: boolean, firstOfRun: boo
   return keep || firstOfRun ? margin : 0;
 }
 
+/**
+ * The cameras once Settings forgot the offset remembered for `keys`: none of them is shown
+ * as remembered any more ("remembered offset", the sentence under "Covers the selection").
+ * The same array when none of them had one, so that nothing is counted again.
+ */
+export function forgetting(cameras: Camera[], keys: string[]): Camera[] {
+  const forgotten = new Set(keys);
+  if (!cameras.some((c) => forgotten.has(c.key) && c.remembered !== null)) return cameras;
+  return cameras.map((c) => (forgotten.has(c.key) ? { ...c, remembered: null } : c));
+}
+
+/**
+ * What a reading shows once Settings forgot the offset remembered for `keys`: those cameras
+ * are no longer remembered (`forgetting`), and a card still showing its remembered offset,
+ * not set by hand (the "remembered offset" label), goes back to 0:00, as a new search would
+ * show it. An offset set by hand or suggested stays. The same objects when nothing changes.
+ */
+export function afterForget(
+  cameras: Camera[],
+  offsets: Record<string, number>,
+  touched: Set<string>,
+  keys: string[],
+): { cameras: Camera[]; offsets: Record<string, number> } {
+  const after = forgetting(cameras, keys);
+  if (after === cameras) return { cameras, offsets };
+  const forgotten = new Set(keys);
+  const back = cameras.filter(
+    (c) => forgotten.has(c.key) && c.remembered !== null && !touched.has(c.key) && offsets[c.key] === c.remembered && c.remembered !== 0,
+  );
+  if (back.length === 0) return { cameras: after, offsets };
+  return { cameras: after, offsets: { ...offsets, ...Object.fromEntries(back.map((c) => [c.key, 0])) } };
+}
+
+/**
+ * A reading (photos found, selection described) as it arrives: the offsets Settings forgot
+ * after it started are not remembered on its cameras either, even when it read the offsets
+ * file before. `seen`: how many had been forgotten when it started.
+ */
+export function arrivedForgetting<T extends { cameras: Camera[] }>(found: T, forgotten: string[], seen: number): T {
+  const cameras = forgetting(found.cameras, forgotten.slice(seen));
+  return cameras === found.cameras ? found : { ...found, cameras };
+}
+
+/** The catalog path's photos found, once Settings forgot offsets (see `forgetting`); a search under way is left to itself. */
+export function searchForgetting(search: Search, keys: string[]): Search {
+  if (search.state !== "ready") return search;
+  const cameras = forgetting(search.period.cameras, keys);
+  return cameras === search.period.cameras ? search : { ...search, period: { ...search.period, cameras } };
+}
+
+/** The selection described, once Settings forgot offsets (see `forgetting`). */
+export function describedForgetting(described: Described | null, keys: string[]): Described | null {
+  if (!described) return null;
+  const cameras = forgetting(described.photos.cameras, keys);
+  return cameras === described.photos.cameras ? described : { ...described, photos: { ...described.photos, cameras } };
+}
+
 /** "Suggest for all": the cameras neither ignored nor set by hand. */
 export function camerasToSuggest(cameras: Camera[], touched: Set<string>, ignored?: Set<string>): string[] {
   return cameras.filter((c) => !ignored?.has(c.key) && !touched.has(c.key)).map((c) => c.key);

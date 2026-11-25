@@ -41,6 +41,7 @@ import {
   type ReviewInput,
 } from "./rules";
 import type { Action, Journey, Path } from "./state";
+import { StepLayout } from "./StepLayout";
 import { photosLine } from "./texts";
 import type { CatalogReading } from "./useCatalogPhotos";
 import type { SelectionReading } from "./useSelectionPhotos";
@@ -196,7 +197,45 @@ export function ReviewStep({
   const bar = reviewBar(input);
 
   return (
-    <>
+    <StepLayout
+      beforeBar={
+        run.state === "failed" && (
+          <div className="notice notice-warn" role="alert">
+            <span>{run.message}</span>
+            <button type="button" className="btn btn-g" onClick={() => setRun({ state: "idle" })}>
+              {t("tag.dismiss")}
+            </button>
+          </div>
+        )
+      }
+      bar={
+        <>
+          {run.state === "writing" ? (
+            <ProgressBar done={run.done} total={run.total} label={t("tag.writing")} />
+          ) : (
+            <div className="selection-text">
+              {bar.text && <span className={bar.blocked ? "muted" : "strong"}>{bar.text}</span>}
+              <span className="muted small">{t("coll.undoShort")}</span>
+            </div>
+          )}
+          <div className="selection-actions">
+            {parentMissing && writeOptions(journey).collections && !writing && (
+              <button type="button" className="btn btn-s" onClick={onOpenSettings}>
+                {t("coll.openSettings")}
+              </button>
+            )}
+            <button type="button" className="btn btn-s" onClick={() => dispatch({ type: "back" })} disabled={writing}>
+              <Icon name="back" />
+              {t("coll.back")}
+            </button>
+            <button type="button" className="btn btn-p" disabled={!canApply(input, writing)} onClick={apply}>
+              {tn("tag.apply", applyCount(input))}
+              <Icon name="arrow" />
+            </button>
+          </div>
+        </>
+      }
+    >
       {line && <p className="journey-line">{line}</p>}
       {!lr.connected && (
         <div className="notice notice-warn" role="status">
@@ -220,41 +259,6 @@ export function ReviewStep({
         ))}
         <KnowLine text={unitsText(log.units)} warn={false} />
       </section>
-
-      {run.state === "failed" && (
-        <div className="notice notice-warn" role="alert">
-          <span>{run.message}</span>
-          <button type="button" className="btn btn-g" onClick={() => setRun({ state: "idle" })}>
-            {t("tag.dismiss")}
-          </button>
-        </div>
-      )}
-
-      <div className="card selection-bar apply-bar">
-        {run.state === "writing" ? (
-          <ProgressBar done={run.done} total={run.total} label={t("tag.writing")} />
-        ) : (
-          <div className="selection-text">
-            {bar.text && <span className={bar.blocked ? "muted" : "strong"}>{bar.text}</span>}
-            <span className="muted small">{t("coll.undoShort")}</span>
-          </div>
-        )}
-        <div className="selection-actions">
-          {parentMissing && writeOptions(journey).collections && !writing && (
-            <button type="button" className="btn btn-s" onClick={onOpenSettings}>
-              {t("coll.openSettings")}
-            </button>
-          )}
-          <button type="button" className="btn btn-s" onClick={() => dispatch({ type: "back" })} disabled={writing}>
-            <Icon name="back" />
-            {t("coll.back")}
-          </button>
-          <button type="button" className="btn btn-p" disabled={!canApply(input, writing)} onClick={apply}>
-            {tn("tag.apply", applyCount(input))}
-            <Icon name="arrow" />
-          </button>
-        </div>
-      </div>
-    </>
+    </StepLayout>
   );
 }

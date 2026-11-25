@@ -1,4 +1,4 @@
-// The journey (spec F5): one screen in five steps, Photos › Dives › Clocks ›
+// The journey (spec F5): one screen in five steps, Scope › Dives › Clocks ›
 // Review & Apply › Summary, on the path chosen at step 1. It holds the
 // journey's one state and the two photo readings, mounted once, so that what
 // the diver chose and set survives going back and forth between steps, and
@@ -19,7 +19,7 @@ import { DivesStep } from "./DivesStep";
 import { PhotosStep } from "./PhotosStep";
 import { ReviewStep } from "./ReviewStep";
 import type { Applied } from "./rules";
-import { appliedFor, looksUpSetAgain, readingDive, screenClass, searchedDives, selectionReads, stripLeadsBack, type Written } from "./shell";
+import { appliedFor, looksUpSetAgain, readingDive, searchedDives, selectionReads, stripLeadsBack, type Written } from "./shell";
 import { reduce, start, stepStates, type Step } from "./state";
 import { SummaryStep } from "./SummaryStep";
 import { useCatalogPhotos } from "./useCatalogPhotos";
@@ -38,6 +38,7 @@ export function Journey({
   onWriting,
   menu,
   logChanges,
+  forgotten,
 }: {
   /** The last dive log read: a new one (same log read again) drops the dives it lost. */
   log: DiveLog;
@@ -56,6 +57,8 @@ export function Journey({
   menu: number;
   /** Another dive log read (application or location), counted: each one starts the journey again. */
   logChanges: number;
+  /** The cameras whose remembered clock offset Settings forgot, in order: no longer shown as remembered. */
+  forgotten: string[];
 }) {
   const [j, dispatch] = useReducer(reduce, start);
   const [writing, setWriting] = useState(false);
@@ -75,8 +78,8 @@ export function Journey({
   }
 
   // The two photo readings, each mounted once for the whole journey.
-  const catalog = useCatalogPhotos(log, lr, searchedDives(j), j.run);
-  const selection = useSelectionPhotos(log, lr, readingDive(j, log.dives), selectionReads(j), j.run);
+  const catalog = useCatalogPhotos(log, lr, searchedDives(j), j.run, forgotten);
+  const selection = useSelectionPhotos(log, lr, readingDive(j, log.dives), selectionReads(j), j.run, forgotten);
   // From step 2 on, so that step 4 opens knowing whether the collection set is still there;
   // again on each arrival at step 3 from step 2, counted.
   const [collectionSetRound, setCollectionSetRound] = useState(0);
@@ -110,7 +113,7 @@ export function Journey({
   const onGo = stripLeadsBack(j, writing) ? (step: Step) => dispatch({ type: "goTo", step }) : undefined;
 
   return (
-    <main className={screenClass(j)}>
+    <main className="screen">
       <Steps states={stepStates(j)} onGo={onGo} />
       {j.step === 1 && <PhotosStep journey={j} dispatch={dispatch} lr={lr} notice={notice} onDismissNotice={onDismissNotice} />}
       {j.step === 2 && path && (
@@ -159,7 +162,6 @@ export function Journey({
           journey={j}
           log={log}
           settings={settings}
-          onBackToDives={() => dispatch({ type: "backToDives" })}
           onHandleSeparately={(ids) => dispatch({ type: "handleSeparately", ids })}
           onDone={() => dispatch({ type: "done" })}
         />

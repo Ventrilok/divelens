@@ -50,9 +50,9 @@ export interface PhotosLineInput {
 }
 
 /**
- * The line under the step strip that recalls the choices made (spec F5), without the
- * "Change" link of step 2, which the screen adds. null where there is none: step 1 and
- * the summary. Step 4 repeats step 3's line, and step 2's for "no dive".
+ * The line under the step strip that recalls the choices made (spec F5), plain text
+ * ("Back" returns to step 1). null where there is none: step 1 and the summary. Step 4
+ * repeats step 3's line, and step 2's for "no dive".
  */
 export function photosLine(j: Journey, i: PhotosLineInput): string | null {
   if (j.step === 1 || j.step === 5 || j.path === null) return null;

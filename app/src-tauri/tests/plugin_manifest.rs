@@ -69,6 +69,27 @@ fn panel_shows_every_field_once_in_titled_sections() {
 }
 
 #[test]
+fn panel_site_section_shows_the_location_then_the_gps_and_its_altitude() {
+    run(
+        &lua(),
+        r#"
+        local items, site, inSite = require "Tagset".items, {}, false
+        for _, item in ipairs(items) do
+            if type(item) == "table" then
+                inSite = item.label == "Site"
+            elseif item == "com.adobe.separator" then
+                inSite = false
+            elseif inSite then
+                site[#site + 1] = item
+            end
+        end
+        local shown = table.concat(site, ",")
+        assert(shown == "com.adobe.location,com.adobe.city,com.adobe.country,com.adobe.GPS,com.adobe.GPSAltitude", shown)
+        "#,
+    );
+}
+
+#[test]
 fn every_plugin_file_compiles_under_lua_5_1() {
     let lua = lua();
     for entry in std::fs::read_dir(plugin_dir()).unwrap() {

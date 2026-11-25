@@ -88,20 +88,9 @@ pub(crate) fn lightroom_link(app: AppHandle, commands: mpsc::Receiver<Command>) 
                             );
                             send_log_level(&app, Settings::load(&dir).log_level);
                         }
-                        let ranges: Vec<_> = status
-                            .selection_cameras
-                            .iter()
-                            .map(|c| {
-                                let key =
-                                    offsets::camera_key(c.model.as_deref(), c.serial.as_deref());
-                                (key, c.from.clone(), c.to.clone())
-                            })
-                            .collect();
                         status.restart_lightroom = status.other_version(&version);
                         let dive_app = source_info(&app).app;
-                        let cover =
-                            offsets::corrected_range(&Offsets::load(&dir, dive_app), &ranges);
-                        (status.cover_from, status.cover_to) = cover.unzip();
+                        offsets::set_cover(&mut status, &Offsets::load(&dir, dive_app));
                         *app.state::<Lightroom>()
                             .status
                             .lock()

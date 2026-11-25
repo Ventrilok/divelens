@@ -51,8 +51,3 @@ export interface Written {
 export function appliedFor(written: Written | null, j: Journey): Applied | null {
   return written && written.run === j.run ? written.applied : null;
 }
-
-/** The dive list fills the screen at step 2; the other steps scroll. */
-export function screenClass(j: Journey): string {
-  return j.step === 2 ? "screen" : "screen screen-scroll";
-}

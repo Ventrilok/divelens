@@ -1,4 +1,4 @@
-// Step 1 of the journey, "Photos" (spec F5): which photos to work on, two
+// Step 1 of the journey, "Scope" (spec F5): which photos to work on, two
 // cards separated by "or". "Entire catalog" leads to ticking dives; "The N
 // photos selected in Lightroom" to choosing one dive, with the selection's
 // cameras, day and live thumbnails (up to six). That card is always shown,
@@ -16,6 +16,7 @@ import type { LightroomStatus, SelectionPreview } from "../types";
 import { catalogCard, photosBar, selectionCard } from "./choose";
 import { canGoNext } from "./rules";
 import type { Action, Journey } from "./state";
+import { StepLayout } from "./StepLayout";
 
 /** Thumbnails shown at most on the selection's card; "+N" for the others. */
 const THUMBNAILS = 6;
@@ -67,13 +68,29 @@ export function PhotosStep({
   const onSelection = journey.path === "selection";
 
   return (
-    <>
+    <StepLayout
+      bar={
+        <>
+          <div className="selection-text">
+            {bar.choice && <span className="strong">{bar.choice}</span>}
+            {bar.next && <span className="muted small">{bar.next}</span>}
+            {bar.prompt && <span className="muted small">{bar.prompt}</span>}
+          </div>
+          <div className="selection-actions">
+            <button type="button" className="btn btn-p" disabled={!next.allowed} onClick={() => dispatch({ type: "next" })}>
+              {t("sel.next")}
+              <Icon name="arrow" />
+            </button>
+          </div>
+        </>
+      }
+    >
       {notice && <LogNotice text={notice} onDismiss={onDismissNotice} />}
       <div className="photos-head">
         <h2>{t("journey.photos.title")}</h2>
         <p className="muted small">{t("journey.photos.hint")}</p>
       </div>
-      <div className="choices" role="radiogroup" aria-label={t("journey.steps.photos")}>
+      <div className="choices" role="radiogroup" aria-label={t("journey.steps.scope")}>
         <label className={`choice ${onCatalog ? "choice-on" : ""}`}>
           <input
             type="radio"
@@ -108,20 +125,6 @@ export function PhotosStep({
           </span>
         </label>
       </div>
-
-      <div className="card selection-bar apply-bar">
-        <div className="selection-text">
-          {bar.choice && <span className="strong">{bar.choice}</span>}
-          {bar.next && <span className="muted small">{bar.next}</span>}
-          {bar.prompt && <span className="muted small">{bar.prompt}</span>}
-        </div>
-        <div className="selection-actions">
-          <button type="button" className="btn btn-p" disabled={!next.allowed} onClick={() => dispatch({ type: "next" })}>
-            {t("sel.next")}
-            <Icon name="arrow" />
-          </button>
-        </div>
-      </div>
-    </>
+    </StepLayout>
   );
 }

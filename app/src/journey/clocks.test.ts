@@ -121,7 +121,7 @@ describe("the photos outside the dives", () => {
       title: "Outside the dives · 65 photos",
       lines: ["Photos from the period that fall in no dive, even with the margin: on land, on the boat… They get nothing."],
       cameras: "58 Olympus TG-6 · 7 Unknown camera",
-      how: 'To attach some to a dive anyway, or give them only a location: select them in Lightroom, then choose "The selected photos" at the Photos step.',
+      how: 'To attach some to a dive anyway, or give them only a location: select them in Lightroom, then choose "The selected photos" at the Scope step.',
     });
   });
 

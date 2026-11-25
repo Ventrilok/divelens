@@ -18,7 +18,7 @@ export function DivePreview({ rows, outside }: { rows: PreviewRow[]; outside: Ou
               <th className="num">{t("col.number")}</th>
               <th>{t("col.site")}</th>
               <th>{t("coll.col.dive")}</th>
-              <th className="num">{t("coll.col.photos")}</th>
+              <th className="ctr">{t("coll.col.photos")}</th>
               <th>{t("coll.col.cameras")}</th>
               <th>{t("coll.col.perPhoto")}</th>
             </tr>
@@ -29,7 +29,7 @@ export function DivePreview({ rows, outside }: { rows: PreviewRow[]; outside: Ou
                 <td className="num">{r.dive.number ?? DASH}</td>
                 <td className="site-name">{r.dive.site.name ?? DASH}</td>
                 <td>{formatRowSpan(r.dive.start, r.dive.end)}</td>
-                <td className={`num strong ${r.warn ? "warn" : ""}`}>{r.photos !== null ? formatInt(r.photos) : "…"}</td>
+                <td className={`ctr strong ${r.warn ? "warn" : ""}`}>{r.photos !== null ? formatInt(r.photos) : "…"}</td>
                 <td className="muted">{r.cameras > 0 ? tn("coll.cameras", r.cameras) : DASH}</td>
                 <td className={r.warn ? "warn" : ""}>{r.perPhoto}</td>
               </tr>

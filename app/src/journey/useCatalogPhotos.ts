@@ -11,6 +11,11 @@
 // ignored cameras and margin; a new `run` throws away what was found and set,
 // except the surface margin when the run goes on with dives ticked ("handle
 // separately", as in 2.1.1), so that its first search keeps it.
+//
+// `forgotten`: the cameras whose remembered offset Settings forgot, in order, never
+// shortened. Each one is no longer shown as remembered, and its card goes back to 0:00
+// while it still showed that offset, not set by hand (afterForget); a search under way
+// when it was forgotten does not bring it back.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { collectionsPreview, findCollectionPhotos, suggestOffsets } from "../api";
@@ -29,12 +34,15 @@ import type {
 } from "../types";
 import type { CatalogReview } from "./rules";
 import {
+  afterForget,
+  arrivedForgetting,
   camerasToSuggest,
   diveKey as searchedDives,
   keysAfterSearch,
   marginAfterRun,
   marginAfterSearch,
   offsetsAfterSearch,
+  searchForgetting,
   suggestionNotes,
   withSuggestions,
   type Search,
@@ -73,6 +81,7 @@ export function useCatalogPhotos(
   lr: Pick<LightroomStatus, "connected">,
   diveIds: string[],
   run: number,
+  forgotten: string[],
 ): CatalogReading {
   const idsKey = diveIds.join(",");
   const diveKey = useMemo(() => searchedDives(log.dives, diveIds), [log.dives, idsKey]);
@@ -88,6 +97,11 @@ export function useCatalogPhotos(
   const [previewFailed, setPreviewFailed] = useState(false);
   const searchedFor = useRef<string | null>(null);
   const asked = useRef(0);
+  // The offsets forgotten in Settings so far, and the cameras of the last photos found
+  // (kept while a newer search is under way).
+  const forgottenNow = useRef(forgotten);
+  forgottenNow.current = forgotten;
+  const lastCameras = useRef<Camera[]>([]);
 
   // A new run: what was found and set is thrown away, and a count asked before
   // is no longer wanted. Before the search below, which starts again.
@@ -119,9 +133,12 @@ export function useCatalogPhotos(
     asked.current++;
     setPreview(null);
     setPreviewFailed(false);
+    const seen = forgottenNow.current.length;
     findCollectionPhotos(logRef(log.source), nextSearchNumber(), diveKey.split(","))
-      .then((period) => {
+      .then((found) => {
         if (!live) return;
+        // An offset forgotten in Settings meanwhile is not remembered on these photos either.
+        const period = arrivedForgetting(found, forgottenNow.current, seen);
         // Same dives found again (link restarted): the user's settings stay.
         const keep = searchedFor.current === diveKey;
         const firstOfRun = searchedFor.current === null;
@@ -138,6 +155,19 @@ export function useCatalogPhotos(
       live = false;
     };
   }, [diveKey, lr.connected, again, run]);
+
+  // Offsets forgotten in Settings since the last time: no longer remembered, and back to
+  // 0:00 on the cards that still showed them (the counts follow).
+  const forgottenSeen = useRef(forgotten.length);
+  useEffect(() => {
+    const keys = forgotten.slice(forgottenSeen.current);
+    forgottenSeen.current = forgotten.length;
+    if (keys.length === 0) return;
+    const after = afterForget(lastCameras.current, offsets, touched, keys);
+    lastCameras.current = after.cameras;
+    if (after.offsets !== offsets) setOffsets(after.offsets);
+    setSearch((s) => searchForgetting(s, keys));
+  }, [forgotten]);
 
   const choices: CollectionChoices = useMemo(
     () => ({ offsets, ignored: [...ignored], marginMin: margin }),
@@ -160,6 +190,7 @@ export function useCatalogPhotos(
 
   const period = search.state === "ready" ? search.period : null;
   const cameras = period?.cameras ?? [];
+  if (period) lastCameras.current = period.cameras;
 
   const setOffset = (key: string, min: number) => {
     setOffsets((o) => ({ ...o, [key]: clampOffset(min) }));

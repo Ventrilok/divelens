@@ -20,6 +20,7 @@ import { catalogBar, catalogOutside, catalogRows, selectionBar, selectionOutside
 import { DivePreview } from "./DivePreview";
 import { canGoNext, chosenDive, tickedDives } from "./rules";
 import type { Journey, Path } from "./state";
+import { StepLayout } from "./StepLayout";
 import { diveLabel, photosLine } from "./texts";
 import type { CatalogReading } from "./useCatalogPhotos";
 import type { SelectionReading } from "./useSelectionPhotos";
@@ -220,7 +221,31 @@ export function ClocksStep({
   }
 
   return (
-    <>
+    <StepLayout
+      bar={
+        <>
+          <div className="selection-text">
+            {main && <span className={main.strong ? "strong" : "muted"}>{main.text}</span>}
+            {notes.map((n, i) => (
+              <span key={i} className={`small ${n.warn ? "warn" : "muted"}`}>
+                {n.text}
+              </span>
+            ))}
+            {next.prompt && <span className="muted small">{next.prompt}</span>}
+          </div>
+          <div className="selection-actions">
+            <button type="button" className="btn btn-s" onClick={onBack}>
+              <Icon name="back" />
+              {t("coll.back")}
+            </button>
+            <button type="button" className="btn btn-p" disabled={!next.allowed} onClick={onNext}>
+              {t("sel.next")}
+              <Icon name="arrow" />
+            </button>
+          </div>
+        </>
+      }
+    >
       {line && <p className="journey-line">{line}</p>}
       {!lr.connected && (
         <div className="notice notice-warn" role="status">
@@ -232,27 +257,6 @@ export function ClocksStep({
       ) : (
         dive && <SelectionClocks s={selection} dive={dive} lr={lr} />
       )}
-      <div className="card selection-bar apply-bar">
-        <div className="selection-text">
-          {main && <span className={main.strong ? "strong" : "muted"}>{main.text}</span>}
-          {notes.map((n, i) => (
-            <span key={i} className={`small ${n.warn ? "warn" : "muted"}`}>
-              {n.text}
-            </span>
-          ))}
-          {next.prompt && <span className="muted small">{next.prompt}</span>}
-        </div>
-        <div className="selection-actions">
-          <button type="button" className="btn btn-s" onClick={onBack}>
-            <Icon name="back" />
-            {t("coll.back")}
-          </button>
-          <button type="button" className="btn btn-p" disabled={!next.allowed} onClick={onNext}>
-            {t("sel.next")}
-            <Icon name="arrow" />
-          </button>
-        </div>
-      </div>
-    </>
+    </StepLayout>
   );
 }

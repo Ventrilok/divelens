@@ -211,10 +211,10 @@ describe("leaving the summary", () => {
   const at5 = run(catalogAt3, { type: "next" }, { type: "setOptions", options: changed }, { type: "applied" });
   const selectionAt5 = run(selectionAt3, { type: "next" }, { type: "setOptions", options: changed }, { type: "applied" });
 
-  it("back to dives: step 2, no dive ticked, default options, a new run", () => {
-    expect(reduce(at5, { type: "backToDives" })).toEqual({
+  it("back to scope selection (catalog): step 1, no dive ticked, default options, the path kept, a new run", () => {
+    expect(reduce(at5, { type: "done" })).toEqual({
       ...at5,
-      step: 2,
+      step: 1,
       dives: new Set(),
       options: defaultOptions,
       run: at5.run + 1,
@@ -246,9 +246,11 @@ describe("menu", () => {
     expect(reduce(catalog, { type: "menu" })).toBe(catalog);
   });
 
-  it("from the summary, unticks the dives as back to dives does, then step 1", () => {
+  it("from the summary, starts again as back to scope selection does: step 1, no dive ticked", () => {
     const at5 = run(catalogAt3, { type: "next" }, { type: "applied" });
-    expect(reduce(at5, { type: "menu" })).toEqual({ ...reduce(at5, { type: "backToDives" }), step: 1 });
+    const after = reduce(at5, { type: "menu" });
+    expect(after).toEqual(reduce(at5, { type: "done" }));
+    expect(after).toEqual({ ...start, path: "catalog", run: at5.run + 1 });
   });
 
   it("from the summary of the selection path, starts again as done does", () => {
