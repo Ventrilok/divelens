@@ -295,6 +295,9 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .coll-table-scroll { overflow-x: auto; }
 .coll-table .tbl th:first-child, .coll-table .tbl td:first-child { padding-left: 20px; }
 .coll-table .tbl th:last-child, .coll-table .tbl td:last-child { padding-right: 20px; }
+/* Each heading aligned as its cells (.tbl th would put it left); the photo counts centred. */
+.coll-table .tbl th.num { text-align: right; }
+.coll-table .tbl .ctr { text-align: center; font-variant-numeric: tabular-nums; }
 .tbl tr.row-warn td { background: rgba(242, 118, 46, 0.07); }
 
 /* The journey, step 1: two cards separated by "or" */
