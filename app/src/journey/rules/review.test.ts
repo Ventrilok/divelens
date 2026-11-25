@@ -2,7 +2,18 @@
 // are compared word for word with the specification (F5).
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage } from "../../i18n";
-import { applyCount, barSummary, canApply, effects, goodToKnow, otherSite, reviewBlocker, reviewCounts, unitsText } from "../rules";
+import {
+  applyCount,
+  barSummary,
+  canApply,
+  effects,
+  goodToKnow,
+  gpsError,
+  otherSite,
+  reviewBlocker,
+  reviewCounts,
+  unitsText,
+} from "../rules";
 import {
   after7,
   before3,
@@ -220,6 +231,27 @@ describe("reviewBlocker, selection path", () => {
     expect(reviewBlocker(input(noDiveAt4))).toBe("Choose a site");
     expect(reviewBlocker(input(withOptions(noDiveAt4, { place: false, gps: false })))).toBe("Tick at least one option");
     expect(reviewBlocker(input(withOptions(noDiveAt4, { pick: pickBlueArch })))).toBeNull();
+  });
+});
+
+describe("gpsError: the position typed under another site is refused (the picker shows it)", () => {
+  const typedWrong = { ...pickBlueArch, lat: "91" };
+
+  it("only for another site, with GPS ticked, on either path", () => {
+    expect(gpsError(input(withOptions(catalogAt4, { site: "other", pick: typedWrong })))).toBe(true);
+    expect(gpsError(input(withOptions(noDiveAt4, { pick: typedWrong })))).toBe(true);
+    expect(gpsError(input(withOptions(catalogAt4, { site: "other", pick: typedWrong, gps: false })))).toBe(false);
+    expect(gpsError(input(withOptions(catalogAt4, { site: "other", pick: pickBlueArch })))).toBe(false);
+  });
+
+  it("never for the dive's site, whatever was typed before", () => {
+    expect(gpsError(input(withOptions(catalogAt4, { pick: typedWrong })))).toBe(false);
+    expect(gpsError(input(withOptions(selectionAt4, { pick: typedWrong })))).toBe(false);
+  });
+
+  it("agrees with what blocks Apply", () => {
+    const j = withOptions(catalogAt4, { site: "other", pick: typedWrong });
+    expect(reviewBlocker(input(j))).toBe("Latitude between -90 and 90, longitude between -180 and 180, or both empty.");
   });
 });
 

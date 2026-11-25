@@ -16,6 +16,7 @@ export {
   canApply,
   effects,
   goodToKnow,
+  gpsError,
   reviewBlocker,
   reviewCounts,
   unitsText,

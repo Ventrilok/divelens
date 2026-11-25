@@ -104,6 +104,23 @@ export function reviewCounts(i: ReviewInput): ReviewCounts {
 }
 
 /**
+ * The position typed under "Other site" is refused: a site is picked and its GPS is not
+ * valid. It matters only when the GPS is written: otherwise none is sent. What greys
+ * "Apply" and what the site picker shows in red.
+ */
+export function gpsError(i: ReviewInput): boolean {
+  const j = i.journey;
+  const other = siteSource(j, j.path === "catalog" ? null : chosenDive(j, i.log.dives)) === "other";
+  return gpsRefused({
+    withPlace: writeOptions(j).gps,
+    placeKind: other ? "site" : "diveSite",
+    diveSiteUsable: !other,
+    siteId: j.options.pick.siteId,
+    gpsValid: gpsInput(j.options.pick.lat, j.options.pick.lon) !== undefined,
+  });
+}
+
+/**
  * What greys "Apply", in the order the diver meets it; null when nothing does. The
  * missing collection set blocks only when collections are created; the reading of the
  * selection only when per-photo values are written. An empty write is never allowed:
@@ -132,15 +149,7 @@ export function reviewBlocker(i: ReviewInput): string | null {
 
   const other = siteSource(j, catalog ? null : chosenDive(j, i.log.dives)) === "other";
   if (siteDetails(o) && other && pickedSite(j, i.log.sites) === null) return t("tag.chooseSite");
-  // A position typed wrong matters only when the GPS is written: otherwise none is sent.
-  const gpsError = gpsRefused({
-    withPlace: o.gps,
-    placeKind: other ? "site" : "diveSite",
-    diveSiteUsable: !other,
-    siteId: j.options.pick.siteId,
-    gpsValid: gpsInput(j.options.pick.lat, j.options.pick.lon) !== undefined,
-  });
-  if (gpsError) return t("tag.badGps");
+  if (gpsError(i)) return t("tag.badGps");
 
   const p = i.catalog.preview;
   const c = reviewCounts(i);

@@ -328,6 +328,35 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .clocks-outside { display: flex; flex-direction: column; gap: 3px; padding: 16px 20px; border-top: 1px solid var(--line-strong); background: #1c1d20; }
 .clocks-outside-title { font-size: 15px; font-weight: 600; }
 .clocks-outside-how { margin-top: 6px; color: var(--text-3); }
+
+/* The journey, step 4: each option with its effect on the right */
+.review { flex: none; overflow: hidden; }
+.review-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
+.review-head { padding: 18px 20px 14px; display: flex; flex-direction: column; gap: 4px; }
+.review-head h2, .review-know h2 { font-size: 16px; font-weight: 700; }
+.review-grp { padding: 9px 20px; background: var(--bg-head); border-top: 1px solid var(--line-soft); }
+.review-opt, .review-sub { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 24px; padding: 18px 20px; border-top: 1px solid var(--line-soft); }
+.review-sub { padding: 12px 20px 12px 50px; border-top-style: dashed; }
+.review-off { opacity: 0.45; }
+.review-t { display: flex; align-items: flex-start; gap: 12px; flex: 1 1 420px; min-width: 0; }
+.review-t input { margin-top: 2px; }
+.review-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.review-body label { display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+.review-off .review-body label, .review-radio:has(input:disabled) { cursor: not-allowed; }
+.review-body b { font-size: 15px; font-weight: 700; color: var(--text); }
+.review-sub .review-body b { font-size: 14px; font-weight: 600; }
+.review-text { font-size: 13px; line-height: 1.45; color: var(--muted); }
+.review-eff { flex: 0 1 260px; text-align: right; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.review-site { flex: 1 1 100%; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.review-src { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; color: var(--text-2); }
+.review-radio { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.review-radio:has(input:disabled) { color: var(--muted); }
+.review-know { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; flex: none; }
+.review-line { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-2); }
+.link { padding: 0; background: none; border: 0; color: var(--accent); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.link:not(:disabled):hover { color: var(--accent-hover); text-decoration: underline; text-underline-offset: 3px; }
+.link:disabled { opacity: 0.5; cursor: not-allowed; }
+.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .result { width: 100%; display: flex; flex-direction: column; gap: 20px; }
 .result-head { display: flex; align-items: center; gap: 16px; }
 .result-head h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
