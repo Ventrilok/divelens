@@ -15,6 +15,10 @@ export interface Filters {
   depthMax: number | null;
   minRating: number | null;
   withProfile: boolean;
+  /** Only dives whose site has a GPS position. */
+  withGps: boolean;
+  /** Only dives with notes. */
+  withNotes: boolean;
 }
 
 export const NO_FILTERS: Filters = {
@@ -26,6 +30,8 @@ export const NO_FILTERS: Filters = {
   depthMax: null,
   minRating: null,
   withProfile: false,
+  withGps: false,
+  withNotes: false,
 };
 
 export type { Sort } from "../types";
@@ -39,8 +45,20 @@ export function hasFilters(f: Filters): boolean {
     f.depthMin !== null ||
     f.depthMax !== null ||
     f.minRating !== null ||
-    f.withProfile
+    f.withProfile ||
+    f.withGps ||
+    f.withNotes
   );
+}
+
+/** The dive's site has a GPS position: its latitude and its longitude, as the detail card shows it. */
+export function hasGps(d: Dive): boolean {
+  return d.site.lat !== null && d.site.lon !== null;
+}
+
+/** The dive has notes (the readers give none for blank notes). */
+export function hasNotes(d: Dive): boolean {
+  return !!d.notes;
 }
 
 /** Pre-computed search text per dive (number, site, location, country). */
@@ -69,6 +87,8 @@ export function applyFilters(dives: Dive[], f: Filters, index: Map<string, strin
     if (f.depthMax !== null && (d.maxDepthM === null || d.maxDepthM > f.depthMax)) return false;
     if (f.minRating !== null && (d.rating ?? 0) < f.minRating) return false;
     if (f.withProfile && !d.hasProfile) return false;
+    if (f.withGps && !hasGps(d)) return false;
+    if (f.withNotes && !hasNotes(d)) return false;
     return true;
   });
 }

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Dive } from "../types";
 
 vi.stubGlobal("navigator", { language: "en-GB" });
-const { applyFilters, countryCounts, NO_FILTERS, searchIndex, sortDives } = await import("./filters");
+const { applyFilters, countryCounts, hasFilters, hasGps, hasNotes, NO_FILTERS, searchIndex, sortDives } = await import("./filters");
 
 function dive(p: Partial<Dive> & { id: string }): Dive {
   return {
@@ -23,8 +23,9 @@ function dive(p: Partial<Dive> & { id: string }): Dive {
 }
 
 const dives = [
-  dive({ id: "a", number: 1, start: "2024-06-01T09:00:00", maxDepthM: 12, rating: 3, hasProfile: true, site: { id: null, name: "Coral Garden", location: "North Reef", country: "Égypte", lat: null, lon: null } }),
-  dive({ id: "b", number: 2, start: "2025-03-10T14:00:00", maxDepthM: 30, site: { id: null, name: "Blue Hole", location: null, country: "Atlantis", lat: null, lon: null } }),
+  dive({ id: "a", number: 1, start: "2024-06-01T09:00:00", maxDepthM: 12, rating: 3, hasProfile: true, site: { id: null, name: "Coral Garden", location: "North Reef", country: "Égypte", lat: -8.5, lon: 115.25 } }),
+  // A site with a latitude but no longitude has no GPS position.
+  dive({ id: "b", number: 2, start: "2025-03-10T14:00:00", maxDepthM: 30, notes: "Strong current.", site: { id: null, name: "Blue Hole", location: null, country: "Atlantis", lat: 12.5, lon: null } }),
   dive({ id: "c", number: 13, start: "2025-03-11T08:00:00", maxDepthM: 22, rating: 5, hasProfile: true }),
 ];
 const index = searchIndex(dives);
@@ -50,6 +51,33 @@ describe("filters", () => {
     expect(filter({ depthMin: 20, depthMax: 25 })).toEqual(["c"]);
     expect(filter({ minRating: 4 })).toEqual(["c"]);
     expect(filter({ withProfile: true })).toEqual(["a", "c"]);
+  });
+  it("filters by GPS position of the site and by notes", () => {
+    expect(filter({ withGps: true })).toEqual(["a"]);
+    expect(filter({ withNotes: true })).toEqual(["b"]);
+  });
+  it("combines the profile, GPS and notes filters", () => {
+    expect(filter({ withProfile: true, withGps: true })).toEqual(["a"]);
+    expect(filter({ withProfile: true, withNotes: true })).toEqual([]);
+    expect(filter({ withGps: true, withNotes: true })).toEqual([]);
+  });
+  it("counts each of them as a filter set, cleared with the others", () => {
+    expect(hasFilters(NO_FILTERS)).toBe(false);
+    expect(hasFilters({ ...NO_FILTERS, withProfile: true })).toBe(true);
+    expect(hasFilters({ ...NO_FILTERS, withGps: true })).toBe(true);
+    expect(hasFilters({ ...NO_FILTERS, withNotes: true })).toBe(true);
+    expect(NO_FILTERS.withGps).toBe(false);
+    expect(NO_FILTERS.withNotes).toBe(false);
+  });
+});
+
+describe("marks of the list", () => {
+  it("a GPS position needs both the latitude and the longitude of the site", () => {
+    expect(dives.map(hasGps)).toEqual([true, false, false]);
+    expect(hasGps(dive({ id: "x", site: { id: null, name: null, location: null, country: null, lat: 0, lon: 0 } }))).toBe(true);
+  });
+  it("notes are there when the dive log gives some", () => {
+    expect(dives.map(hasNotes)).toEqual([false, true, false]);
   });
 });
 

@@ -199,6 +199,28 @@ export function FilterBar({ dives, filters: f, onChange, capabilities, units, sh
         </button>
       )}
 
+      {capabilities.gps && (
+        <button
+          type="button"
+          className={`chip chip-toggle ${f.withGps ? "chip-on" : ""}`}
+          aria-pressed={f.withGps}
+          onClick={() => set({ withGps: !f.withGps })}
+        >
+          <Icon name="pin" size={15} className="accent" />
+          {t("filter.withGps")}
+        </button>
+      )}
+
+      <button
+        type="button"
+        className={`chip chip-toggle ${f.withNotes ? "chip-on" : ""}`}
+        aria-pressed={f.withNotes}
+        onClick={() => set({ withNotes: !f.withNotes })}
+      >
+        <Icon name="note" size={15} className="accent" />
+        {t("filter.withNotes")}
+      </button>
+
       <span className="filter-count">{count ?? t("dives.shown", { shown: formatInt(shown), total: formatInt(dives.length) })}</span>
     </div>
   );
