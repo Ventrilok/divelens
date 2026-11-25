@@ -24,6 +24,7 @@ use crate::dive_log::{
 };
 use crate::files::config_dir;
 use crate::lightroom::commands::send_log_level;
+use crate::lightroom::events::Lightroom;
 use crate::update::check_update;
 
 /// Where the app writes its log (`None`: no home folder).
@@ -94,7 +95,9 @@ pub(crate) fn remembered_offsets(app: AppHandle) -> Vec<Remembered> {
 
 /// Forgets the clock offset remembered for `camera` (its key) for the dive
 /// application in use, and returns the offsets left. Nothing in Lightroom
-/// changes: the offset already written on photos stays.
+/// changes: the offset already written on photos stays. The selection's
+/// cover range, computed from the remembered offsets, is computed again and
+/// told to the screens when it moved.
 #[tauri::command]
 pub(crate) fn forget_offset(app: AppHandle, camera: String) -> Result<Vec<Remembered>, String> {
     let dive_app = source_info(&app).app;
@@ -103,6 +106,14 @@ pub(crate) fn forget_offset(app: AppHandle, camera: String) -> Result<Vec<Rememb
         e.to_string()
     })?;
     log::info!("clock offset of {camera} forgotten ({})", dive_app.name);
+    let moved = {
+        let lightroom = app.state::<Lightroom>();
+        let mut status = lightroom.status.lock().expect("lightroom state");
+        offsets::set_cover(&mut status, &left).then(|| status.clone())
+    };
+    if let Some(status) = moved {
+        let _ = app.emit("lightroom-status", status);
+    }
     Ok(left.remembered())
 }
 

@@ -13,7 +13,9 @@ use chrono::{Duration, NaiveDateTime};
 use divelens_core::apps::DiveApp;
 use serde::{Deserialize, Serialize};
 
-use crate::lightroom::ApplyOutcome;
+#[cfg(test)]
+use crate::lightroom::CameraRange;
+use crate::lightroom::{ApplyOutcome, Status};
 
 const CURRENT_VERSION: u32 = 1;
 
@@ -159,6 +161,25 @@ pub fn corrected_range(
         });
     }
     range.map(|(a, b)| (format_time(a), format_time(b)))
+}
+
+/// Sets the cover range of `status` (the selection path's "covers the
+/// selection" hint, before the selection is described): its selection's
+/// range, each camera moved by its offset in `offsets`. Returns whether it
+/// changed.
+pub(crate) fn set_cover(status: &mut Status, offsets: &Offsets) -> bool {
+    let ranges: Vec<_> = status
+        .selection_cameras
+        .iter()
+        .map(|c| {
+            let key = camera_key(c.model.as_deref(), c.serial.as_deref());
+            (key, c.from.clone(), c.to.clone())
+        })
+        .collect();
+    let (from, to) = corrected_range(offsets, &ranges).unzip();
+    let changed = status.cover_from != from || status.cover_to != to;
+    (status.cover_from, status.cover_to) = (from, to);
+    changed
 }
 
 #[cfg(test)]
@@ -354,6 +375,55 @@ mod tests {
         );
         assert_eq!(Offsets::load(&dir, app).get("Nikon|"), Some(5));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_cover_of_the_selection_follows_the_offsets_remembered() {
+        let camera = |model: &str, serial: Option<&str>, from: &str, to: &str| CameraRange {
+            model: Some(model.into()),
+            serial: serial.map(Into::into),
+            from: from.into(),
+            to: to.into(),
+        };
+        let mut status = Status {
+            selection_cameras: vec![
+                camera(
+                    "TG-7",
+                    Some("A1"),
+                    "2025-12-30T05:02:00",
+                    "2025-12-30T05:40:00",
+                ),
+                camera("GoPro", None, "2025-12-30T09:10:00", "2025-12-30T09:20:00"),
+            ],
+            ..Status::default()
+        };
+        let mut offsets = Offsets::default();
+        offsets.cameras.insert("TG-7|A1".into(), 240);
+        assert!(set_cover(&mut status, &offsets));
+        let cover = |s: &Status| (s.cover_from.clone(), s.cover_to.clone());
+        assert_eq!(
+            cover(&status),
+            (
+                Some("2025-12-30T09:02:00".into()),
+                Some("2025-12-30T09:40:00".into())
+            )
+        );
+        // The same offsets again: nothing to tell.
+        assert!(!set_cover(&mut status, &offsets));
+        // The TG-7's offset forgotten: its photos at the times they carry.
+        offsets.cameras.remove("TG-7|A1");
+        assert!(set_cover(&mut status, &offsets));
+        assert_eq!(
+            cover(&status),
+            (
+                Some("2025-12-30T05:02:00".into()),
+                Some("2025-12-30T09:20:00".into())
+            )
+        );
+        // No selection: no cover.
+        let mut none = Status::default();
+        assert!(!set_cover(&mut none, &offsets));
+        assert_eq!(cover(&none), (None, None));
     }
 
     #[test]
