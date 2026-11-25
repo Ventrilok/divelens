@@ -263,6 +263,11 @@ describe("canApply", () => {
     expect(canApply(input(catalogAt4, { parentMissing: true }), false)).toBe(false);
   });
 
+  it("catalog path: never with counts kept from a search that is no longer shown", () => {
+    // No search going on (nothing blocks), but the counts of an earlier one are still there.
+    expect(canApply(input(catalogAt4, { catalog: { search: { state: "idle" }, preview, previewFailed: false } }), false)).toBe(false);
+  });
+
   it("selection path: no blocker, no write in progress", () => {
     expect(canApply(input(selectionAt4), false)).toBe(true);
     expect(canApply(input(selectionAt4), true)).toBe(false);

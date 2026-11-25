@@ -164,12 +164,13 @@ export function reviewBlocker(i: ReviewInput): string | null {
 
 /**
  * "Apply" can be clicked: nothing blocks it and no write is in progress; on the catalog
- * path the counts must be in too (without them there is no blocker yet, but nothing to
- * write either), as before.
+ * path the photos must be found and counted too (without them there is no blocker yet,
+ * but nothing to write either), as before. Counts kept from a search no longer shown
+ * are not enough: Apply writes the search shown.
  */
 export function canApply(i: ReviewInput, writing: boolean): boolean {
   if (writing || reviewBlocker(i) !== null) return false;
-  return i.journey.path !== "catalog" || i.catalog.preview !== null;
+  return i.journey.path !== "catalog" || (i.catalog.search.state === "ready" && i.catalog.preview !== null);
 }
 
 /**

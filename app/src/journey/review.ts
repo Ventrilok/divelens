@@ -23,6 +23,7 @@ import type {
 } from "../types";
 import {
   barSummary,
+  canApply,
   chosenDive,
   effects,
   goodToKnow,
@@ -193,6 +194,31 @@ export function knowLines(i: ReviewInput): { text: string; warn: boolean }[] {
   return goodToKnow(i).map((text, n) => ({ text, warn: n < empty }));
 }
 
+/** What a click on "Apply" writes: the search shown and its counts (catalog path), or the selection of the moment. */
+export type ApplyPlan = { path: "catalog"; period: Period; preview: CollectionsPreview } | { path: "selection" };
+
+/** What a click on "Apply" writes now; null exactly when "Apply" is greyed (canApply), so a click always writes. */
+export function applyPlan(i: ReviewInput, writing: boolean): ApplyPlan | null {
+  if (!canApply(i, writing)) return null;
+  if (i.journey.path !== "catalog") return { path: "selection" };
+  const s = i.catalog.search;
+  // canApply asked for both on the catalog path: this only tells the types.
+  return s.state === "ready" && i.catalog.preview !== null ? { path: "catalog", period: s.period, preview: i.catalog.preview } : null;
+}
+
+/**
+ * Lightroom's answer is no longer wanted: it came for an earlier run of the journey,
+ * or once the step was gone. The latest run wins: such an answer changes nothing.
+ */
+export function staleAnswer(runAtClick: number, runNow: number, mounted: boolean): boolean {
+  return !mounted || runAtClick !== runNow;
+}
+
+/** Per-photo values were sent: the dive details ticked, with the description of the selection. */
+export function perPhotoSent(choice: TagChoice): boolean {
+  return choice.options.dive && choice.search !== null;
+}
+
 /** Catalog path, written: the summary's figures, the photos outside the dives and the cameras of the search used. */
 export function catalogApplied(
   result: CollectionsResult,
@@ -204,11 +230,11 @@ export function catalogApplied(
 }
 
 /**
- * Selection path, written: per-photo values were sent with the description (`choice.search`),
- * and then the photos outside the dive are those of its counts.
+ * Selection path, written: whether per-photo values were sent (perPhotoSent), and then
+ * the photos outside the dive are those of the counts of the description sent.
  */
 export function selectionApplied(result: TagApplied, choice: TagChoice, counts: TagPreview | null): Applied {
-  const perPhoto = choice.search !== null;
+  const perPhoto = perPhotoSent(choice);
   return {
     path: "selection",
     result,

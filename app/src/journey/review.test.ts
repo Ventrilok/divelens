@@ -5,12 +5,14 @@ import { setLanguage } from "../i18n";
 import { NO_PICK } from "../tag/SitePicker";
 import type { ApplyError, CollectionsResult, Period, TagApplied } from "../types";
 import {
+  applyPlan,
   catalogApplied,
   chooseOtherSite,
   collectionName,
   collectionPath,
   collectionsText,
   knowLines,
+  perPhotoSent,
   readAgain,
   reviewBar,
   reviewBoxes,
@@ -18,9 +20,10 @@ import {
   selectionApplied,
   siteDetailsTicked,
   siteRadios,
+  staleAnswer,
   type Box,
 } from "./review";
-import { tagChoice } from "./rules";
+import { canApply, tagChoice } from "./rules";
 import {
   after7,
   catalogAt4,
@@ -306,6 +309,59 @@ describe("what Apply hands to the summary", () => {
       outsideMore: 0,
       perPhoto: false,
     });
+  });
+});
+
+describe("applyPlan: what a click on Apply writes, null exactly when Apply is greyed", () => {
+  const period = (ready as Extract<typeof ready, { state: "ready" }>).period;
+
+  it("catalog path: the search shown and its counts", () => {
+    expect(applyPlan(input(catalogAt4), false)).toEqual({ path: "catalog", period, preview });
+  });
+
+  it("selection path: the selection at the moment of the click", () => {
+    expect(applyPlan(input(selectionAt4), false)).toEqual({ path: "selection" });
+  });
+
+  it("agrees with canApply", () => {
+    const cases = [
+      input(catalogAt4),
+      input(catalogAt4, { catalog: { search: { state: "idle" }, preview, previewFailed: false } }),
+      input(catalogAt4, { catalog: { search: ready, preview: null, previewFailed: false } }),
+      input(catalogAt4, { catalog: { search: { state: "searching" }, preview, previewFailed: false } }),
+      input(catalogAt4, { parentMissing: true }),
+      input(selectionAt4),
+      input(selectionAt4, { lr: { connected: true, selected: 0 } }),
+      input(withOptions(selectionAt4, { dive: false, place: false, gps: false, collections: false })),
+    ];
+    for (const i of cases) {
+      for (const writing of [false, true]) expect(applyPlan(i, writing) !== null).toBe(canApply(i, writing));
+    }
+  });
+});
+
+describe("staleAnswer: Lightroom's answer to an earlier run, or once the step is gone, changes nothing", () => {
+  it("only the answer to the run shown, on the step shown, counts", () => {
+    expect(staleAnswer(3, 3, true)).toBe(false);
+    expect(staleAnswer(3, 4, true)).toBe(true);
+    expect(staleAnswer(3, 3, false)).toBe(true);
+  });
+});
+
+describe("perPhotoSent", () => {
+  it("the description of the selection was sent, with the dive details", () => {
+    const sent = tagChoice({ journey: selectionAt4, dive: d1, selection: read, offsets: {} });
+    expect(perPhotoSent(sent)).toBe(true);
+    expect(perPhotoSent({ ...sent, search: null })).toBe(false);
+    // Whatever is sent with the dive details unticked, no per-photo value is written.
+    expect(perPhotoSent({ ...sent, options: { ...sent.options, dive: false } })).toBe(false);
+  });
+
+  it("selectionApplied follows it", () => {
+    const result: TagApplied = { count: 3, withDepth: 0, collection: null };
+    const sent = tagChoice({ journey: selectionAt4, dive: d1, selection: read, offsets: {} });
+    const noDetails = { ...sent, options: { ...sent.options, dive: false } };
+    expect(selectionApplied(result, noDetails, counts)).toMatchObject({ perPhoto: false, outside: [], outsideMore: 0 });
   });
 });
 

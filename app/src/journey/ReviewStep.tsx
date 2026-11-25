@@ -19,7 +19,16 @@ import { logRef } from "../diveLog";
 import { t, tn } from "../i18n";
 import { Icon } from "../ui/Icon";
 import type { ApplyError, DiveLog, LightroomStatus, Settings } from "../types";
-import { catalogApplied, knowLines, readAgain, reviewBar, selectionApplied } from "./review";
+import {
+  applyPlan,
+  catalogApplied,
+  knowLines,
+  perPhotoSent,
+  readAgain,
+  reviewBar,
+  selectionApplied,
+  staleAnswer,
+} from "./review";
 import { ReviewOptions } from "./ReviewOptions";
 import {
   applyCount,
@@ -119,55 +128,75 @@ export function ReviewStep({
     [],
   );
 
+  // The journey's run now, and whether the step is still shown: Lightroom's answer to
+  // an earlier run, or once the step is gone, changes nothing (the latest run wins).
+  const runNow = useRef(journey.run);
+  runNow.current = journey.run;
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   const input: ReviewInput = { journey, lr, log, parentMissing, parent, catalog, selection };
+  // What a click writes; null exactly when Apply is greyed.
+  const plan = applyPlan(input, writing);
 
   const begin = (total: number) => {
     busy.current = true;
     setRun({ state: "writing", done: 0, total });
   };
-  /** Lightroom answered (`error` null: written): what is read again, as before. */
-  const answered = (error: ApplyError | null, perPhoto: boolean) => {
+  /**
+   * Lightroom answered (`error` null: written). An answer no longer wanted only lets
+   * Apply be clicked again; otherwise the step shows it, and what is read again after
+   * it is read again, as before.
+   */
+  const answered = (runAtClick: number, perPhoto: boolean, error: ApplyError | null, show: () => void) => {
     busy.current = false;
+    if (staleAnswer(runAtClick, runNow.current, mounted.current)) return;
+    show();
     const again = readAgain(path, perPhoto, error);
     if (again.searchAgain) catalog.searchAgain();
     if (again.describeAgain) selection.describeAgain();
     if (again.clearTouched) selection.clearTouched();
   };
 
+  // The success and failure handlers are apart: whatever the summary does once shown
+  // is never taken for a refused write.
   const apply = () => {
-    if (busy.current || !canApply(input, writing)) return;
-    if (path === "catalog") {
+    if (busy.current || plan === null) return;
+    const runAtClick = journey.run;
+    if (plan.path === "catalog") {
       // The search shown, its counts and the choices of this click: the summary tells them.
-      const { preview, period, choices } = catalog;
-      if (!preview || !period) return;
+      const { period, preview } = plan;
+      const choices = catalog.choices;
       begin(preview.total);
-      applyCollections(logRef(log.source), period.search, choices, writeOptions(journey), otherSite(journey))
-        .then((result) => {
-          setRun({ state: "idle" });
-          answered(null, false);
-          onApplied(catalogApplied(result, preview, period, choices));
-        })
-        .catch((e: ApplyError) => {
-          setRun({ state: "failed", message: applyFailure(e, "collections") });
-          answered(e, false);
-        });
+      applyCollections(logRef(log.source), period.search, choices, writeOptions(journey), otherSite(journey)).then(
+        (result) =>
+          answered(runAtClick, false, null, () => {
+            setRun({ state: "idle" });
+            onApplied(catalogApplied(result, preview, period, choices));
+          }),
+        (e: ApplyError) =>
+          answered(runAtClick, false, e, () => setRun({ state: "failed", message: applyFailure(e, "collections") })),
+      );
       return;
     }
     // The description the blocker checked, and its counts: the summary tells its photos outside the dive.
     const choice = tagChoice({ journey, dive: chosenDive(journey, log.dives), selection, offsets: selection.offsets });
     const counts = selection.freshCounts;
-    const perPhoto = choice.search !== null;
+    const perPhoto = perPhotoSent(choice);
     begin(lr.selected);
-    tagSelection(logRef(log.source), choice)
-      .then((result) => {
-        setRun({ state: "idle" });
-        onApplied(selectionApplied(result, choice, counts));
-        answered(null, perPhoto);
-      })
-      .catch((e: ApplyError) => {
-        setRun({ state: "failed", message: applyFailure(e, "tag") });
-        answered(e, perPhoto);
-      });
+    tagSelection(logRef(log.source), choice).then(
+      (result) =>
+        answered(runAtClick, perPhoto, null, () => {
+          setRun({ state: "idle" });
+          onApplied(selectionApplied(result, choice, counts));
+        }),
+      (e: ApplyError) => answered(runAtClick, perPhoto, e, () => setRun({ state: "failed", message: applyFailure(e, "tag") })),
+    );
   };
 
   const onCatalog = path === "catalog";
