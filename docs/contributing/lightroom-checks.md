@@ -22,7 +22,7 @@ Play them before a release that touches the plug-in or the catalog writes, and a
   - [Selection path](#selection-path): SEL-01 to SEL-09
   - [Camera clock offset](#camera-clock-offset): CLK-01 and CLK-02
   - [Units and altitude](#units-and-altitude): UNIT-01 to UNIT-04
-  - [Settings](#settings): SET-01 to SET-06
+  - [Settings](#settings): SET-01 to SET-07
   - [Undo](#undo): UNDO-01 to UNDO-03
 - [After the tests](#after-the-tests)
 - [Results sheet](#results-sheet)
@@ -421,7 +421,7 @@ This test writes nothing.
 
 1. **Library › Plug-in Extras › Open Dive Lens…**. Drag the corner of the app window to make it narrower and lower, until it stops: it cannot be made smaller.
 2. At Scope, look at the bar, then choose **Entire catalog** and **Next**.
-3. At Dives, scroll the dive list to its end. Click dive 101 and scroll its detail card to its end (profile, map, notes). Tick dives 101 and 102, then **Next**.
+3. At Dives, open the **Country** filter, then the **Rating** filter, and close each. Scroll the dive list to its end. Click dive 101 and scroll its detail card to its end (profile, map, notes). Tick dives 101 and 102, then **Next**.
 4. At Clocks, scroll to the end of the step, then **Next**.
 5. At Review & Apply, choose **Other site, the same for all photos…** (the site picker makes the step longer) and scroll to the end. Choose **Each dive's site** again, then **Apply to 5 photos**.
 6. On the summary, scroll to the end.
@@ -435,7 +435,9 @@ This test writes nothing.
   - only the content between them scrolls;
   - scrolled to its end, the content's last line shows whole above the bar, never under it;
   - nothing in the bar is cut off or overlapping (its text may wrap onto two lines).
-- At Dives: the dive list and the detail card each scroll on their own, the bar still in view; when the window is too low for them, the whole step scrolls instead. Write down which of the two you see at the smallest size.
+- At Dives:
+  - the dive list and the detail card each scroll on their own, the bar still in view; when the window is too low for them, the whole step scrolls instead. Write down which of the two you see at the smallest size;
+  - the options of the **Country** and **Rating** filters open within the step, never under the bar; when they do not fit, their list scrolls on its own.
 
 ### Catalog path
 
@@ -1107,7 +1109,34 @@ This test writes nothing.
 - After step 7: no Test Camera line left. Without cameras of your own, the section reads "No clock offset remembered.".
 - In French (optional): « Décalages d'horloge mémorisés », « Gardés pour chaque appareil après « Appliquer » et proposés à nouveau à l'étape Horloges, pour Subsurface. », « Oublier », « Aucun décalage d'horloge mémorisé. ».
 
-#### SET-06 · Forgetting an offset during a journey
+#### SET-06 · Forgetting offsets during a journey, catalog path
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to Review & Apply](#shortcuts-used-in-the-steps) (at **Clocks**, set any card that is not at 0:00 to 0:00), then **Apply to 5 photos**. Then, in Lightroom, select B1 and B2; **Library › Plug-in Extras › Open Dive Lens…**, choose the **Lightroom selection** card, **Next**; click dive **101**, **Next**; on the Test Camera B card, click **Suggest** (−4:30); **Next**, then **Apply to 2 photos**. Test Camera A is now remembered at 0:00, Test Camera B at −4:30.
+2. **Library › Plug-in Extras › Open Dive Lens…**, choose **Entire catalog**, **Next**, tick dives 101 and 102, **Next**. Look at the cards and the preview. Then, on the Test Camera A card, type 0:05.
+3. Click the gear. Under **Remembered clock offsets**, click **Forget** on the Test Camera A line and on the Test Camera B line, then **Back**.
+4. **Next**, then **Apply to 5 photos**. Click the gear and look at **Remembered clock offsets**, then **Back**.
+5. Reset: in Settings, **Forget** Test Camera A and Test Camera B; then a [clean start](#clean-start).
+
+**Expected**
+
+- After step 2:
+  - before typing: the Test Camera A card at 0:00 and the Test Camera B card at −4:30, both with "remembered offset"; Test Camera B reads "2 in the dives · 0 outside";
+  - the preview: 5 photos for dive 101; 0 for dive 102, its count and "No photo — clock changed?" in orange;
+  - once 0:05 is typed, the Test Camera A card no longer shows "remembered offset".
+- After step 3, back at Clocks:
+  - the Test Camera A card still at 0:05: an offset set by hand stays;
+  - the Test Camera B card back to 0:00: it still carried "remembered offset";
+  - neither card shows "remembered offset";
+  - the counts follow: 3 photos for dive 101, 2 for dive 102; the bar reads "5 photos in 2 dives · 1 outside the dives".
+- After step 4:
+  - A1, A2, A3: dive 101, Clock Offset +00:05; B1, B2: dive 102, Clock Offset +00:00;
+  - Settings list "Test Camera A" with "+0:05" and "Test Camera B" with "0:00": **Apply** remembered what the cards showed.
+
+#### SET-07 · Forgetting an offset during a journey, selection path
 
 **Before:** [clean start](#clean-start). Select B1 and B2.
 
@@ -1117,23 +1146,20 @@ This test writes nothing.
 2. **Next**: look at Dives. Click dive 101, **Next**: look at the Test Camera B card.
 3. Click the gear. Under **Remembered clock offsets**, click **Forget** on the Test Camera B line, then **Back**.
 4. Click **Back**, to Dives.
-5. **Next**, **Next**, then **Apply to 2 photos**. Click the gear and look at **Remembered clock offsets**; click **Forget** on the Test Camera B line, then **Back**.
-6. On the summary, **Done**, then **Next**: look at Dives. Click dive 101, **Next**: look at the Test Camera B card. Leave without applying.
-7. Reset: [clean start](#clean-start).
+5. **Next**. On the Test Camera B card, click **Suggest**; **Next**, then **Apply to 2 photos**. Click the gear and look at **Remembered clock offsets**.
+6. Reset: **Forget** Test Camera B, **Back**; then a [clean start](#clean-start).
 
 **Expected**
 
 - After step 2:
   - dive 101 marked "Covers the selection", with under its row "Covers the selection: 2 of the 2 photos fall in this dive, with the remembered offset of the Test Camera B (−4:30).";
   - the Test Camera B card at −4:30 with "remembered offset".
-- After step 3: back at Clocks, the Test Camera B card still at −4:30, but without "remembered offset"; "2 in the dive · 0 outside", as before.
-- After step 4: dive 101 still marked "Covers the selection" (it follows the offset shown), but without the sentence under its row.
+- After step 3, back at Clocks: the Test Camera B card back to 0:00, without "remembered offset", in orange, "0 in the dive · 2 outside"; the total reads "2 photos attached to 101 Coral Garden · 0 with depth".
+- After step 4: dive 102 marked "Covers the selection", no longer 101, and no sentence under the row; dive 101 is still the one chosen.
 - After step 5:
-  - B1 and B2 carry Clock Offset -04:30;
-  - in Settings, "Test Camera B" with "−4:30" again: **Apply** remembered it again.
-- After step 6:
-  - dive 102 marked "Covers the selection", not 101, and no sentence under its row: the new run starts Test Camera B at 0:00;
-  - the Test Camera B card at 0:00, without "remembered offset", in orange, "0 in the dive · 2 outside".
+  - **Suggest** gives −4:30 again, without "remembered offset";
+  - B1 and B2: dive 101, Clock Offset -04:30;
+  - Settings list "Test Camera B" with "−4:30": **Apply** remembered the offset the card showed.
 
 ### Undo
 
@@ -1269,7 +1295,8 @@ Windows <version>, Lightroom Classic <version>
 | SET-03 No altitude line in Settings; an older settings file still imports | | |
 | SET-04 The collection set chosen in Settings is missing | | |
 | SET-05 Forget the remembered clock offset of one camera | | |
-| SET-06 Forgetting an offset during a journey | | |
+| SET-06 Forgetting offsets during a journey, catalog path | | |
+| SET-07 Forgetting an offset during a journey, selection path | | |
 | UNDO-01 Catalog path: one Undo takes everything back, GPS and altitude included | | |
 | UNDO-02 Selection path: one Undo takes everything back, GPS and altitude included | | |
 | UNDO-03 Undo when Apply creates the "Dive Lens" set | | |
