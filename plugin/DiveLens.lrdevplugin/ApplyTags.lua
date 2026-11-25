@@ -18,7 +18,8 @@ local Tagging = require "Tagging"
 local ApplyTags = {}
 
 -- Tags the photos selected in Lightroom now (not when the app last looked),
--- in two catalog writes under one Undo name, the GPS and altitude in the
+-- in two catalog writes under one Undo name, the same as Create
+-- Collections' (CatalogWrite.UNDO_NAME), the GPS and altitude in the
 -- second (Tagging.splitGps, CatalogWrite.writeGpsLater), so one Undo
 -- reverts it all. A photo that carried another dive also loses that dive's
 -- own values (Tagging.retagChanges), read from the photo inside the first
@@ -29,8 +30,9 @@ local ApplyTags = {}
 -- The photos taken during the dive get their values, and the other dive's
 -- are not cleared on them first (Tagging.notOverwritten). When the request
 -- names a collection (Tagging.planCollection), the selected photos also go
--- in it, made when missing, in the first write; where it goes is looked up
--- before any photo is written (CatalogWrite.holder). Always answers the app.
+-- in it, made when missing, in the first write (Tagging.tagWrites); where
+-- it goes is looked up before any photo is written (CatalogWrite.holder).
+-- Always answers the app.
 function ApplyTags.run(s, message)
     local id = message.id
     s.applyStage = { id = id, stage = "before" }
@@ -66,21 +68,21 @@ function ApplyTags.run(s, message)
 
     CatalogWrite.apply(s, id, {
         catalog = catalog,
-        undoName = LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)",
+        undoName = CatalogWrite.UNDO_NAME,
         total = total,
         fail = fail,
         before = function(cat)
             return Tagging.writesDive(changes) and CatalogWrite.photosBefore(cat, photos) or {}
         end,
         writeFirst = function(cat, before, advance)
-            local planned = Tagging.tagWrites(changes, photos, before, perPhoto, Tagging.photoId)
+            local planned = Tagging.tagWrites(changes, photos, before, perPhoto, Tagging.photoId, place and place.name)
             for _, w in ipairs(planned.writes) do
                 CatalogWrite.write(w.photo, w.changes)
                 advance()
             end
-            if place then
+            if planned.collection then
                 -- All the selected photos: Lightroom ignores those already in it.
-                cat:createCollection(place.name, container, true):addPhotos(photos)
+                cat:createCollection(planned.collection, container, true):addPhotos(photos)
             end
             return { later = planned.later, cleared = planned.cleared, withValues = planned.withValues }
         end,

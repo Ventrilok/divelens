@@ -59,7 +59,8 @@ local function command(app, screen)
     return "open -a " .. shellQuote(app) .. " --args --screen " .. screen
 end
 
---- Opens the app on `screen` ("collections", "tag" or "settings").
+--- Opens the app on `screen`: "journey" (the start of its journey) or
+--- "settings" (app/src/ui/screens.ts, RequestedScreen).
 function Launch.open(screen)
     LrTasks.startAsyncTask(function()
         if Link.show(screen) then return end

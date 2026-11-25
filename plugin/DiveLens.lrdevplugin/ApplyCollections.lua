@@ -53,12 +53,14 @@ end
 -- Writes a "Create Collections" request: each dive's collection where the
 -- app's settings say (by default in a "Dive Lens" set at the root, created
 -- if needed), its data and location on its photos, and each photo's own
--- values. Two catalog writes under one Undo name, the GPS and altitude in
--- the second (Tagging.splitGps, CatalogWrite.writeGpsLater), so one Undo
--- reverts it all. What each photo carries is read inside the first write,
--- as Tag Selection does: an altitude Dive Lens wrote from a depth now
--- cleared, or from another dive's, is cleared in the second write
--- (Tagging.photoWrites). Always answers the app.
+-- values. Two catalog writes under one Undo name, the same as Tag
+-- Selection's (CatalogWrite.UNDO_NAME), the GPS and altitude in the second
+-- (Tagging.splitGps, CatalogWrite.writeGpsLater), so one Undo reverts it
+-- all. Which groups make or complete their collection is decided by
+-- Tagging.collectionWrites. What each photo carries is read inside the
+-- first write, as Tag Selection does: an altitude Dive Lens wrote from a
+-- depth now cleared, or from another dive's, is cleared in the second
+-- write (Tagging.photoWrites). Always answers the app.
 function ApplyCollections.run(s, message)
     local id = message.id
     s.applyStage = { id = id, stage = "before" }
@@ -87,22 +89,21 @@ function ApplyCollections.run(s, message)
     local total = Tagging.resolvePhotos(groups, s.search.photos)
     CatalogWrite.apply(s, id, {
         catalog = catalog,
-        undoName = LOC "$$$/DiveLens/Undo/CreateCollections=Create Collections (Dive Lens)",
+        undoName = CatalogWrite.UNDO_NAME,
         total = total,
         fail = fail,
         -- Only the photos of groups writing a dive: the others clear nothing.
         before = function(cat) return CatalogWrite.photosBefore(cat, Tagging.divePhotos(groups)) end,
         writeFirst = function(cat, before, advance)
             local planned = Tagging.collectionWrites(groups, before, existing)
-            for gi, g in ipairs(groups) do
-                local group = planned.groups[gi]
+            for _, group in ipairs(planned.groups) do
                 -- One step per photo requested: written when found.
                 for _, step in ipairs(group.steps) do
                     if step.photo then CatalogWrite.write(step.photo, step.changes) end
                     advance()
                 end
-                if g.collection and #group.photos > 0 then
-                    local collection = cat:createCollection(g.collection, container, true)
+                if group.collection then
+                    local collection = cat:createCollection(group.collection, container, true)
                     collection:addPhotos(group.photos)
                 end
             end

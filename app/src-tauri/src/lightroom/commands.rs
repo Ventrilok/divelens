@@ -56,7 +56,7 @@ fn refresh_size(state: &Lightroom) -> Result<(), ApplyError> {
     send_to(state, Command::CountPhotos { reply })
 }
 
-/// Screen asked for on the command line (`--screen tag`), when Lightroom
+/// Screen asked for on the command line (`--screen journey`), when Lightroom
 /// launched the app from one of its menus.
 #[tauri::command]
 pub(crate) fn initial_screen() -> Option<String> {
@@ -128,20 +128,15 @@ mod tests {
     #[test]
     fn reads_screen_argument() {
         assert_eq!(
-            screen_arg(args(&["DiveLens", "--screen", "tag"])),
-            Some("tag".into())
+            screen_arg(args(&["DiveLens", "--screen", "journey"])),
+            Some("journey".into())
         );
         assert_eq!(screen_arg(args(&["DiveLens"])), None);
         assert_eq!(screen_arg(args(&["DiveLens", "--screen"])), None);
         // macOS may add its own arguments before ours.
         assert_eq!(
-            screen_arg(args(&[
-                "DiveLens",
-                "-psn_0_1234",
-                "--screen",
-                "collections"
-            ])),
-            Some("collections".into())
+            screen_arg(args(&["DiveLens", "-psn_0_1234", "--screen", "settings"])),
+            Some("settings".into())
         );
     }
 }

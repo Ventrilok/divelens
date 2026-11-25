@@ -1,6 +1,7 @@
 // Why a search or a write of Tag Selection or Create Collections failed, in words
 // for the diver: one translator for both screens. `feature` chooses the texts that
-// belong to each screen (the Undo step's name, "selection" or "photos found").
+// belong to each screen ("selection" or "photos found"); both name the same Undo
+// step, "Dive Lens" (the plug-in's CatalogWrite.UNDO_NAME).
 
 import { t } from "../i18n";
 import type { ApplyError } from "../types";

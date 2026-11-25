@@ -459,6 +459,34 @@ fn a_collection_already_there_is_completed_not_created() {
     );
 }
 
+/// Whether "Tag Selection" writes its collection in the catalogue (the
+/// envelope makes or completes `plan.collection` with the selected photos):
+/// only when the request names one, with photos selected, as for the
+/// groups of "Create Collections". The photos' writes do not depend on it.
+#[test]
+fn the_selection_writes_its_collection_only_when_named() {
+    run(
+        &lua(),
+        r#"
+        local Tagging = require "Tagging"
+        local changes = { { kind = "raw", field = "location", value = "Coral Garden" } }
+        local p1, p2 = { id = "p1" }, { id = "p2" }
+        local function idOf(p) return p.id end
+        local name = "101 - Three Arches Reef"
+        local named = Tagging.tagWrites(changes, { p1, p2 }, {}, nil, idOf, name)
+        local unnamed = Tagging.tagWrites(changes, { p1, p2 }, {}, nil, idOf)
+        assert(named.collection == name, tostring(named.collection))
+        assert(unnamed.collection == nil, tostring(unnamed.collection))
+        assert(#named.writes == 2 and #unnamed.writes == 2)
+        for i, w in ipairs(named.writes) do
+            assert(w.photo == unnamed.writes[i].photo and #w.changes == #unnamed.writes[i].changes)
+        end
+        local none = Tagging.tagWrites(changes, {}, {}, nil, idOf, name)
+        assert(none.collection == nil, tostring(none.collection))
+        "#,
+    );
+}
+
 /// What `lua` returns, a JSON text (Json.encode), as a value to compare.
 #[test]
 fn apply_reply_says_why_nothing_or_part_was_written() {

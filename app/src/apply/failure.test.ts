@@ -65,7 +65,7 @@ describe.each(["en", "fr"] as const)("Tag Selection failure texts (%s)", (lang) 
   });
 
   const nothingWritten = lang === "en" ? "Nothing was written" : "Rien n'a été écrit";
-  const undo = lang === "en" ? "Undo Tag Selection (Dive Lens)" : "Annuler Tagger la sélection (Dive Lens)";
+  const undo = lang === "en" ? "Edit › Undo Dive Lens in Lightroom" : "Édition › Annuler Dive Lens dans Lightroom";
 
   it("gpsNotWritten and linkLost say what was written, never that nothing was", () => {
     for (const detail of [DETAIL, null]) {
@@ -156,7 +156,7 @@ const collWriteErrors: ApplyError[] = [
 describe.each(["en", "fr"] as const)("Create Collections write failure texts (%s)", (lang) => {
   beforeEach(() => setLanguage(lang));
   const nothingWritten = lang === "en" ? "Nothing was written" : "Rien n'a été écrit";
-  const undo = lang === "en" ? "Undo Create Collections (Dive Lens)" : "Annuler Créer les collections (Dive Lens)";
+  const undo = lang === "en" ? "Edit › Undo Dive Lens in Lightroom" : "Édition › Annuler Dive Lens dans Lightroom";
 
   it.each(collWriteErrors.map((e) => [JSON.stringify(e), e] as const))("%s", (_, e) => {
     const text = applyFailure(e, "collections");

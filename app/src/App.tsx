@@ -20,7 +20,7 @@ import { revertChange } from "./settings/save";
 import { unitsInUse } from "./collections/collectionPlace";
 import { latestOnly, logChangedNotice, logWatch, sameLogSetting } from "./diveLog";
 import { profiles } from "./dives/profiles";
-import { isReadyScreen, shownScreen, type Screen } from "./ui/screens";
+import { isReadyScreen, requestedScreen, shownScreen, type Screen } from "./ui/screens";
 import { Header } from "./ui/Header";
 import { StatusBar } from "./ui/AppStatusBar";
 import { Icon } from "./ui/Icon";
@@ -224,7 +224,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   // Lightroom link: current state, then live updates; menus choose the screen.
   const [lr, setLr] = useState<LightroomStatus>(offline);
   useEffect(() => {
-    const go = (s: string | null) => s && isReadyScreen(s) && open(s);
+    const go = (s: string | null) => s && isReadyScreen(s) && open(requestedScreen(s));
     initialScreen().then(go);
     lightroomStatus().then(setLr);
     const stops = [onLightroomStatus(setLr), onShowScreen(go)];

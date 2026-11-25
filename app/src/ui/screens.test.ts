@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isReadyScreen, shownScreen } from "./screens";
+import { isReadyScreen, requestedScreen, shownScreen } from "./screens";
 
 describe("shownScreen", () => {
   it("shows the screen in use", () => {
@@ -18,8 +18,18 @@ describe("shownScreen", () => {
 });
 
 describe("isReadyScreen", () => {
-  it("accepts the screens and nothing else", () => {
-    expect(["collections", "tag", "settings"].every(isReadyScreen)).toBe(true);
+  it("accepts the screens a request may open and nothing else", () => {
+    expect(["journey", "settings"].every(isReadyScreen)).toBe(true);
+    // The two menus before the journey: Lightroom no longer sends them.
+    expect(isReadyScreen("collections")).toBe(false);
+    expect(isReadyScreen("tag")).toBe(false);
     expect(isReadyScreen("nope")).toBe(false);
+  });
+});
+
+describe("requestedScreen", () => {
+  it("opens the journey on Create Collections, Settings on Settings", () => {
+    expect(requestedScreen("journey")).toBe("collections");
+    expect(requestedScreen("settings")).toBe("settings");
   });
 });

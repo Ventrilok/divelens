@@ -118,21 +118,20 @@ fn the_undo_names_match() {
             .unwrap_or_else(|| panic!("no text {key} in {file}"))
             .to_string()
     };
+    // Both features write under the one Undo name of CatalogWrite.lua
+    // (tests/plugin_manifest.rs checks they do): each text names the item
+    // of Lightroom's Edit menu, "Undo <name>".
     for (source, key, i18n_key) in [
-        ("ApplyTags.lua", "TagSelection", "tag.err.gpsNotWritten"),
+        ("CatalogWrite.lua", "DiveLens", "tag.err.gpsNotWritten"),
         (
-            "ApplyTags.lua",
-            "TagSelection",
+            "CatalogWrite.lua",
+            "DiveLens",
             "tag.err.gpsNotWrittenDetail",
         ),
+        ("CatalogWrite.lua", "DiveLens", "coll.err.gpsNotWritten"),
         (
-            "ApplyCollections.lua",
-            "CreateCollections",
-            "coll.err.gpsNotWritten",
-        ),
-        (
-            "ApplyCollections.lua",
-            "CreateCollections",
+            "CatalogWrite.lua",
+            "DiveLens",
             "coll.err.gpsNotWrittenDetail",
         ),
     ] {
@@ -141,13 +140,14 @@ fn the_undo_names_match() {
             !english.is_empty() && !french.is_empty(),
             "empty Undo name for {key}"
         );
+        let (undo, annuler) = (format!("Undo {english}"), format!("Annuler {french}"));
         assert!(
-            line_of(&english_texts, ENGLISH, i18n_key).contains(&english),
-            "{i18n_key} (English) does not name the Undo \"{english}\" of {source}"
+            line_of(&english_texts, ENGLISH, i18n_key).contains(&undo),
+            "{i18n_key} (English) does not name the Undo \"{undo}\" of {source}"
         );
         assert!(
-            line_of(&french_texts, FRENCH, i18n_key).contains(&french),
-            "{i18n_key} (French) does not name the Undo \"{french}\" of {source}"
+            line_of(&french_texts, FRENCH, i18n_key).contains(&annuler),
+            "{i18n_key} (French) does not name the Undo \"{annuler}\" of {source}"
         );
     }
 }
@@ -158,24 +158,20 @@ fn the_screens_match() {
     let line = screens
         .lines()
         .map(str::trim)
-        .find(|l| l.starts_with("export type Screen ="))
-        .expect("`export type Screen =` not found in app/src/ui/screens.ts");
+        .find(|l| l.starts_with("export type RequestedScreen ="))
+        .expect("`export type RequestedScreen =` not found in app/src/ui/screens.ts");
     let accepted: BTreeSet<&str> = line
-        .trim_start_matches("export type Screen =")
+        .trim_start_matches("export type RequestedScreen =")
         .trim_end_matches(';')
         .split('|')
         .map(|n| n.trim().trim_matches('"'))
         .collect();
     assert!(
-        accepted.len() >= 3 && !accepted.contains(""),
-        "cannot read the Screen type: {line}"
+        accepted.len() >= 2 && !accepted.contains(""),
+        "cannot read the RequestedScreen type: {line}"
     );
 
-    for menu in [
-        "MenuTagSelection.lua",
-        "MenuCreateCollections.lua",
-        "MenuSettings.lua",
-    ] {
+    for menu in ["MenuOpen.lua", "MenuSettings.lua"] {
         let source = plugin_file(menu);
         let name = source
             .lines()
@@ -188,4 +184,31 @@ fn the_screens_match() {
             "{menu} opens screen \"{name}\", which the app does not accept: {accepted:?}"
         );
     }
+
+    // Every screen the plug-in opens, menus and Plug-in Manager buttons
+    // alike, is one the app accepts, and the app accepts no other.
+    let mut opened = BTreeSet::new();
+    for entry in std::fs::read_dir(plugin_dir()).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|e| e == "lua") {
+            let file = path.file_name().unwrap().to_string_lossy().into_owned();
+            for line in plugin_file(&file).lines() {
+                let name = ["require \"Launch\".open(", "Launch.open("]
+                    .iter()
+                    .find_map(|marker| quoted_after(line, marker));
+                if let Some(name) = name {
+                    assert!(
+                        accepted.contains(name),
+                        "{file} opens screen \"{name}\", which the app does not accept: {accepted:?}"
+                    );
+                    opened.insert(name.to_string());
+                }
+            }
+        }
+    }
+    let accepted: BTreeSet<String> = accepted.iter().map(|s| s.to_string()).collect();
+    assert_eq!(
+        opened, accepted,
+        "the plug-in opens {opened:?}, the app accepts {accepted:?}"
+    );
 }
