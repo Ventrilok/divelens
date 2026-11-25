@@ -694,10 +694,10 @@ This test writes nothing.
 **Expected**
 
 - After step 2:
-  - after the **Profile** column, a **GPS** column and a **Notes** column, each with its mark: in colour when the dive has it, greyed when not. Subsurface gives site positions, so the GPS column shows; a dive application that does not give them would have no GPS column and no **With GPS** filter;
-  - dive 101: GPS and notes in colour, tooltips "Site GPS available" and "Notes available";
-  - dive 102: GPS in colour, notes greyed, "No notes";
-  - dive 103: GPS greyed, "No site GPS", notes in colour.
+  - after the **Profile** column, a **GPS** column and a **Notes** column, each with its mark when the dive has it, and an empty cell when not (no greyed mark, no dash); the same goes for the **Profile** column. Subsurface gives site positions, so the GPS column shows; a dive application that does not give them would have no GPS column and no **With GPS** filter;
+  - dive 101: the GPS and notes marks, tooltips "Site GPS available" and "Notes available";
+  - dive 102: the GPS mark, an empty Notes cell;
+  - dive 103: an empty GPS cell, the notes mark.
 - After step 3: dives 100, 101, 102, 104, 108 and 109 only.
 - After step 4: dives 100, 101 and 108 only.
 - After step 5: dives 100, 101, 103 and 108 only.
