@@ -137,13 +137,15 @@ export function selectionWaiting(r: Pick<SelectionShown, "described" | "counts" 
 /**
  * Selection path, the bar: "N photos attached to <no. site> · N with depth", counting
  * every photo selected, those without a capture time too, and "Nothing else to set.".
- * While the cards of a dive with a profile wait, what they wait for instead.
+ * While the cards of a dive with a profile wait, what they wait for instead; with the
+ * selection empty, "Select photos in Lightroom" on any dive.
  */
 export function selectionBar(
   dive: Dive,
   r: SelectionShown,
   lr: Lr,
 ): { total: string | null; waiting: string | null; hint: string | null } {
+  if (lr.connected && lr.selected === 0) return { total: null, waiting: t("tag.selectInLr"), hint: null };
   if (r.needsValues && !(r.described && r.counts)) return { total: null, waiting: selectionWaiting(r, lr), hint: null };
   const n = r.counts ? r.counts.total : lr.selected;
   const depth = r.needsValues && r.counts ? r.counts.inDive : 0;

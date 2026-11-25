@@ -220,6 +220,14 @@ describe("the bottom bar", () => {
     expect(selectionBar(d3, unread, lr).total).toBe("5 photos attached to 708 Sand Patch · 0 with depth");
   });
 
+  it("selection path: asks for photos once the selection is empty, with or without a profile", () => {
+    const empty = { connected: true, selected: 0 };
+    const unread = { described: null, counts: null, profile: ok, needsValues: false };
+    const asks = { total: null, waiting: "Select photos in Lightroom", hint: null };
+    expect(selectionBar(d3, unread, empty)).toEqual(asks);
+    expect(selectionBar(d2, { ...unread, needsValues: true }, empty)).toEqual(asks);
+  });
+
   it("selection path: says what the cards wait for instead of the total", () => {
     const waiting = { described: null, counts: null, profile: ok, needsValues: true };
     expect(selectionBar(d2, waiting, lr)).toEqual({
