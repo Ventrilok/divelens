@@ -83,7 +83,9 @@ Si la barre d'état affiche **Lightroom déconnecté**, rien ne peut être écri
 
 ## 3. Le parcours
 
-Cinq étapes, rappelées en haut : **Photos › Plongées › Horloges › Vérifier et appliquer › Récapitulatif**. **Suivant** avance et **Précédent** revient en arrière ; un clic sur une étape déjà faite y revient aussi, sauf depuis le récapitulatif. Sous les étapes, une ligne qui commence par **Photos :** rappelle vos choix ; à l'étape 2, son **Modifier** ramène à l'étape 1. Rien n'est écrit dans Lightroom avant que vous cliquiez sur **Appliquer à N photos** à l'étape 4.
+Cinq étapes, rappelées en haut : **Périmètre › Plongées › Horloges › Vérifier et appliquer › Récapitulatif**. **Suivant** avance et **Précédent** revient en arrière ; un clic sur une étape déjà faite y revient aussi, sauf depuis le récapitulatif. Sous les étapes, une ligne qui commence par **Photos :** rappelle vos choix. Rien n'est écrit dans Lightroom avant que vous cliquiez sur **Appliquer à N photos** à l'étape 4.
+
+La barre de **Précédent** et **Suivant** (ou **Appliquer à N photos**) reste en bas de la fenêtre, juste au-dessus de la barre d'état, et les étapes restent en haut : quand la fenêtre est petite, seul le contenu entre les deux défile. Rien n'est jamais caché sous la barre.
 
 ### Deux chemins
 
@@ -94,13 +96,15 @@ L'étape 1 pose la seule vraie question : sur quelles photos ?
 
 Choisir l'autre chemin à l'étape 1 fait repartir de zéro les étapes suivantes : plongées, horloges et options.
 
-### Étape 1 — Photos
+### Étape 1 — Périmètre
 
 « Sur quelles photos travailler ? » Deux cartes : **Tout le catalogue**, ou les photos sélectionnées dans Lightroom. La carte de la sélection suit Lightroom en direct : les appareils et le jour des photos sélectionnées, et jusqu'à six vignettes. Sans photo sélectionnée, elle est grisée et indique **Aucune photo sélectionnée** : sélectionnez des photos dans Lightroom et elle s'allume. Choisissez une carte, puis **Suivant**.
 
 ### Étape 2 — Plongées
 
-La liste montre toutes les plongées de votre carnet, regroupées par mois. Cherchez par numéro, site, lieu ou pays, et affinez avec les filtres (**Période**, **Pays**, **Profondeur**, **Note**, **Avec courbe**). **Trier** ordonne la liste (**Plus récentes d'abord**, **Plus anciennes d'abord**, **Profondeur max**) ; Dive Lens retient votre choix. Un clic sur une plongée affiche sa fiche à droite : courbe, durée, profondeur max, températures, note, GPS du site avec une carte, et vos notes.
+La liste montre toutes les plongées de votre carnet, regroupées par mois. Cherchez par numéro, site, lieu ou pays, et affinez avec les filtres (**Période**, **Pays**, **Profondeur**, **Note**, **Avec courbe**, **Avec GPS**, **Avec notes**). **Trier** ordonne la liste (**Plus récentes d'abord**, **Plus anciennes d'abord**, **Profondeur max**) ; Dive Lens retient votre choix. Un clic sur une plongée affiche sa fiche à droite : courbe, durée, profondeur max, températures, note, GPS du site avec une carte, et vos notes.
+
+Chaque ligne se termine par trois repères, en couleur quand la plongée en a, grisés sinon : **Courbe**, **GPS** (son site a une position GPS) et **Notes**. Survolez un repère pour le lire, par exemple « GPS du site disponible » ou « Pas de notes ». La colonne **GPS** et le filtre **Avec GPS** n'apparaissent que si l'application de plongée donne la position des sites, comme MacDive et Subsurface.
 
 - **Tout le catalogue** : cochez une ou plusieurs plongées, puis **Suivant**. La barre indique combien sont cochées et leurs jours ; **Tout désélectionner** les décoche.
 - **Les photos sélectionnées dans Lightroom** : cliquez sur une plongée, puis **Suivant**.
@@ -116,9 +120,9 @@ Une plongée **sans courbe** (saisie à la main, ou venant d'un ancien ordinateu
 - **Suggérer** propose le décalage qui place le plus de photos dans les plongées. Il essaie chaque quart d'heure entre −14 h et +14 h, et retrouve donc aussi un fuseau horaire oublié.
 - **Suggérer pour tous** le fait pour tous les appareils d'un coup, sans toucher à ceux réglés à la main ni aux appareils ignorés.
 - Vous pouvez aussi saisir le décalage (heures:minutes) ou l'ajuster vous-même.
-- Chaque carte part du dernier décalage appliqué à cet appareil, dans l'un ou l'autre chemin (**décalage mémorisé**) ; sans décalage connu, elle part de 0:00. Les décalages sont mémorisés séparément pour chaque application de plongée.
+- Chaque carte part du dernier décalage appliqué à cet appareil, dans l'un ou l'autre chemin (**décalage mémorisé**) ; sans décalage connu, elle part de 0:00. Les décalages sont mémorisés séparément pour chaque application de plongée. **Réglages › Décalages d'horloge mémorisés** les liste et oublie celui d'un appareil (section 8).
 
-**Aperçu par plongée.** Les compteurs suivent vos réglages : photos par plongée, appareils, et les données par photo que donne chaque plongée (**Profondeur · temp. · temps**, **Pas de courbe : infos de plongée seules**, **Photos de surface seulement**). Une plongée sans photo est en orange, **Aucune photo — horloge changée ?** : c'est souvent le signe d'une horloge changée pendant le voyage (section 10).
+**Aperçu par plongée.** Les compteurs suivent vos réglages : photos par plongée, appareils, et les données par photo que donne chaque plongée (**Profondeur · temp. · temps**, **Pas de courbe : infos de plongée seules**, **Photos de surface seulement**). Pour une plongée sans photo, son nombre, 0, et **Aucune photo — horloge changée ?** sont écrits en orange : c'est souvent le signe d'une horloge changée pendant le voyage (section 10).
 
 Dans le chemin **Tout le catalogue** :
 
@@ -170,8 +174,8 @@ La barre du bas résume ce qui sera écrit (« N photos · N collections ») et 
 
 **Écrit dans Lightroom** : **Photos taguées** (les photos écrites, y compris celles seulement rangées dans une collection), **Avec profondeur** et **Collections**, puis chaque collection avec son nombre de photos, **créée** ou **complétée**. Ensuite les avertissements (plongées sans photo, photos hors plongée, photos sans profondeur) et le rappel pour tout défaire (section 7).
 
-- **Tout le catalogue** : **Retour aux plongées** ramène à l'étape 2, sans aucune plongée cochée. Quand une plongée n'a reçu aucune photo, **Traiter la plongée N à part** (ou **Traiter ces plongées à part**) mène directement à l'étape 3 avec ces seules plongées cochées, et relance la recherche de leurs photos : donnez à leur appareil son propre décalage (section 10).
-- **Les photos sélectionnées dans Lightroom** : **Terminer** ramène à l'étape 1.
+- **Tout le catalogue** : **Retour au choix du périmètre** ramène à l'étape 1 et commence un nouveau passage : **Tout le catalogue** reste choisi, aucune plongée n'est cochée et les options reviennent à leur valeur par défaut. Quand une plongée n'a reçu aucune photo, **Traiter la plongée N à part** (ou **Traiter ces plongées à part**) mène directement à l'étape 3 avec ces seules plongées cochées, et relance la recherche de leurs photos : donnez à leur appareil son propre décalage (section 10).
+- **Les photos sélectionnées dans Lightroom** : **Terminer** ramène à l'étape 1 et commence de même un nouveau passage, la carte des photos sélectionnées restant choisie.
 
 ---
 
@@ -277,6 +281,12 @@ Chaque modification est enregistrée immédiatement.
 - **Regrouper dans l'ensemble** : « Dive Lens » par défaut, créé si besoin ; laissez vide pour ranger les collections directement à l'emplacement choisi. Un aperçu montre le chemin obtenu. Les collections déjà créées restent où elles sont.
 - Si l'ensemble choisi dans **Placer dans** n'est plus dans le catalogue, l'étape 4 le signale tant que **Créer les collections** est cochée, et **Appliquer** reste grisé jusqu'à ce que vous choisissiez un autre emplacement ici.
 
+**Décalages d'horloge mémorisés**
+- Sous le titre, « Gardés pour chaque appareil après « Appliquer » et proposés à nouveau à l'étape Horloges, pour <application>. » La liste montre les appareils dont le décalage est mémorisé pour l'application de plongée choisie plus haut, classés par nom comme à l'étape 3. Chaque ligne donne le nom de l'appareil comme sur sa carte de l'étape 3 (son modèle, ou « Appareil inconnu »), avec dessous « n° <numéro de série> » quand les photos le donnent ; à droite, son décalage comme sur la carte (par exemple « +4:00 », « 0:00 » ou « −0:30 »), et **Oublier**. Sans aucun : « Aucun décalage d'horloge mémorisé. »
+- **Oublier** retire aussitôt le décalage de cet appareil, sans demander de confirmation, et sa ligne disparaît. La fois suivante, l'étape 3 part de 0:00 sur sa carte, sans **décalage mémorisé** ; **Suggérer** retrouve le décalage. Les autres appareils, et les décalages gardés pour l'autre application de plongée, restent.
+- Rien ne change dans Lightroom : le décalage d'horloge déjà écrit sur les photos reste.
+- Oublié pendant un parcours : au retour des Réglages, l'appareil n'est plus présenté comme mémorisé (plus de **décalage mémorisé** sur sa carte à l'étape 3, plus de « avec le décalage mémorisé de… » sous **Couvre la sélection** à l'étape 2), mais le décalage affiché reste tel quel, réglé à la main ou non. Les compteurs et **Couvre la sélection** le suivent, et **Appliquer** l'écrit et le mémorise à nouveau. L'appareil repart de 0:00 la prochaine fois que Dive Lens prend son décalage dans ce qui est mémorisé : dans un nouveau passage, quand d'autres plongées sont cochées (**Tout le catalogue**), ou quand il revient dans la sélection après en être sorti (**Les photos sélectionnées dans Lightroom**).
+
 **Sauvegarde des réglages**
 - **Exporter ou importer** : pour retrouver vos réglages sur un autre ordinateur, ou après une réinstallation.
 - **Exporter…** les enregistre dans un fichier, nommé « Réglages Dive Lens.json » sauf si vous choisissez un autre nom. Le fichier contient : l'application de plongée et l'emplacement du carnet de chacune, la langue, les unités, l'emplacement des collections, la vérification automatique des mises à jour, le niveau du journal et l'ordre de la liste des plongées. Les décalages d'horloge retenus pour chaque appareil n'y figurent pas : ils restent sur cet ordinateur.
@@ -307,7 +317,7 @@ Dans le module **Bibliothèque**, ouvrez le panneau **Métadonnées** et choisis
 
 - **Photo** : Profondeur, Température, Temps écoulé ;
 - **Plongée** : Plongée, Début de plongée, Fin de plongée, Durée, Profondeur max, Temp. min, Temp. max, Note ;
-- **Site** : le lieu, la ville, le pays et le GPS de Lightroom ;
+- **Site** : le lieu, la ville, le pays et le GPS de Lightroom, avec l'altitude GPS sous le GPS ;
 - **Technique** : Décalage horloge, Source.
 
 Les champs Dive Lens restent dans le catalogue Lightroom : ils ne sont pas écrits dans les fichiers photo et ne suivent pas les exports. Seuls la position GPS, les champs de lieu et, si vous le choisissez, l'altitude les suivent.

@@ -83,7 +83,9 @@ If the status bar says **Lightroom not connected**, nothing can be written: chec
 
 ## 3. The journey
 
-Five steps, shown at the top: **Photos › Dives › Clocks › Review & Apply › Summary**. **Next** moves on and **Back** goes back; a click on a step already done goes back to it too, except from the summary. Under the steps, a line starting with **Photos:** recalls what you chose; at step 2, its **Change** takes you back to step 1. Nothing is written in Lightroom before you click **Apply to N photos** at step 4.
+Five steps, shown at the top: **Scope › Dives › Clocks › Review & Apply › Summary**. **Next** moves on and **Back** goes back; a click on a step already done goes back to it too, except from the summary. Under the steps, a line starting with **Photos:** recalls what you chose. Nothing is written in Lightroom before you click **Apply to N photos** at step 4.
+
+The bar with **Back** and **Next** (or **Apply to N photos**) stays at the bottom of the window, just above the status bar, and the steps stay at the top: when the window is small, only the content in between scrolls. Nothing is ever hidden under the bar.
 
 ### Two paths
 
@@ -94,13 +96,15 @@ Step 1 asks the one real question: which photos?
 
 Choosing the other path at step 1 starts the next steps again: dives, clocks and options.
 
-### Step 1 — Photos
+### Step 1 — Scope
 
 "Which photos to work on?" Two cards: **Entire catalog**, or **Lightroom selection**. The selection card follows Lightroom live: the cameras and the day of the selected photos, and up to six thumbnails. With no photo selected, it is greyed and says **No photos selected**: select photos in Lightroom and it lights up. Choose a card, then **Next**.
 
 ### Step 2 — Dives
 
-The list shows every dive of your log, grouped by month. Search by number, site, location or country, and narrow down with the filters (**Period**, **Country**, **Depth**, **Rating**, **With profile**). **Sort** orders the list (**Newest first**, **Oldest first**, **Max depth**); Dive Lens remembers your choice. Click a dive to see its details on the right: profile, duration, max depth, temperatures, rating, site GPS with a map, and your notes.
+The list shows every dive of your log, grouped by month. Search by number, site, location or country, and narrow down with the filters (**Period**, **Country**, **Depth**, **Rating**, **With profile**, **With GPS**, **With notes**). **Sort** orders the list (**Newest first**, **Oldest first**, **Max depth**); Dive Lens remembers your choice. Click a dive to see its details on the right: profile, duration, max depth, temperatures, rating, site GPS with a map, and your notes.
+
+Each row has three marks at its end, in colour when the dive has it and greyed when not: **Profile**, **GPS** (its site has a GPS position) and **Notes**. Hover over a mark to read it, for example "Site GPS available" or "No notes". The **GPS** column and the **With GPS** filter show only when the dive application gives site positions, as MacDive and Subsurface do.
 
 - **Entire catalog**: tick one or more dives, then **Next**. The bar shows how many are ticked and their days; **Deselect all** unticks them.
 - **Lightroom selection**: click one dive, then **Next**.
@@ -116,9 +120,9 @@ A dive **without a profile** (entered by hand, or from an older dive computer wh
 - **Suggest** proposes the offset that puts the most photos in the dives. It tries every quarter of an hour between −14 h and +14 h, so it also finds a forgotten time zone.
 - **Suggest for all** does it for every camera at once, without touching cameras you set by hand or ignore.
 - You can also type the offset (hours:minutes) or adjust it yourself.
-- Each card starts from the last offset applied to that camera, on either path (**remembered offset**); with none, it starts at 0:00. Offsets are remembered separately for each dive application.
+- Each card starts from the last offset applied to that camera, on either path (**remembered offset**); with none, it starts at 0:00. Offsets are remembered separately for each dive application. **Settings › Remembered clock offsets** lists them and forgets the one of a camera (section 8).
 
-**Preview by dive.** The counts follow your settings: photos per dive, cameras, and the per-photo data each dive gives (**Depth · temp. · time**, **No profile: dive data only**, **Surface photos only**). A dive with no photo is shown in orange, **No photo — clock changed?**: a camera clock was often changed during the trip (section 10).
+**Preview by dive.** The counts follow your settings: photos per dive, cameras, and the per-photo data each dive gives (**Depth · temp. · time**, **No profile: dive data only**, **Surface photos only**). For a dive with no photo, its count, 0, and **No photo — clock changed?** are written in orange: a camera clock was often changed during the trip (section 10).
 
 On the **Entire catalog** path:
 
@@ -170,8 +174,8 @@ The bar at the bottom sums up what will be written ("N photos · N collections")
 
 **Written in Lightroom**: **Photos tagged** (the photos written, those only put in a collection included), **With depth**, and **Collections**, then each collection with its number of photos, **created** or **added to**. Then the warnings (dives without photo, photos outside the dives, photos without depth) and the reminder of how to undo (section 7).
 
-- **Entire catalog**: **Back to dives** returns to step 2 with no dive ticked. When a dive got no photo, **Handle dive N separately** (or **Handle these dives separately**) goes straight to step 3 with only those dives ticked, and looks for their photos again: give their camera its own offset (section 10).
-- **Lightroom selection**: **Done** returns to step 1.
+- **Entire catalog**: **Back to scope selection** returns to step 1 and starts a new run: **Entire catalog** is still chosen, no dive is ticked and the options are back to their defaults. When a dive got no photo, **Handle dive N separately** (or **Handle these dives separately**) goes straight to step 3 with only those dives ticked, and looks for their photos again: give their camera its own offset (section 10).
+- **Lightroom selection**: **Done** returns to step 1 and starts a new run in the same way, the **Lightroom selection** card still chosen.
 
 ---
 
@@ -277,6 +281,12 @@ Every change is saved at once.
 - **Group in the set**: "Dive Lens" by default, created when needed; leave it empty to put the collections straight in the place above. A preview shows the resulting path. Collections already created stay where they are.
 - If the set chosen in **Place in** is no longer in the catalog, step 4 says so while **Create collections** is ticked, and **Apply** stays greyed until you choose another place here.
 
+**Remembered clock offsets**
+- Under the title, "Kept for each camera after Apply and offered again at the Clocks step, for <application>." The list shows the cameras whose offset is remembered for the dive application chosen above, sorted by name as at step 3. Each line gives the camera's name as on its card at step 3 (its model, or "Unknown camera"), with "no. <serial number>" under it when the photos give one; on the right, its offset as on the card (for example "+4:00", "0:00" or "−0:30"), and **Forget**. With none: "No clock offset remembered."
+- **Forget** removes that camera's offset at once, without asking, and its line goes. The next time, step 3 starts its card at 0:00, without **remembered offset**; **Suggest** finds the offset again. The other cameras, and the offsets kept for the other dive application, stay.
+- Nothing changes in Lightroom: the clock offset already written on photos stays.
+- Forgotten during a journey: back from Settings, the camera is no longer shown as remembered (no **remembered offset** on its card at step 3, no "with the remembered offset of…" under **Covers the selection** at step 2), but the offset shown stays as it is, set by hand or not. The counts and **Covers the selection** follow it, and **Apply** writes it and remembers it again. The camera starts at 0:00 the next time Dive Lens takes its offset from what is remembered: in a new run, when other dives are ticked (**Entire catalog**), or when it comes back into the selection after leaving it (**Lightroom selection**).
+
 **Settings backup**
 - **Export or import**: to get your settings back on another computer, or after reinstalling.
 - **Export…** saves them in a file, named "Dive Lens settings.json" unless you choose another name. The file holds: the dive application and the log location of each one, language, units, where the collections go, the automatic check for updates, the log level and the order of the dive list. The clock offsets remembered for each camera are not in it: they stay on this computer.
@@ -307,7 +317,7 @@ In the **Library** module, open the **Metadata** panel and choose **Dive Lens** 
 
 - **Photo**: Depth, Temperature, Elapsed Time;
 - **Dive**: Dive, Start Dive, End Dive, Duration, Max Depth, Temp. Low, Temp. High, Rating;
-- **Site**: Lightroom's location, city, country and GPS;
+- **Site**: Lightroom's location, city, country and GPS, with the GPS altitude under the GPS;
 - **Technical**: Clock Offset, Source.
 
 The Dive Lens fields stay in the Lightroom catalog: they are not written into the photo files and do not travel with exports. Only the GPS position, the location fields and, if you choose it, the altitude do.

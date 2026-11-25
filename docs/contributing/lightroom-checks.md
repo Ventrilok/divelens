@@ -17,12 +17,12 @@ Play them before a release that touches the plug-in or the catalog writes, and a
   - [Test photos and dives](#test-photos-and-dives)
   - [Shortcuts used in the steps](#shortcuts-used-in-the-steps)
 - [Tests by feature](#tests-by-feature)
-  - [Journey and frame](#journey-and-frame): JRN-01 to JRN-11
-  - [Catalog path](#catalog-path): CAT-01 to CAT-11
+  - [Journey and frame](#journey-and-frame): JRN-01 to JRN-12
+  - [Catalog path](#catalog-path): CAT-01 to CAT-12
   - [Selection path](#selection-path): SEL-01 to SEL-09
   - [Camera clock offset](#camera-clock-offset): CLK-01 and CLK-02
-  - [Units and altitude](#units-and-altitude): UNIT-01 to UNIT-03
-  - [Settings](#settings): SET-01 to SET-04
+  - [Units and altitude](#units-and-altitude): UNIT-01 to UNIT-04
+  - [Settings](#settings): SET-01 to SET-06
   - [Undo](#undo): UNDO-01 to UNDO-03
 - [After the tests](#after-the-tests)
 - [Results sheet](#results-sheet)
@@ -72,7 +72,7 @@ Copying the depth to the GPS altitude is no longer a setting: it is the option *
 
 Every test uses the base settings. A test that needs another setting changes it in its steps and sets it back in its last step.
 
-Dive Lens remembers each camera's last clock offset outside the catalog, so a new catalog does not reset it. If a camera card at **Clocks** shows another offset than 0:00 (left by an earlier run), set it to 0:00 before **Apply**.
+Dive Lens remembers each camera's last clock offset outside the catalog, so a new catalog does not reset it. If a camera card at **Clocks** shows another offset than 0:00 (left by an earlier run), set it to 0:00 before **Apply**, or forget it beforehand in **Settings › Remembered clock offsets** (**Forget**).
 
 ### Clean photos
 
@@ -114,9 +114,9 @@ Dive Lens fields are read in Lightroom's Metadata panel (Dive Lens section); the
 
 ### Shortcuts used in the steps
 
-- **Catalog path to Clocks**: **Library › Plug-in Extras › Open Dive Lens…**; at **Photos** choose **Entire catalog**, then **Next**; at **Dives** tick dives 101 and 102, then **Next**.
+- **Catalog path to Clocks**: **Library › Plug-in Extras › Open Dive Lens…**; at **Scope** choose **Entire catalog**, then **Next**; at **Dives** tick dives 101 and 102, then **Next**.
 - **Catalog path to Review & Apply**: the same, then **Next** at **Clocks**.
-- **Selection path with dive N**: with the photos selected in Lightroom, **Library › Plug-in Extras › Open Dive Lens…**; at **Photos** choose the **Lightroom selection** card, then **Next**; at **Dives** click dive N, then **Next**; at **Clocks**, **Next**. You are at **Review & Apply**.
+- **Selection path with dive N**: with the photos selected in Lightroom, **Library › Plug-in Extras › Open Dive Lens…**; at **Scope** choose the **Lightroom selection** card, then **Next**; at **Dives** click dive N, then **Next**; at **Clocks**, **Next**. You are at **Review & Apply**.
 
 ## Tests by feature
 
@@ -132,21 +132,21 @@ Nobody has looked at the real window of the journey yet: JRN-01 and JRN-02 come 
 
 **Steps**
 
-1. **Library › Plug-in Extras › Open Dive Lens…**. Read the Photos step.
+1. **Library › Plug-in Extras › Open Dive Lens…**. Read the Scope step.
 2. Choose **Entire catalog**, then **Next**. Read the Dives step, tick dives 101 and 102, then **Next**.
 3. Read the Clocks step, then **Next**.
 4. Read the Review & Apply step, then click **Apply to 5 photos**.
-5. Read the summary, then click **Back to dives**.
+5. Read the summary, then click **Back to scope selection**. Then **Next**, and **Back**.
 6. Click the gear, set **Display › Language** to Français, then **Retour**.
-7. Click **Précédent** to reach Photos, and play steps 2 to 5 again, in French.
+7. At « Périmètre », play steps 2 to 5 again, in French.
 8. Reset: set the language back to its base value, then make a [clean start](#clean-start).
 
 **Expected**
 
 - On every screen, in both languages: nothing cut off or overlapping, no raw text key (such as `journey.opt.dive`), no English left on the French screens.
-- Everywhere: at the top, "Dive Lens" and the gear (tooltip "Settings" / « Réglages »); the strip "Photos › Dives › Clocks › Review & Apply › Summary" / « Photos › Plongées › Horloges › Vérifier et appliquer › Récapitulatif », with the current step highlighted; at the bottom, the status bar: "Lightroom connected", "Catalog: <name>", "Catalog size: 6 items", "Selected photos: none", "Dive log app: Subsurface", "Dives logged: 10" / « Lightroom connecté », « Catalogue : … », « Taille du catalogue : 6 éléments », « Photos sélectionnées : aucune », « Application de carnet : Subsurface », « Plongées enregistrées : 10 ».
-- At Photos: the title "Which photos to work on?" / « Sur quelles photos travailler ? »; two cards separated by "or" / « ou »: "Entire catalog" / « Tout le catalogue », and, greyed, "Lightroom selection" / « Les photos sélectionnées dans Lightroom » with "No photos selected" / « Aucune photo sélectionnée ». Once **Entire catalog** is chosen, the bar reads "Entire catalog" and "Next step: tick the dives" / « Tout le catalogue », « Étape suivante : cocher les plongées », next to "Next" / « Suivant ».
-- At Dives: the line "Photos: entire catalog · tick the dives, Dive Lens finds the photos taken during each one · Change" / « Photos : tout le catalogue · cochez les plongées, Dive Lens retrouve les photos prises pendant chacune · Modifier »; the dive list grouped by month, with its search, filters, sort and detail card. Before any tick, "Next" is greyed with "Check one or more dives" / « Cochez une ou plusieurs plongées ». With 101 and 102 ticked: "2 dives selected" and "From 14 Jun 2025 to 14 Jun 2025 · photos looked for in the entire catalog" / « 2 plongées sélectionnées », « Du 14 juin 2025 au 14 juin 2025 · photos cherchées dans tout le catalogue », then "Deselect all", "Back", "Next" / « Tout désélectionner », « Précédent », « Suivant ».
+- Everywhere: at the top, "Dive Lens" and the gear (tooltip "Settings" / « Réglages »); the strip "Scope › Dives › Clocks › Review & Apply › Summary" / « Périmètre › Plongées › Horloges › Vérifier et appliquer › Récapitulatif », with the current step highlighted; at the bottom, the status bar: "Lightroom connected", "Catalog: <name>", "Catalog size: 6 items", "Selected photos: none", "Dive log app: Subsurface", "Dives logged: 10" / « Lightroom connecté », « Catalogue : … », « Taille du catalogue : 6 éléments », « Photos sélectionnées : aucune », « Application de carnet : Subsurface », « Plongées enregistrées : 10 ».
+- At Scope: the title "Which photos to work on?" / « Sur quelles photos travailler ? »; two cards separated by "or" / « ou »: "Entire catalog" / « Tout le catalogue », and, greyed, "Lightroom selection" / « Les photos sélectionnées dans Lightroom » with "No photos selected" / « Aucune photo sélectionnée ». Once **Entire catalog** is chosen, the bar reads "Entire catalog" and "Next step: tick the dives" / « Tout le catalogue », « Étape suivante : cocher les plongées », next to "Next" / « Suivant ».
+- At Dives: the line "Photos: entire catalog · tick the dives, Dive Lens finds the photos taken during each one" / « Photos : tout le catalogue · cochez les plongées, Dive Lens retrouve les photos prises pendant chacune », with no "Change" / « Modifier » link after it; the dive list grouped by month, with its search, filters, sort and detail card. Before any tick, "Next" is greyed with "Check one or more dives" / « Cochez une ou plusieurs plongées ». With 101 and 102 ticked: "2 dives selected" and "From 14 Jun 2025 to 14 Jun 2025 · photos looked for in the entire catalog" / « 2 plongées sélectionnées », « Du 14 juin 2025 au 14 juin 2025 · photos cherchées dans tout le catalogue », then "Deselect all", "Back", "Next" / « Tout désélectionner », « Précédent », « Suivant ».
 - At Clocks: the line "Photos: entire catalog, from 14 Jun 2025 to 14 Jun 2025 · 6 photos from 2 cameras · 2 dives ticked" / « Photos : tout le catalogue, du 14 juin 2025 au 14 juin 2025 · 6 photos de 2 appareils · 2 plongées cochées ».
   - "Camera clocks" / « Horloge des appareils », with "Suggest for all" / « Suggérer pour tous ».
   - Two cards: Test Camera A ("3 in the dives · 1 outside" / « 3 dans les plongées · 1 hors ») and Test Camera B ("2 in the dives · 0 outside"), each with "Suggest" / « Suggérer » and "Ignore" / « Ignorer ».
@@ -164,7 +164,8 @@ Nobody has looked at the real window of the journey yet: JRN-01 and JRN-02 come 
   - Under "Dive Lens": "101 - Coral Garden", "3 photos · created" and "102 - Glacier Wall", "2 photos · created". The French run reads « complétée » instead.
   - "1 photo outside the dives got nothing." / « 1 photo hors plongée n'a rien reçu. ».
   - "To undo: Edit › Undo in Lightroom, in one step, GPS and altitude included." / « Pour tout défaire : Édition › Annuler dans Lightroom, en une seule fois, GPS et altitude compris. ».
-  - "Back to dives" / « Retour aux plongées ». A click on a step of the strip does nothing here.
+  - "Back to scope selection" / « Retour au choix du périmètre ». A click on a step of the strip does nothing here.
+- After "Back to scope selection" (step 5): Scope, with **Entire catalog** still chosen. **Next** leads to Dives with no dive ticked.
 
 #### JRN-02 · Every screen of the selection path, in English and in French
 
@@ -172,7 +173,7 @@ Nobody has looked at the real window of the journey yet: JRN-01 and JRN-02 come 
 
 **Steps**
 
-1. **Library › Plug-in Extras › Open Dive Lens…**. Read the Photos step.
+1. **Library › Plug-in Extras › Open Dive Lens…**. Read the Scope step.
 2. Choose the **Lightroom selection** card, then **Next**. Read the Dives step, click dive 101, then **Next**.
 3. Read the Clocks step, then **Next**.
 4. Read the Review & Apply step, then click **Apply to 4 photos**.
@@ -184,9 +185,9 @@ Nobody has looked at the real window of the journey yet: JRN-01 and JRN-02 come 
 **Expected**
 
 - As in JRN-01: nothing cut off or overlapping, no raw text key, no English on the French screens; the status bar reads "Selected photos: 4" / « Photos sélectionnées : 4 ».
-- At Photos: the card "Lightroom selection" / « Les 4 photos sélectionnées dans Lightroom » is lit, with "Test Camera A · Saturday, 14 June 2025" / « Test Camera A · samedi 14 juin 2025 », "You choose one dive: all 4 photos are attached to it, whatever their time." / « Vous choisissez une plongée : les 4 photos y sont toutes rattachées, quelle que soit leur heure. » and four thumbnails. The "Entire catalog" card adds "The Lightroom selection is ignored." / « La sélection Lightroom est ignorée. ». Once the card is chosen, the bar reads "The 4 selected photos" and "Next step: choose their dive" / « Les 4 photos sélectionnées », « Étape suivante : choisir leur plongée ».
+- At Scope: the card "Lightroom selection" / « Les 4 photos sélectionnées dans Lightroom » is lit, with "Test Camera A · Saturday, 14 June 2025" / « Test Camera A · samedi 14 juin 2025 », "You choose one dive: all 4 photos are attached to it, whatever their time." / « Vous choisissez une plongée : les 4 photos y sont toutes rattachées, quelle que soit leur heure. » and four thumbnails. The "Entire catalog" card adds "The Lightroom selection is ignored." / « La sélection Lightroom est ignorée. ». Once the card is chosen, the bar reads "The 4 selected photos" and "Next step: choose their dive" / « Les 4 photos sélectionnées », « Étape suivante : choisir leur plongée ».
 - At Dives:
-  - The line "Photos: the 4 selected in Lightroom · Test Camera A · Saturday, 14 June 2025 · Change" / « Photos : les 4 sélectionnées dans Lightroom · Test Camera A · samedi 14 juin 2025 · Modifier ».
+  - The line "Photos: the 4 selected in Lightroom · Test Camera A · Saturday, 14 June 2025" / « Photos : les 4 sélectionnées dans Lightroom · Test Camera A · samedi 14 juin 2025 », with no "Change" / « Modifier » link after it.
   - "Choose their dive: all 4 photos will be attached to it, whatever their time. Without a dive, you will only set a location, chosen at step 4." / « Choisissez leur plongée : les 4 photos y seront toutes rattachées, quelle que soit leur heure. Sans plongée, vous poserez seulement un lieu, choisi à l'étape 4. ».
   - The counter "10 dives · only one to choose" / « 10 plongées · une seule à choisir ».
   - The first row "No dive — location only", "chosen at step 4: boat, beach…" / « Aucune plongée — lieu seulement », « choisi à l'étape 4 : bateau, plage… ».
@@ -209,7 +210,7 @@ Nobody has looked at the real window of the journey yet: JRN-01 and JRN-02 come 
   - "Photos tagged" 4, "With depth" 3, "Collection" 1.
   - Under "Dive Lens": "101 - Coral Garden", "4 photos · created" (the French run: « complétée »).
   - "1 photo without depth: taken after getting out of the water." / « 1 photo sans profondeur : prise après la sortie de l'eau. ».
-  - The Undo reminder, then "Done" / « Terminer », which leads to Photos.
+  - The Undo reminder, then "Done" / « Terminer », which leads to Scope, with the selection card still chosen.
 
 #### JRN-03 · One menu item, enabled without a selection
 
@@ -228,13 +229,13 @@ This test writes nothing.
 **Expected**
 
 - After step 1: one Dive Lens item, **Open Dive Lens…**, enabled although nothing is selected. No **Create Collections…** or **Tag Selection…**.
-- After step 2: the app opens at Photos; the selection card is greyed.
-- After step 3: the app's window comes to the front at Photos, with **Entire catalog** still chosen.
+- After step 2: the app opens at Scope; the selection card is greyed.
+- After step 3: the app's window comes to the front at Scope, with **Entire catalog** still chosen.
 - After step 4: the app shows Settings.
-- After step 5: **Open Dive Lens** shows Photos; **Open Settings** shows Settings.
+- After step 5: **Open Dive Lens** shows Scope; **Open Settings** shows Settings.
 - In a French Lightroom, the two items read « Ouvrir Dive Lens… » and « Réglages de Dive Lens… » (optional).
 
-#### JRN-04 · The Photos step follows the Lightroom selection live
+#### JRN-04 · The Scope step follows the Lightroom selection live
 
 This test writes nothing.
 
@@ -263,7 +264,7 @@ This test writes nothing.
 1. **Library › Plug-in Extras › Open Dive Lens…**. Compare the status bar with the count Lightroom shows next to **Catalog › All Photographs**.
 2. Choose **Entire catalog**, then **Next**.
 3. In Lightroom, select X1 and choose **Photo › Remove Photo…**, then **Remove** (from the catalog only, not from the disk).
-4. In the app, click **Back** to reach Photos.
+4. In the app, click **Back** to reach Scope.
 5. Put X1 back: **Edit › Undo** in Lightroom; if Lightroom cannot undo it, import X1 again from the copied folder with **Add**.
 6. In the app, **Next**, then **Back**.
 
@@ -273,7 +274,7 @@ This test writes nothing.
 - After step 4: "Catalog size: 5 items", the same number as All Photographs.
 - After step 6: "Catalog size: 6 items" again.
 
-#### JRN-06 · "Open Dive Lens…" during the journey goes back to Photos
+#### JRN-06 · "Open Dive Lens…" during the journey goes back to Scope
 
 **Before:** [clean start](#clean-start).
 
@@ -290,7 +291,7 @@ This test writes nothing.
 
 **Expected**
 
-- After step 2: Photos, **Entire catalog** still chosen.
+- After step 2: Scope, **Entire catalog** still chosen.
 - After step 3: Dives, with 101 and 102 still ticked.
 - After step 5: Dives, with no dive ticked.
 - After step 7: Dives, with no dive chosen.
@@ -333,7 +334,7 @@ This test writes nothing.
 
 **Expected**
 
-- After step 4: Photos, no card chosen. Going on, no dive is ticked at Dives. No orange notice. The status bar reads "Dives logged: 10".
+- After step 4: Scope, no card chosen. Going on, no dive is ticked at Dives. No orange notice. The status bar reads "Dives logged: 10".
 
 #### JRN-09 · Nothing leaves Review & Apply during a write
 
@@ -412,6 +413,30 @@ This test writes nothing.
   - the status bar reads "Lightroom connected", and the photos are looked for again;
   - the Test Camera A card is still at 0:05, and the margin still at 10 min.
 
+#### JRN-12 · The bottom bar stays in view at the smallest window size
+
+**Before:** [clean start](#clean-start). Nothing selected in Lightroom (**Edit › Select None**).
+
+**Steps**
+
+1. **Library › Plug-in Extras › Open Dive Lens…**. Drag the corner of the app window to make it narrower and lower, until it stops: it cannot be made smaller.
+2. At Scope, look at the bar, then choose **Entire catalog** and **Next**.
+3. At Dives, scroll the dive list to its end. Click dive 101 and scroll its detail card to its end (profile, map, notes). Tick dives 101 and 102, then **Next**.
+4. At Clocks, scroll to the end of the step, then **Next**.
+5. At Review & Apply, choose **Other site, the same for all photos…** (the site picker makes the step longer) and scroll to the end. Choose **Each dive's site** again, then **Apply to 5 photos**.
+6. On the summary, scroll to the end.
+7. In Lightroom, select A1, A2, A3 and X1. [Selection path with dive 101](#shortcuts-used-in-the-steps), looking at each step on the way as above; at Review & Apply, choose **Other site…** and scroll to the end, then **Dive's site: Coral Garden** again, and **Apply to 4 photos**. Scroll the summary to its end.
+8. Reset: make the window large again, then a [clean start](#clean-start).
+
+**Expected**
+
+- On every step of both paths:
+  - the step strip stays at the top, and the bar (its text and its buttons: **Next**, **Back**, **Apply to N photos**, **Back to scope selection**, **Done**) stays at the bottom of the window, just above the status bar, whole;
+  - only the content between them scrolls;
+  - scrolled to its end, the content's last line shows whole above the bar, never under it;
+  - nothing in the bar is cut off or overlapping (its text may wrap onto two lines).
+- At Dives: the dive list and the detail card each scroll on their own, the bar still in view; when the window is too low for them, the whole step scrolls instead. Write down which of the two you see at the smallest size.
+
 ### Catalog path
 
 #### CAT-01 · Create collections for two dives
@@ -484,7 +509,7 @@ This test writes nothing.
 **Expected**
 
 - At Clocks:
-  - the preview row of dive 103 is orange, with "No photo — clock changed?";
+  - in the preview row of dive 103, its photo count, 0, and "No photo — clock changed?" are written in orange, not only tinted by a faint orange row;
   - the bar adds "Dive 103 Shark Point / Bay: no photo — clock changed?".
 - At Review & Apply:
   - "Good to know before applying" starts with "Dive 103 Shark Point / Bay: no photo, no collection.", in orange;
@@ -494,7 +519,7 @@ This test writes nothing.
   - the warning "Dive 103 Shark Point / Bay: no photo, no collection created. If the clock changed that day, handle it separately with its own offset.".
 - After step 3: Clocks, with only dive 103 ticked and the photos looked for again. The search covers a day on either side of the dive, so the six test photos are found:
   - both camera cards read "0 photos in the dives";
-  - dive 103's row is orange, with "No photo — clock changed?";
+  - in dive 103's row, the count 0 and "No photo — clock changed?" are written in orange;
   - "Outside the dives · 6 photos";
   - the bar reads "0 photos in 0 dives · 6 outside the dives".
 
@@ -632,7 +657,7 @@ Required on Windows.
 1. [Catalog path to Clocks](#shortcuts-used-in-the-steps).
 2. Under **Include photos taken at the surface**, click **+** until it reads 120 min.
 3. **Next**, then **Apply to 6 photos**.
-4. On the summary, **Back to dives**. Tick dives 101 and 102, then **Next**.
+4. On the summary, **Back to scope selection**. At Scope, **Next**; tick dives 101 and 102, then **Next**.
 5. Reset: [clean start](#clean-start).
 
 **Expected**
@@ -645,7 +670,37 @@ Required on Windows.
   - dive 101's fields, location and GPS;
   - Clock Offset +00:00;
   - no photo depth, temperature or elapsed time.
-- After step 4: the margin is back to 0 min.
+- After step 4:
+  - "Back to scope selection" led to Scope, with **Entire catalog** still chosen, and Dives showed no dive ticked;
+  - at Clocks, the margin is back to 0 min.
+
+#### CAT-12 · GPS and notes marks and filters
+
+This test writes nothing.
+
+**Before:** any selection.
+
+**Steps**
+
+1. **Library › Plug-in Extras › Open Dive Lens…**, choose **Entire catalog**, **Next**, and stay on Dives.
+2. Look at the end of each row. Hover over the marks of dives 101, 102 and 103.
+3. Click the filter **With GPS**.
+4. Click **With notes** as well.
+5. Click **With GPS** again, so that only **With notes** is on.
+6. Click **Clear filters**.
+
+**Expected**
+
+- After step 2:
+  - after the **Profile** column, a **GPS** column and a **Notes** column, each with its mark: in colour when the dive has it, greyed when not. Subsurface gives site positions, so the GPS column shows; a dive application that does not give them would have no GPS column and no **With GPS** filter;
+  - dive 101: GPS and notes in colour, tooltips "Site GPS available" and "Notes available";
+  - dive 102: GPS in colour, notes greyed, "No notes";
+  - dive 103: GPS greyed, "No site GPS", notes in colour.
+- After step 3: dives 100, 101, 102, 104, 108 and 109 only.
+- After step 4: dives 100, 101 and 108 only.
+- After step 5: dives 100, 101, 103 and 108 only.
+- After step 6: every dive back, and both filters off.
+- In French (optional): « Avec GPS », « Avec notes », « GPS du site disponible », « Pas de GPS du site », « Notes disponibles », « Pas de notes ».
 
 ### Selection path
 
@@ -731,7 +786,7 @@ This test writes nothing.
 
 1. [Selection path with dive 101](#shortcuts-used-in-the-steps).
 2. In Lightroom, deselect everything: **Edit › Select None**.
-3. In the app, click **Photos** in the strip.
+3. In the app, click **Scope** in the strip.
 
 **Expected**
 
@@ -823,7 +878,7 @@ This test writes nothing.
   - X1: country "Atlantide", city "Île Verte", location "Récif d'Émeraude", GPS 20°30'S 57°15'E;
   - no Dive Lens field (no dive number, no Source) and no collection;
   - the summary reads "The selected photo · site details", "Photos tagged" 1, "With depth" 0, "Collections" 0;
-  - **Done** leads to Photos.
+  - **Done** leads to Scope.
 
 ### Camera clock offset
 
@@ -916,6 +971,26 @@ This test writes nothing.
 - After step 2: dive 101 60 ft, dive 108 102 ft.
 - After step 3: dive 101 18.4 m, dive 108 31.2 m.
 
+#### UNIT-04 · The GPS altitude shows under the GPS in the Dive Lens panel
+
+Nobody has seen this line of the panel in Lightroom yet: this test observes and writes down.
+
+**Before:** [clean photos](#clean-photos). Select A1 and X1.
+
+**Steps**
+
+1. [Selection path with dive 101](#shortcuts-used-in-the-steps). At **Review & Apply**, tick **Copy depth to GPS altitude**, then **Apply to 2 photos**.
+2. In the Library module, select A1 alone. In the Metadata panel, choose **Dive Lens** in its menu and look at the **Site** section.
+3. Select X1 alone and look again.
+4. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 1: **Copy depth to GPS altitude** read "1 photo" before Apply (X1 is taken after the dive: no depth).
+- After step 2: in **Site**, after location, city, country and GPS, a line for the GPS altitude, about -18 m below sea level. Write down its label and its value exactly as Lightroom shows them (Lightroom may show it in feet, or as a height below sea level).
+- After step 3: write down what that line shows for a photo without altitude: an empty line, or no line.
+- Write down whether the line can be edited in the panel.
+
 ### Settings
 
 #### SET-01 · Dive log not found
@@ -972,7 +1047,7 @@ This test writes nothing.
 
 **Expected**
 
-- After step 1: the sections Dive log, Display, Collections, Settings backup, Updates, Diagnostics, About, in that order. No "Writing on photos", no "Copy depth to GPS altitude".
+- After step 1: the sections Dive log, Display, Collections, Remembered clock offsets, Settings backup, Updates, Diagnostics, About, in that order. No "Writing on photos", no "Copy depth to GPS altitude".
 - After step 2: "Settings imported."; every setting as before.
 - After step 3: the new file has no `depthToAltitude`.
 - After step 4: **Copy depth to GPS altitude** unticked.
@@ -1005,6 +1080,60 @@ This test writes nothing.
   - Settings show "Trips (not found)";
   - with "This collection set is no longer in the catalog: choose another.".
 - After step 7: Review & Apply, **Apply** enabled.
+
+#### SET-05 · Forget the remembered clock offset of one camera
+
+**Before:** [clean start](#clean-start).
+
+**Steps**
+
+1. [Catalog path to Review & Apply](#shortcuts-used-in-the-steps) (at **Clocks**, set any card that is not at 0:00 to 0:00), then **Apply to 5 photos**. Test Camera A and Test Camera B are now remembered at 0:00.
+2. In Lightroom, select B1 and B2. **Library › Plug-in Extras › Open Dive Lens…**, choose the **Lightroom selection** card, **Next**; click dive **101**, **Next**; on the Test Camera B card, click **Suggest** (−4:30); **Next**, then **Apply to 2 photos**.
+3. Click the gear and read the section **Remembered clock offsets**.
+4. On the Test Camera B line, click **Forget**.
+5. Click **Back**. **Library › Plug-in Extras › Open Dive Lens…**, choose **Entire catalog**, **Next**, tick dives 101 and 102, **Next**: look at the two camera cards. Leave without applying.
+6. In Lightroom, look at the Dive Lens fields of B1 and B2.
+7. Click the gear, and on the Test Camera A line, click **Forget**. Then **Back**.
+8. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 3:
+  - the section sits between **Collections** and **Settings backup**, with "Kept for each camera after Apply and offered again at the Clocks step, for Subsurface.";
+  - one line per camera, by name: "Test Camera A" with "0:00", and "Test Camera B" with "−4:30", each with a **Forget** button. No "no. …" under the names: the test photos carry no serial number. Cameras of your own remembered for Subsurface may be listed too: leave them.
+- After step 4: the Test Camera B line goes at once, with no confirmation; the Test Camera A line stays, at 0:00.
+- After step 5: the Test Camera A card at 0:00 with "remembered offset"; the Test Camera B card at 0:00 without "remembered offset".
+- After step 6: B1 and B2 still carry dive 101 and Clock Offset -04:30: forgetting changes nothing on photos already written.
+- After step 7: no Test Camera line left. Without cameras of your own, the section reads "No clock offset remembered.".
+- In French (optional): « Décalages d'horloge mémorisés », « Gardés pour chaque appareil après « Appliquer » et proposés à nouveau à l'étape Horloges, pour Subsurface. », « Oublier », « Aucun décalage d'horloge mémorisé. ».
+
+#### SET-06 · Forgetting an offset during a journey
+
+**Before:** [clean start](#clean-start). Select B1 and B2.
+
+**Steps**
+
+1. **Library › Plug-in Extras › Open Dive Lens…**, choose the **Lightroom selection** card, **Next**; click dive **101**, **Next**; on the Test Camera B card, click **Suggest** (−4:30); **Next**, then **Apply to 2 photos**. On the summary, **Done**.
+2. **Next**: look at Dives. Click dive 101, **Next**: look at the Test Camera B card.
+3. Click the gear. Under **Remembered clock offsets**, click **Forget** on the Test Camera B line, then **Back**.
+4. Click **Back**, to Dives.
+5. **Next**, **Next**, then **Apply to 2 photos**. Click the gear and look at **Remembered clock offsets**; click **Forget** on the Test Camera B line, then **Back**.
+6. On the summary, **Done**, then **Next**: look at Dives. Click dive 101, **Next**: look at the Test Camera B card. Leave without applying.
+7. Reset: [clean start](#clean-start).
+
+**Expected**
+
+- After step 2:
+  - dive 101 marked "Covers the selection", with under its row "Covers the selection: 2 of the 2 photos fall in this dive, with the remembered offset of the Test Camera B (−4:30).";
+  - the Test Camera B card at −4:30 with "remembered offset".
+- After step 3: back at Clocks, the Test Camera B card still at −4:30, but without "remembered offset"; "2 in the dive · 0 outside", as before.
+- After step 4: dive 101 still marked "Covers the selection" (it follows the offset shown), but without the sentence under its row.
+- After step 5:
+  - B1 and B2 carry Clock Offset -04:30;
+  - in Settings, "Test Camera B" with "−4:30" again: **Apply** remembered it again.
+- After step 6:
+  - dive 102 marked "Covers the selection", not 101, and no sentence under its row: the new run starts Test Camera B at 0:00;
+  - the Test Camera B card at 0:00, without "remembered offset", in orange, "0 in the dive · 2 outside".
 
 ### Undo
 
@@ -1099,14 +1228,15 @@ Windows <version>, Lightroom Classic <version>
 | JRN-01 Every screen of the catalog path, in English and in French | | |
 | JRN-02 Every screen of the selection path, in English and in French | | |
 | JRN-03 One menu item, enabled without a selection | | |
-| JRN-04 The Photos step follows the Lightroom selection live | | |
+| JRN-04 The Scope step follows the Lightroom selection live | | |
 | JRN-05 The catalog size matches All Photographs | | |
-| JRN-06 "Open Dive Lens…" during the journey goes back to Photos | | |
+| JRN-06 "Open Dive Lens…" during the journey goes back to Scope | | |
 | JRN-07 Settings, then Back, keep the step and the choices | | |
 | JRN-08 Another dive log in Settings starts the journey again | | |
 | JRN-09 Nothing leaves Review & Apply during a write | | |
 | JRN-10 A plug-in of another version asks to restart Lightroom | | |
 | JRN-11 Lightroom quits during the journey | | |
+| JRN-12 The bottom bar stays in view at the smallest window size | | |
 | CAT-01 Create collections for two dives | | |
 | CAT-02 Running again duplicates nothing | | |
 | CAT-03 Country and period filters | | |
@@ -1118,6 +1248,7 @@ Windows <version>, Lightroom Classic <version>
 | CAT-09 Another site for every photo | | |
 | CAT-10 Collections alone | | |
 | CAT-11 A surface photo goes to the closer dive | | |
+| CAT-12 GPS and notes marks and filters | | |
 | SEL-01 Tag three photos with one dive | | |
 | SEL-02 The dive's collection is completed, without duplicates | | |
 | SEL-03 Tag a photo again with another dive | | |
@@ -1132,10 +1263,13 @@ Windows <version>, Lightroom Classic <version>
 | UNIT-01 Writing in feet, with the depth copied to the altitude | | |
 | UNIT-02 The altitude option is unticked on every run | | |
 | UNIT-03 Depths in the dive list, in feet and in metres | | |
+| UNIT-04 The GPS altitude shows under the GPS in the Dive Lens panel | | |
 | SET-01 Dive log not found | | |
 | SET-02 Check for updates | | |
 | SET-03 No altitude line in Settings; an older settings file still imports | | |
 | SET-04 The collection set chosen in Settings is missing | | |
+| SET-05 Forget the remembered clock offset of one camera | | |
+| SET-06 Forgetting an offset during a journey | | |
 | UNDO-01 Catalog path: one Undo takes everything back, GPS and altitude included | | |
 | UNDO-02 Selection path: one Undo takes everything back, GPS and altitude included | | |
 | UNDO-03 Undo when Apply creates the "Dive Lens" set | | |
