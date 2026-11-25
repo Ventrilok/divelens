@@ -151,13 +151,12 @@ export function reviewBlocker(i: ReviewInput): string | null {
   if (gpsError(i)) return t("tag.badGps");
 
   const p = i.catalog.preview;
+  // Without the counts nothing can be said yet: Apply waits for them anyway.
+  if (catalog && !p) return null;
+  if (catalog && p?.total === 0) return t("coll.err.nothingToWrite");
+  // Photos are there (found, or selected), but the options ticked leave nothing on them.
   const c = reviewCounts(i);
-  if (catalog) {
-    // Without the counts nothing can be said yet: Apply waits for them anyway.
-    if (p && (p.total === 0 || (c.photos === 0 && c.collections === 0))) return t("coll.err.nothingToWrite");
-  } else if (c.photos === 0 && c.collections === 0) {
-    return t("tag.err.nothingChosen");
-  }
+  if (c.photos === 0 && c.collections === 0) return t("journey.review.nothingWithOptions");
   return null;
 }
 

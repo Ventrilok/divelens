@@ -78,9 +78,19 @@ describe.each(["en", "fr"] as const)("Tag Selection failure texts (%s)", (lang) 
 
   it("every other write failure says that nothing was written", () => {
     const others = writeErrors.filter(
-      (e) => e.error !== "linkLost" && !(e.error === "lightroom" && e.reason === "gpsNotWritten"),
+      (e) =>
+        e.error !== "linkLost" &&
+        e.error !== "nothingChosen" &&
+        !(e.error === "lightroom" && e.reason === "gpsNotWritten"),
     );
     for (const e of others) expect(applyFailure(e, "tag"), JSON.stringify(e)).toContain(nothingWritten);
+  });
+
+  it("the options ticked leaving nothing to write say so, as the bar does before Apply", () => {
+    // A dive or "no dive" and a site are chosen before step 4: only the options are left as a cause.
+    expect(applyFailure({ error: "nothingChosen" }, "tag")).toBe(
+      lang === "en" ? "Nothing to write with these options." : "Rien à écrire avec ces options.",
+    );
   });
 
   it("a vanished dive or site says to reopen Dive Lens", () => {
@@ -191,6 +201,15 @@ describe.each(["en", "fr"] as const)("Refusals both paths share (%s)", (lang) =>
       lang === "en"
         ? "The collection set chosen in Settings (Trips › 2025) is no longer in the catalog. Choose another place in Settings."
         : "L'ensemble choisi dans les réglages (Trips › 2025) n'est plus dans le catalogue. Choisissez un autre emplacement dans les réglages.",
+    );
+  });
+
+  it("nothing left to write reads the same on both paths, true whatever the cause", () => {
+    // Catalog path: the engine refuses the same way for no photo in the dives and for
+    // options that leave nothing on the photos found; the text holds for both.
+    expect(applyFailure({ error: "nothingToWrite" }, "collections")).toBe(applyFailure({ error: "nothingChosen" }, "tag"));
+    expect(applyFailure({ error: "nothingToWrite" }, "collections")).toBe(
+      lang === "en" ? "Nothing to write with these options." : "Rien à écrire avec ces options.",
     );
   });
 

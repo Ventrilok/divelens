@@ -112,30 +112,47 @@ describe("reviewBlocker, catalog path", () => {
       preview: { ...preview, dives: [{ id: "d4", photos: 5, inDive: 5, cameras: 1 }], total: 5, outside: 0 },
       previewFailed: false,
     };
-    expect(reviewBlocker(input(placeOnly, { catalog: d4Photos }))).toBe("No photo falls in the dives: adjust the clock offsets.");
+    expect(reviewBlocker(input(placeOnly, { catalog: d4Photos }))).toBe("Nothing to write with these options.");
+    setLanguage("fr");
+    expect(reviewBlocker(input(placeOnly, { catalog: d4Photos }))).toBe("Rien à écrire avec ces options.");
+    setLanguage("en");
     // Its GPS position is something to write.
     expect(reviewBlocker(input(withOptions(placeOnly, { gps: true }), { catalog: d4Photos }))).toBeNull();
     // The same site picked as another site.
     const picked = withOptions(catalogAt4, { dive: false, gps: false, collections: false, site: "other", pick: { ...pickSandPatch, siteId: "s3" } });
-    expect(reviewBlocker(input(picked))).toBe("No photo falls in the dives: adjust the clock offsets.");
+    expect(reviewBlocker(input(picked))).toBe("Nothing to write with these options.");
   });
 
-  it("says there is nothing to write when no photo falls in the dives", () => {
+  it("says no photo falls in the dives only when none does", () => {
     const empty = { search: ready, preview: { ...preview, dives: [], total: 0 }, previewFailed: false };
     expect(reviewBlocker(input(catalogAt4, { catalog: empty }))).toBe("No photo falls in the dives: adjust the clock offsets.");
+    // Whatever the options: there is no photo to write on.
+    const gpsOnly = withOptions(catalogAt4, { dive: false, place: false, collections: false });
+    expect(reviewBlocker(input(gpsOnly, { catalog: empty }))).toBe("No photo falls in the dives: adjust the clock offsets.");
+  });
+
+  it("names a missing collection set before an empty search, with collections ticked", () => {
+    const empty = { search: ready, preview: { ...preview, dives: [], total: 0 }, previewFailed: false };
+    expect(reviewBlocker(input(catalogAt4, { catalog: empty, parentMissing: true }))).toBe(
+      "The collection set chosen in Settings (Trips › 2025) is no longer in the catalog. Choose another place in Settings.",
+    );
+    // Without collections, the set does not matter: no photo falls in the dives.
+    expect(reviewBlocker(input(withOptions(catalogAt4, { collections: false }), { catalog: empty, parentMissing: true }))).toBe(
+      "No photo falls in the dives: adjust the clock offsets.",
+    );
   });
 
   it("GPS alone with dive sites without GPS: nothing to write, Apply greyed", () => {
     const gpsOnly = withOptions(catalogAt4, { dive: false, place: false, collections: false });
     const onlySandPatch = { search: ready, preview: { ...preview, dives: [preview.dives[1]], total: 6 }, previewFailed: false };
-    expect(reviewBlocker(input(gpsOnly, { catalog: onlySandPatch }))).toBe("No photo falls in the dives: adjust the clock offsets.");
+    expect(reviewBlocker(input(gpsOnly, { catalog: onlySandPatch }))).toBe("Nothing to write with these options.");
     // Dive 12, at a site with GPS, has photos too: its GPS is written.
     expect(reviewBlocker(input(gpsOnly))).toBeNull();
   });
 
   it("GPS alone with another site without GPS: nothing to write, unless a position is typed", () => {
     const gpsOnly = withOptions(catalogAt4, { dive: false, place: false, collections: false, site: "other", pick: pickSandPatch });
-    expect(reviewBlocker(input(gpsOnly))).toBe("No photo falls in the dives: adjust the clock offsets.");
+    expect(reviewBlocker(input(gpsOnly))).toBe("Nothing to write with these options.");
     expect(reviewBlocker(input(withOptions(gpsOnly, { pick: { ...pickSandPatch, lat: "-8.3", lon: "115.4" } })))).toBeNull();
   });
 });
@@ -188,11 +205,9 @@ describe("reviewBlocker, selection path", () => {
   it("GPS alone with a dive site without GPS: nothing to write, Apply greyed", () => {
     const j = run(selectionAt4, { type: "goTo", step: 2 }, { type: "pickDive", pick: { kind: "dive", id: "d2" } }, { type: "next" }, { type: "next" });
     const gpsOnly = withOptions(j, { dive: false, place: false, collections: false });
-    expect(reviewBlocker(input(gpsOnly, { selection: nothingRead }))).toBe("Nothing was written: choose a dive or a site first.");
+    expect(reviewBlocker(input(gpsOnly, { selection: nothingRead }))).toBe("Nothing to write with these options.");
     setLanguage("fr");
-    expect(reviewBlocker(input(gpsOnly, { selection: nothingRead }))).toBe(
-      "Rien n'a été écrit : choisissez d'abord une plongée ou un site.",
-    );
+    expect(reviewBlocker(input(gpsOnly, { selection: nothingRead }))).toBe("Rien à écrire avec ces options.");
   });
 
   it("ignores a GPS position typed wrong while GPS is unticked", () => {
@@ -206,7 +221,7 @@ describe("reviewBlocker, selection path", () => {
   it("location alone on a dive site without names: nothing to write, Apply greyed", () => {
     const j = run(selectionAt4, { type: "goTo", step: 2 }, { type: "pickDive", pick: { kind: "dive", id: "d4" } }, { type: "next" }, { type: "next" });
     const placeOnly = withOptions(j, { dive: false, gps: false, collections: false });
-    expect(reviewBlocker(input(placeOnly, { selection: nothingRead }))).toBe("Nothing was written: choose a dive or a site first.");
+    expect(reviewBlocker(input(placeOnly, { selection: nothingRead }))).toBe("Nothing to write with these options.");
   });
 
   it("asks to tick at least one option when all three are unticked", () => {

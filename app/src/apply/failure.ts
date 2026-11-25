@@ -28,12 +28,16 @@ export function applyFailure(e: ApplyError, feature: ApplyFeature): string {
       // Tag: the selection must be described again. Collections: the search is gone.
       return tag ? t("tag.err.selectionChanged") : t("coll.err.noPhotos");
     case "nothingChosen":
-      return tag ? t("tag.err.nothingChosen") : t("coll.err.nothingChosen");
+      // Tag: a dive or "no dive" and a site are chosen before Apply, so the options ticked
+      // are what leaves nothing to write. Collections: only a search refuses so.
+      return tag ? t("journey.review.nothingWithOptions") : t("coll.err.nothingChosen");
     case "logChanged":
       // Not seen: the app reads the log again and says why.
       return t("log.changedNothingWritten");
     case "nothingToWrite":
-      return tag ? t("tag.err.lightroom") : t("coll.err.nothingToWrite");
+      // Collections: no photo in the dives, or options that leave nothing on those found;
+      // the refusal does not tell which, and this text holds for both.
+      return tag ? t("tag.err.lightroom") : t("journey.review.nothingWithOptions");
     case "badGps":
       // Another site's position (both paths): the same refusal.
       return t("tag.err.badGps");
