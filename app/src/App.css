@@ -84,7 +84,7 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .gear:not(:disabled):hover { background: var(--btn); color: var(--text); }
 .gear[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
 .gear:disabled { opacity: 0.45; cursor: not-allowed; }
-.gear:focus-visible, .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .status-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 24px; min-height: 36px; padding: 8px 20px; background: var(--bg-side); border-top: 1px solid #2c2e33; font-size: 12px; color: var(--muted); }
 .status-group { display: flex; flex-wrap: wrap; align-items: center; row-gap: 6px; min-width: 0; }
 .status-title { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; }
@@ -92,15 +92,11 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .status-group > .status-item:first-child { margin-left: 0; padding-left: 0; border-left: 0; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .dot-warn { background: var(--warn); box-shadow: 0 0 0 3px rgba(242, 118, 46, 0.2); }
-/* Every screen of the journey stays mounted while Settings are shown, so that
-   its choices are still there on return; [hidden] must beat the display below. */
+/* The journey stays mounted while Settings are shown or the dive log is read
+   again, so that its choices are still there on return; [hidden] must beat
+   the display below. */
 .journey { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .journey[hidden] { display: none; }
-/* Temporary tabs, until the journey replaces the two screens. */
-.tabs { flex: none; display: flex; gap: 4px; padding: 8px 28px 0; border-bottom: 1px solid var(--line-soft); }
-.tab { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-3); font-weight: 500; cursor: pointer; }
-.tab:hover { color: var(--text); }
-.tab-on { color: var(--accent-text); border-bottom-color: var(--accent); }
 .settings-back { align-self: flex-start; }
 
 .content { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
@@ -110,12 +106,9 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .screen { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 24px 28px; }
 .screen-center { align-items: center; justify-content: center; }
 .screen-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
-.screen-head h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
 .sort { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 
-/* Create Collections: the three steps, joined by a line like a checkout */
-.flow-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
-.flow-head h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+/* The journey: the five steps, joined by a line like a checkout */
 .flow { display: flex; align-items: center; width: 100%; list-style: none; margin: 0; padding: 14px 20px; font-size: 13px; }
 .flow-step { display: flex; align-items: center; color: var(--muted); }
 .flow-step:not(:last-child) { flex: 1; }
@@ -130,6 +123,7 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .flow-on .flow-n { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .flow-done { color: var(--text-3); }
 .flow-done .flow-n { border-color: var(--accent); color: var(--accent); }
+.flow-skipped { opacity: 0.45; }
 .sort .inp { min-width: 190px; }
 
 /* Filters */
@@ -223,25 +217,9 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .path { font-size: 12px; color: var(--muted); word-break: break-all; font-variant-numeric: tabular-nums; }
 .actions { display: flex; gap: 8px; margin-top: 4px; }
 
-/* Tag Selection */
+/* Shared by the steps */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .screen-scroll { overflow-y: auto; }
-.tag-selection { padding: 14px 18px; display: flex; flex-direction: column; gap: 2px; }
-.tag-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.tag-count { font-size: 18px; font-weight: 700; }
-.tag-what { display: flex; flex-direction: column; flex: none; }
-.blk { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
-.blk-sep { border-top: 1px solid var(--line-soft); }
-.chk { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: var(--text); cursor: pointer; }
-.tag-dives { flex: none; height: 420px; }
-.tag-clock { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
-.tag-clock-head { display: flex; flex-direction: column; gap: 4px; }
-.tag-clock h2 { font-size: 15px; font-weight: 700; }
-.opts { display: flex; flex-wrap: wrap; gap: 8px; }
-.opt { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; border: 1px solid #2c2e33; background: var(--bg); font-size: 14px; cursor: pointer; flex: 0 1 220px; }
-.opt-wide { flex: 1 1 320px; }
-.opt-on { border-color: var(--accent); background: rgba(105, 183, 191, 0.08); }
-.opt-off { opacity: 0.55; cursor: not-allowed; }
 .pick { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
 .pick-cols { flex: 999 1 480px; min-width: 0; display: flex; border: 1px solid #2c2e33; border-radius: 10px; overflow: hidden; background: #1c1d20; height: 280px; }
 .pick-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid #2c2e33; }
@@ -269,14 +247,11 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .bar-fill { height: 6px; border-radius: 3px; background: var(--accent); transition: width 0.2s; }
 .badge { display: inline-flex; align-items: center; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); font-size: 11px; font-weight: 600; }
 .badge-invalid { background: rgba(242, 118, 46, 0.16); color: var(--warn-text); }
-.tag-selection { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
-.tag-selection-text { display: flex; flex-direction: column; gap: 2px; }
-.tag-span { font-size: 13px; font-weight: 400; color: var(--text-3); }
 .thumbs { display: flex; gap: 6px; }
 .thumb { width: 54px; aspect-ratio: 3 / 2; border-radius: 5px; background: linear-gradient(160deg, #3a4a52, #22303a); object-fit: cover; display: flex; align-items: center; justify-content: center; flex: none; }
 .thumb-more { background: #26282c; color: var(--text-2); font-size: 12px; font-weight: 600; }
 
-/* Create Collections */
+/* The journey, step 3: camera clocks, margin, preview by dive */
 .warn { color: var(--warn-text); }
 .coll-sec { padding: 20px; display: flex; flex-direction: column; gap: 16px; flex: none; }
 .coll-sec h2, .coll-table h2 { font-size: 16px; font-weight: 700; }
@@ -320,7 +295,6 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .coll-table .tbl th:first-child, .coll-table .tbl td:first-child { padding-left: 20px; }
 .coll-table .tbl th:last-child, .coll-table .tbl td:last-child { padding-right: 20px; }
 .tbl tr.row-warn td { background: rgba(242, 118, 46, 0.07); }
-.coll-total { padding: 14px 20px; }
 
 /* The journey, step 1: two cards separated by "or" */
 .photos-head { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }

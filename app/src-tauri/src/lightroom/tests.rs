@@ -110,7 +110,7 @@ fn connects_follows_selection_and_ends_on_bye() {
         );
         write(
             to_app,
-            "{\"type\":\"show\",\"screen\":\"tag\"}\n{\"type\":\"future\"}\n",
+            "{\"type\":\"show\",\"screen\":\"journey\"}\n{\"type\":\"future\"}\n",
         );
         // After an accepted hello: the size request, then the pings.
         let count: serde_json::Value = serde_json::from_str(&lines.next().unwrap()).unwrap();
@@ -146,7 +146,7 @@ fn connects_follows_selection_and_ends_on_bye() {
                 index: 1,
                 jpeg: "/9j/".into()
             },
-            Event::Show("tag".into()),
+            Event::Show("journey".into()),
             Event::Status(Status::default()),
         ]
     );
@@ -360,7 +360,7 @@ fn refused_hello_ends_without_connecting() {
         lines.next().unwrap();
         write(to_app, "{\"type\":\"error\",\"reason\":\"token\"}\n");
         // Messages are ignored before a valid hello.
-        write(to_app, "{\"type\":\"show\",\"screen\":\"tag\"}\n");
+        write(to_app, "{\"type\":\"show\",\"screen\":\"journey\"}\n");
         thread::sleep(Duration::from_millis(1800));
     });
     let mut events = Vec::new();
