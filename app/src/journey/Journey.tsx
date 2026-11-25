@@ -159,7 +159,6 @@ export function Journey({
           journey={j}
           log={log}
           settings={settings}
-          onBackToDives={() => dispatch({ type: "backToDives" })}
           onHandleSeparately={(ids) => dispatch({ type: "handleSeparately", ids })}
           onDone={() => dispatch({ type: "done" })}
         />

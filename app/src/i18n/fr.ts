@@ -200,7 +200,6 @@ export const fr: Record<Key, string> = {
   "coll.result.created": "créée",
   "coll.result.completed": "complétée",
   "coll.result.empty": "Plongée {dive} : aucune photo, pas de collection créée. Si l'horloge a changé ce jour-là, traitez-la à part avec son propre décalage.",
-  "coll.result.back": "Retour aux plongées",
   "coll.result.retryOne": "Traiter la plongée {dive} à part",
   "coll.result.retryMany": "Traiter ces plongées à part",
   "coll.err.notConnected": "Lightroom n'est pas connecté. Rien n'a été écrit.",
@@ -353,6 +352,7 @@ export const fr: Record<Key, string> = {
   "journey.summary.noDepth_one": "{n} photo sans profondeur.",
   "journey.summary.noDepth_other": "{n} photos sans profondeur.",
   "journey.summary.done": "Terminer",
+  "journey.summary.backToScope": "Retour au choix du périmètre",
 
   "settings.title": "Réglages",
   "settings.saveError": "Réglage non enregistré : {detail}",

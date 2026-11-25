@@ -1,8 +1,9 @@
 // Step 5 of the journey, "Summary" (spec F5), one screen for both paths: the
 // run recalled, what was written in Lightroom (photos tagged, with depth,
 // collections, then each collection under the place chosen in Settings), the
-// warnings and the Undo reminder. Catalog path: "Back to dives", and for the
-// dives that got no photo "Handle … separately"; selection path: "Done".
+// warnings and the Undo reminder. Catalog path: "Back to scope selection",
+// and for the dives that got no photo "Handle … separately"; selection path:
+// "Done". Both main buttons start a new run at step 1.
 // Taken over from the result of Create Collections.
 //
 // Rendered inside the journey's screen, under the step strip (which no longer
@@ -21,7 +22,6 @@ export function SummaryStep({
   journey,
   log,
   settings,
-  onBackToDives,
   onHandleSeparately,
   onDone,
 }: {
@@ -29,11 +29,9 @@ export function SummaryStep({
   journey: Journey;
   log: DiveLog;
   settings: Settings;
-  /** Catalog path: back to step 2, no dive ticked. */
-  onBackToDives: () => void;
   /** Catalog path: to step 3 with only these dives ticked, the photos looked for again. */
   onHandleSeparately: (ids: string[]) => void;
-  /** Selection path: back to step 1. */
+  /** Both paths: a new run at step 1, the path kept, nothing ticked or chosen. */
   onDone: () => void;
 }) {
   const i = { journey, applied, dives: log.dives };
@@ -90,8 +88,8 @@ export function SummaryStep({
                   {separately}
                 </button>
               )}
-              <button type="button" className="btn btn-p" onClick={onBackToDives}>
-                {t("coll.result.back")}
+              <button type="button" className="btn btn-p" onClick={onDone}>
+                {t("journey.summary.backToScope")}
               </button>
             </>
           ) : (

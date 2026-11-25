@@ -198,7 +198,6 @@ export const en = {
   "coll.result.created": "created",
   "coll.result.completed": "added to",
   "coll.result.empty": "Dive {dive}: no photo, no collection created. If the clock changed that day, handle it separately with its own offset.",
-  "coll.result.back": "Back to dives",
   "coll.result.retryOne": "Handle dive {dive} separately",
   "coll.result.retryMany": "Handle these dives separately",
   "coll.err.notConnected": "Lightroom is not connected. Nothing was written.",
@@ -351,6 +350,7 @@ export const en = {
   "journey.summary.noDepth_one": "{n} photo without depth.",
   "journey.summary.noDepth_other": "{n} photos without depth.",
   "journey.summary.done": "Done",
+  "journey.summary.backToScope": "Back to scope selection",
 
   "settings.title": "Settings",
   "settings.saveError": "Setting not saved: {detail}",

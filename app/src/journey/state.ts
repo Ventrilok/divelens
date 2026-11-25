@@ -63,8 +63,8 @@ export type Action =
   | { type: "pickDive"; pick: DivePick }
   | { type: "setOptions"; options: Partial<Options> }
   | { type: "applied" }
-  | { type: "backToDives" }
   | { type: "handleSeparately"; ids: string[] }
+  /** Leaving the summary by its main button: "Back to scope selection" (catalog) or "Done" (selection). */
   | { type: "done" }
   | { type: "menu" }
   | { type: "logChanged" }
@@ -114,17 +114,7 @@ function previousStep(j: Journey): Step | null {
 const samePick = (a: DivePick, b: DivePick) =>
   a.kind === b.kind && (a.kind !== "dive" || (b.kind === "dive" && a.id === b.id));
 
-/** A new run of the catalog path from step 2: no dive ticked, the options back to their defaults. */
-const backToDives = (j: Journey): Journey => ({
-  ...j,
-  step: 2,
-  dives: new Set(),
-  dive: NONE,
-  options: defaultOptions,
-  run: j.run + 1,
-});
-
-/** A new run of the same path from step 1. */
+/** A new run of the same path from step 1: no dive ticked or chosen, the options back to their defaults. */
 const done = (j: Journey): Journey => ({ ...start, path: j.path, run: j.run + 1 });
 
 /** The dive log holds only `ids` now: what it lost is no longer chosen. */
@@ -179,15 +169,13 @@ export function reduce(j: Journey, a: Action): Journey {
     case "applied":
       // A write ending after the journey started again shows no summary.
       return j.step === 4 ? { ...j, step: 5 } : j;
-    case "backToDives":
-      return backToDives(j);
     case "handleSeparately":
-      return { ...backToDives(j), step: 3, dives: new Set(a.ids) };
+      return { ...done(j), step: 3, dives: new Set(a.ids) };
     case "done":
       return done(j);
     case "menu":
-      // "Open Dive Lens…": step 1, the choices kept; leaving the summary ends its run.
-      if (j.step === 5) return j.path === "selection" ? done(j) : { ...backToDives(j), step: 1 };
+      // "Open Dive Lens…": step 1, the choices kept; leaving the summary ends its run, as its main button does.
+      if (j.step === 5) return done(j);
       return j.step === 1 ? j : { ...j, step: 1 };
     case "logChanged":
       return { ...start, run: j.run + 1 };
