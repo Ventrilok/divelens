@@ -2,8 +2,12 @@
 
 Dive Lens links your underwater photos in Adobe Lightroom Classic with your dive log.
 
-- **Create collections**: finds the photos taken during each dive from their capture time, creates one collection per dive, and tags every photo with the dive data, the dive site, and the **depth, water temperature and elapsed time at the moment the photo was taken**.
-- **Tag selection**: tags the photos selected in Lightroom with a dive's data and/or a dive site.
+One Library menu item in Lightroom, **Library › Plug-in Extras › Open Dive Lens…**, opens a journey in five steps: Photos, Dives, Clocks, Review & Apply, Summary. It works on:
+
+- **the entire catalog**: you tick dives, and Dive Lens finds the photos taken during each one from their capture time, creates one collection per dive, and tags every photo with the dive data, the dive site, and the **depth, water temperature and elapsed time at the moment the photo was taken**;
+- **the Lightroom selection**: the photos selected in Lightroom are attached to one dive you choose, whatever their time, or given only a dive site.
+
+You choose what is written before applying, and one Undo in Lightroom takes it all back.
 
 Dive Lens reads your dive log directly, read-only. Nothing to export.
 
