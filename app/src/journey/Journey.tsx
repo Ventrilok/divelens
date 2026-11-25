@@ -23,6 +23,7 @@ import { appliedFor, readingDive, screenClass, searchedDives, selectionReads, st
 import { reduce, start, stepStates, type Step } from "./state";
 import { SummaryStep } from "./SummaryStep";
 import { useCatalogPhotos } from "./useCatalogPhotos";
+import { useParentMissing } from "./useCollectionSet";
 import { useSelectionPhotos } from "./useSelectionPhotos";
 
 export function Journey({
@@ -76,6 +77,8 @@ export function Journey({
   // The two photo readings, each mounted once for the whole journey.
   const catalog = useCatalogPhotos(log, lr, searchedDives(j), j.run);
   const selection = useSelectionPhotos(log, lr, readingDive(j, log.dives), selectionReads(j), j.run);
+  // From step 2 on, so that step 4 opens knowing whether the collection set is still there.
+  const parentMissing = useParentMissing(lr, settings.collections.parent, j.step >= 2 && j.step <= 4);
 
   // Leaving step 1 clears the notice of a changed dive log; landing on it counts the catalog again (spec F1).
   const stepBefore = useRef(j.step);
@@ -140,6 +143,7 @@ export function Journey({
           log={log}
           lr={lr}
           settings={settings}
+          parentMissing={parentMissing}
           onOpenSettings={onOpenSettings}
           onApplied={onApplied}
           onWriting={tellWriting}

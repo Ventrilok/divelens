@@ -11,10 +11,9 @@
 // here can be clicked, and `onWriting` tells the journey (its menu waits).
 
 import { useEffect, useRef, useState } from "react";
-import { applyCollections, collectionSets, onApplyProgress, tagSelection } from "../api";
+import { applyCollections, onApplyProgress, tagSelection } from "../api";
 import { applyFailure } from "../apply/failure";
 import { ProgressBar } from "../apply/ProgressBar";
-import { setExists } from "../collections/collectionPlace";
 import { logRef } from "../diveLog";
 import { t, tn } from "../i18n";
 import { Icon } from "../ui/Icon";
@@ -67,6 +66,7 @@ export function ReviewStep({
   log,
   lr,
   settings,
+  parentMissing,
   onOpenSettings,
   onApplied,
   onWriting,
@@ -79,6 +79,8 @@ export function ReviewStep({
   log: DiveLog;
   lr: LightroomStatus;
   settings: Settings;
+  /** The collection set chosen in Settings is no longer in the catalog (spec F2). */
+  parentMissing: boolean;
   onOpenSettings: () => void;
   /** Written: the journey shows the summary of `applied` (it dispatches "applied"). */
   onApplied: (applied: Applied) => void;
@@ -90,22 +92,8 @@ export function ReviewStep({
   // Set at the click, before the screen shows the write: a second click does nothing.
   const busy = useRef(false);
 
-  // The collection set chosen in Settings must still be in the catalog (spec F2):
-  // checked when Lightroom connects, and again when the place changes.
+  // The collection set chosen in Settings, looked up by the journey (useParentMissing).
   const parent = settings.collections.parent;
-  const parentKey = JSON.stringify(parent);
-  const [parentMissing, setParentMissing] = useState(false);
-  useEffect(() => {
-    setParentMissing(false);
-    if (!lr.connected || parent.length === 0) return;
-    let live = true;
-    collectionSets()
-      .then((sets) => live && setParentMissing(!setExists(sets, parent)))
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [lr.connected, lr.catalog, parentKey]);
 
   useEffect(() => {
     const stop = onApplyProgress((done, total) =>
