@@ -391,7 +391,7 @@ fn menu_items_open_existing_plugin_files() {
 }
 
 /// Both writes of an "Apply", in both features, carry one Undo name, "Dive
-/// Lens" in English and in French: Lightroom's Edit menu then reads "Undo
+/// Lens" in every language: Lightroom's Edit menu then reads "Undo
 /// Dive Lens" (spec section 3). No other Undo name is left in the plug-in.
 #[test]
 fn both_features_write_under_one_undo_name() {
@@ -408,10 +408,13 @@ fn both_features_write_under_one_undo_name() {
         undo_keys(localized_texts(&read("CatalogWrite.lua"))),
         [(KEY.to_string(), "Dive Lens".to_string())]
     );
-    assert_eq!(
-        undo_keys(localized_texts(&read("TranslatedStrings_fr.txt"))),
-        [(KEY.to_string(), "Dive Lens".to_string())]
-    );
+    for translation in TRANSLATIONS {
+        assert_eq!(
+            undo_keys(localized_texts(&read(translation))),
+            [(KEY.to_string(), "Dive Lens".to_string())],
+            "{translation}"
+        );
+    }
     for envelope in ["ApplyTags.lua", "ApplyCollections.lua"] {
         let code = read(envelope);
         assert!(
@@ -458,8 +461,12 @@ fn placeholders(text: &str) -> Vec<char> {
     found
 }
 
+/// The plug-in's translations, one file per language of Lightroom
+/// (`TranslatedStrings_<language>.txt`); English is in the Lua source.
+const TRANSLATIONS: [&str; 2] = ["TranslatedStrings_fr.txt", "TranslatedStrings_de.txt"];
+
 #[test]
-fn every_plugin_text_has_its_french_translation() {
+fn every_plugin_text_has_its_translations() {
     let dir = plugin_dir();
     let mut english = std::collections::BTreeMap::new();
     for entry in std::fs::read_dir(&dir).unwrap() {
@@ -473,22 +480,27 @@ fn every_plugin_text_has_its_french_translation() {
             }
         }
     }
-    let french: std::collections::BTreeMap<_, _> =
-        localized_texts(&std::fs::read_to_string(dir.join("TranslatedStrings_fr.txt")).unwrap())
-            .into_iter()
-            .collect();
-    for (key, text) in &english {
-        let fr = french
-            .get(key)
-            .unwrap_or_else(|| panic!("{key}: no French text"));
-        assert!(!fr.trim().is_empty(), "{key}: empty French text");
-        assert_eq!(
-            placeholders(fr),
-            placeholders(text),
-            "{key}: placeholders differ"
-        );
-    }
-    for key in french.keys() {
-        assert!(english.contains_key(key), "{key}: translated, never used");
+    for file in TRANSLATIONS {
+        let translated: std::collections::BTreeMap<_, _> =
+            localized_texts(&std::fs::read_to_string(dir.join(file)).unwrap())
+                .into_iter()
+                .collect();
+        for (key, text) in &english {
+            let theirs = translated
+                .get(key)
+                .unwrap_or_else(|| panic!("{key}: no text in {file}"));
+            assert!(!theirs.trim().is_empty(), "{key}: empty text in {file}");
+            assert_eq!(
+                placeholders(theirs),
+                placeholders(text),
+                "{key}: placeholders differ in {file}"
+            );
+        }
+        for key in translated.keys() {
+            assert!(
+                english.contains_key(key),
+                "{key}: translated in {file}, never used"
+            );
+        }
     }
 }

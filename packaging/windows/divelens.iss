@@ -50,7 +50,7 @@ SetupIconFile=..\..\app\src-tauri\icons\icon.ico
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
-; English or French, following Windows, without asking.
+; English, French or German, following Windows, without asking.
 ShowLanguageDialog=auto
 Compression=lzma2
 SolidCompression=yes
@@ -60,6 +60,7 @@ OutputBaseFilename=DiveLens-{#Version}-Windows-Setup
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
 Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
 
 [Messages]
 ; Last screen. No shortcut is created, so Inno Setup shows the "NoIcons" text.
@@ -67,6 +68,8 @@ en.FinishedLabelNoIcons=Dive Lens is installed.%n%nIf Lightroom Classic is open,
 en.FinishedLabel=Dive Lens is installed.%n%nIf Lightroom Classic is open, quit it and start it again: Lightroom loads Dive Lens only when it starts.%n%nThe Dive Lens menus are in Library › Plug-in Extras.
 fr.FinishedLabelNoIcons=Dive Lens est installé.%n%nSi Lightroom Classic est ouvert, quittez-le et relancez-le : Lightroom ne charge Dive Lens qu'à son démarrage.%n%nLes menus Dive Lens sont dans Bibliothèque › Modules externes.
 fr.FinishedLabel=Dive Lens est installé.%n%nSi Lightroom Classic est ouvert, quittez-le et relancez-le : Lightroom ne charge Dive Lens qu'à son démarrage.%n%nLes menus Dive Lens sont dans Bibliothèque › Modules externes.
+de.FinishedLabelNoIcons=Dive Lens ist installiert.%n%nFalls Lightroom Classic geöffnet ist, beenden Sie es und starten Sie es neu: Lightroom lädt Dive Lens nur beim Start.%n%nDie Dive Lens-Menüs befinden sich unter Bibliothek › Plug-in-Extras.
+de.FinishedLabel=Dive Lens ist installiert.%n%nFalls Lightroom Classic geöffnet ist, beenden Sie es und starten Sie es neu: Lightroom lädt Dive Lens nur beim Start.%n%nDie Dive Lens-Menüs befinden sich unter Bibliothek › Plug-in-Extras.
 
 [InstallDelete]
 ; Start from an empty plug-in folder: no file of an earlier version is left.

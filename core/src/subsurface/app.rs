@@ -125,6 +125,54 @@ pub static APP: DiveApp = DiveApp {
                 ),
             ],
         },
+        de: Texts {
+            log: "Subsurface-Logbuch",
+            log_hint: "Standarddatei von Subsurface, sofern Sie keine andere wählen: eine .xml- oder .ssrf-Datei oder der Ordner des Git-Speichers. Wird nur gelesen, nie verändert.",
+            reading: "Logbuch wird gelesen…",
+            read: &[
+                ("xml", "XML-Datei · {dives} · {sites}"),
+                ("git", "Git-Speicher · {dives} · {sites}"),
+            ],
+            file_type: "Subsurface-Logbuch",
+            locate: None,
+            problems: &[
+                (
+                    "notFound",
+                    Problem {
+                        title: "Subsurface-Logbuch nicht gefunden",
+                        text: "An diesem Ort gibt es nichts. Wählen Sie Ihr Subsurface-Logbuch: eine .xml- oder .ssrf-Datei oder den Ordner seines Git-Speichers.",
+                    },
+                ),
+                (
+                    "notADiveLog",
+                    Problem {
+                        title: "Das ist kein Subsurface-Logbuch",
+                        text: "Wählen Sie eine von Subsurface gespeicherte Datei (.xml oder .ssrf) oder den Ordner seines Git-Speichers.",
+                    },
+                ),
+                (
+                    "database",
+                    Problem {
+                        title: "Das Subsurface-Logbuch konnte nicht gelesen werden",
+                        text: "Es ist vielleicht unvollständig, zum Beispiel während Subsurface es speichert. Versuchen Sie es gleich noch einmal.",
+                    },
+                ),
+                (
+                    "oldFormat",
+                    Problem {
+                        title: "Dieses Subsurface-Logbuch hat ein altes Format",
+                        text: "Öffnen Sie es in Subsurface, speichern Sie es erneut und versuchen Sie es dann noch einmal.",
+                    },
+                ),
+                (
+                    "severalLogs",
+                    Problem {
+                        title: "Mehrere Logbücher in diesem Ordner",
+                        text: "Dive Lens kann nicht erkennen, welches zu lesen ist. Wählen Sie einen anderen Ordner.",
+                    },
+                ),
+            ],
+        },
     },
     #[cfg(test)]
     conformance: super::tests::conformance,

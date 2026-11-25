@@ -30,7 +30,7 @@
 //!    ids, wall-clock times, metres, °C, its way of storing missing values.
 //!    Declare what it provides in `capabilities`.
 //! 3. Describe the application in `app.rs` (`APP`: name, systems, standard
-//!    location, texts in English and French…).
+//!    location, texts in English, French and German…).
 //! 4. In the tests, write the reference log as the application stores it;
 //!    its runs of the common tests go in the description.
 //! 5. Add `APP` to `crate::apps::ALL`, then run `cargo test -p

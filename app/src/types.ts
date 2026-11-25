@@ -75,7 +75,7 @@ export interface DiveApp {
   name: string;
   /** The log is a file with one of these extensions (null: never a file), and/or a folder. */
   choose: { file: string[] | null; folder: boolean };
-  texts: { en: AppTexts; fr: AppTexts };
+  texts: { en: AppTexts; fr: AppTexts; de: AppTexts };
 }
 
 export interface SourceInfo {
@@ -354,7 +354,7 @@ export interface Settings {
   /** Application chosen, and the location chosen for each, by id (none: its standard location). */
   source: { kind: SourceKind; locations: Record<SourceKind, string> };
   units: { depth: "source" | "m" | "ft"; temp: "source" | "c" | "f" };
-  language: "system" | "en" | "fr";
+  language: "system" | "en" | "fr" | "de";
   /** Where "Create collections" (step 4 of the journey) puts the collections. */
   collections: { parent: string[]; group: string };
   logLevel: "normal" | "detailed";

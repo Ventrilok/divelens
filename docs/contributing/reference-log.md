@@ -220,7 +220,7 @@ An application is a reader plus its description. The description
 reader: the name written on photos, the systems it runs on, its standard
 location, whether the diver chooses a file or a folder, its unit
 preferences, its clock-offsets file, and every text the screens show for
-it, in English and French. The app builds Settings, the file chooser and
+it, in English, French and German. The app builds Settings, the file chooser and
 the dive-log error screen from it; nothing else in the app or in the
 screens names an application. Before starting, open a "Support a new dive
 application" issue so that the approach can be discussed.
@@ -265,7 +265,7 @@ application" issue so that the approach can be discussed.
    reader must declare, and whether the application marks dives invalid.
 4. Describe the application in `core/src/<application>/app.rs`: a
    `pub static APP: DiveApp` with its id (camelCase, kept by settings files
-   and never changed), its name, its texts in both languages, and its runs
+   and never changed), its name, its texts in every language, and its runs
    (`conformance: super::tests::conformance`). The runs exist only in the
    tests' build, so keep the `#[cfg(test)]` above them; there, the compiler
    refuses a description without them.
@@ -276,8 +276,8 @@ application" issue so that the approach can be discussed.
 6. Run `cargo test -p divelens-core` until it passes. The common tests run
    every registered application, opened as the app opens it; a failure
    lists every value that differs from this page. Other tests check the
-   description is complete: every text present in English and in French,
-   none empty, the same placeholders in both languages, an id, name and
+   description is complete: every text present in English, in French and in German,
+   none empty, the same placeholders in every language, an id, name and
    offsets file no other application has.
 7. Check the reader against a real log on your own computer, with the tool
    below: it reads every registered application, nothing to add there.

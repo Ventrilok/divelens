@@ -637,6 +637,7 @@ export function SettingsScreen({
               <option value="system">{t("settings.languageSystem", { name: systemName })}</option>
               <option value="fr">{t("lang.fr")}</option>
               <option value="en">{t("lang.en")}</option>
+              <option value="de">{t("lang.de")}</option>
             </select>
           </Row>
           <Row title={t("settings.depth")} hint={t("settings.unitsHint")}>

@@ -3,19 +3,24 @@
 // are in i18n/, one file per language; English is the reference.
 
 import { en, type Key } from "./i18n/en";
+import { de } from "./i18n/de";
 import { fr } from "./i18n/fr";
 
 export type { Key };
-export type Lang = "en" | "fr";
+export type Lang = "en" | "fr" | "de";
 
-const dictionaries: Record<Lang, Record<Key, string>> = { en, fr };
+const dictionaries: Record<Lang, Record<Key, string>> = { en, fr, de };
 
 /** The system's language, when DiveLens speaks it; English otherwise. */
 export function systemLang(): Lang {
-  return navigator.language.toLowerCase().startsWith("fr") ? "fr" : "en";
+  const system = navigator.language.toLowerCase();
+  if (system.startsWith("fr")) return "fr";
+  if (system.startsWith("de")) return "de";
+  return "en";
 }
 
-const localeOf = (l: Lang) => (l === "fr" ? "fr-FR" : "en-GB");
+const locales: Record<Lang, string> = { en: "en-GB", fr: "fr-FR", de: "de-DE" };
+const localeOf = (l: Lang) => locales[l];
 
 export let lang: Lang = systemLang();
 export let locale = localeOf(lang);

@@ -24,14 +24,18 @@ const fileApp: DiveApp = {
   id: "fileLog",
   name: "FileLog",
   choose: { file: ["flog"], folder: false },
-  texts: { en: texts("en"), fr: texts("fr") },
+  texts: { en: texts("en"), fr: texts("fr"), de: texts("de") },
 };
 const own = { oldFormat: { title: "old", text: "old text" }, severalLogs: { title: "several", text: "several text" } };
 const eitherApp: DiveApp = {
   id: "eitherLog",
   name: "EitherLog",
   choose: { file: ["elog", "xml"], folder: true },
-  texts: { en: { ...texts("en", own), locate: null }, fr: { ...texts("fr", own), locate: null } },
+  texts: {
+    en: { ...texts("en", own), locate: null },
+    fr: { ...texts("fr", own), locate: null },
+    de: { ...texts("de", own), locate: null },
+  },
 };
 const folderApp: DiveApp = { ...fileApp, id: "folderLog", choose: { file: null, folder: true } };
 
