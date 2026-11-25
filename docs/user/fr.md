@@ -124,7 +124,7 @@ Dans le chemin **Tout le catalogue** :
 
 - Dive Lens cherche dans tout le catalogue les photos prises sur la période des plongées cochées.
 - **Ignorer** écarte un appareil, par exemple un téléphone resté sur le bateau : ses photos ne sont ni comptées ni taguées.
-- **Inclure les photos prises en surface** : jusqu'à N minutes avant et après chaque plongée, pour les photos prises sur le bateau juste avant la mise à l'eau ou juste après la sortie. 0 minute par défaut, et retour à 0 à chaque passage. Ces photos reçoivent les infos de plongée, sans profondeur.
+- **Inclure les photos prises en surface** : jusqu'à N minutes avant et après chaque plongée, pour les photos prises sur le bateau juste avant la mise à l'eau ou juste après la sortie. 0 minute par défaut, et retour à 0 à chaque passage (sauf **Traiter la plongée N à part** et **Traiter ces plongées à part**, qui la gardent). Ces photos reçoivent les infos de plongée, sans profondeur.
 - **Hors plongée** : les photos de la période qui ne tombent dans aucune plongée, même avec la marge (à terre, sur le bateau…). Elles ne reçoivent rien (section 6).
 
 Dans le chemin **Les photos sélectionnées dans Lightroom** :
@@ -178,7 +178,7 @@ La barre du bas résume ce qui sera écrit (« N photos · N collections ») et 
 ## 4. Ce qui est écrit
 
 - **Créer les collections** : une collection par plongée, nommée **« numéro - site »**, dans l'ensemble de collections **Dive Lens** (l'emplacement se change dans les réglages). Une plongée sans numéro reçoit sa date et son heure de début à la place du numéro.
-- **Détails de la plongée** : sur chaque photo, numéro de plongée, début et fin, durée, profondeur max, températures min et max, note et l'application de plongée d'où viennent les données. Sur les photos prises pendant une plongée qui a une courbe, aussi **la profondeur, la température et le temps écoulé** au moment de la photo, estimés entre les deux points de la courbe qui l'entourent. Et le décalage d'horloge appliqué : sur toutes les photos rangées dans une plongée (**Tout le catalogue**), sur les photos prises pendant la plongée (**Les photos sélectionnées dans Lightroom**).
+- **Détails de la plongée** : sur chaque photo, numéro de plongée, début et fin, durée, profondeur max, températures min et max, note et l'application de plongée d'où viennent les données. Sur les photos prises pendant une plongée qui a une courbe, aussi **la profondeur, la température et le temps écoulé** au moment de la photo, estimés entre les deux points de la courbe qui l'entourent. Et le décalage d'horloge appliqué : sur toutes les photos rangées dans une plongée (**Tout le catalogue**), sur les photos prises pendant la plongée, quand elle a une courbe (**Les photos sélectionnées dans Lightroom**).
 - **Détails du site** : pays, ville, lieu et GPS, dans les champs standard de Lightroom.
 
 Bon à savoir, dans les deux chemins :
@@ -194,7 +194,7 @@ Dans le chemin **Tout le catalogue** :
 - Une photo dans la marge de surface reçoit les infos de plongée, le lieu et le décalage d'horloge, sans données par photo.
 - Une photo qui tomberait dans deux plongées va à la plus proche.
 - Relancer un groupe de plongées ne fait qu'ajouter : les photos déjà rangées restent où elles sont (corrigez-les à la main si besoin), et les photos retrouvées voient leurs valeurs réécrites.
-- Une plongée dont la courbe ne peut pas être lue arrête **Appliquer** : rien n'est écrit.
+- Une plongée dont la courbe ne peut pas être lue arrête **Appliquer** quand des photos ont été prises pendant celle-ci : rien n'est écrit.
 
 Dans le chemin **Les photos sélectionnées dans Lightroom** :
 
@@ -250,7 +250,7 @@ Avec **Aucune plongée — lieu seulement**, l'étape 3 est sautée. À l'étape
 **Édition › Annuler** dans Lightroom défait tout ce qu'un **Appliquer** a écrit, en une seule fois, GPS et altitude compris, dans les deux chemins. Le menu Édition de Lightroom l'appelle **Annuler Dive Lens**.
 
 - Une collection créée par **Appliquer** disparaît avec lui ; les photos ajoutées à une collection existante en ressortent.
-- **La première fois**, quand l'ensemble de collections (**Dive Lens** par défaut) n'existe pas encore, Dive Lens le crée à part, juste avant d'écrire. Lightroom en fait une étape séparée, au nom de l'ensemble : le premier « Annuler » défait ce qui a été écrit, un second retire l'ensemble, devenu vide. Si l'écriture est refusée après la création de l'ensemble, l'ensemble vide reste : annulez-le, ou supprimez-le dans Lightroom.
+- **La première fois**, quand l'ensemble de collections (**Dive Lens** par défaut) n'existe pas encore, Dive Lens le crée juste avant d'écrire. S'il reste là, vide, après « Annuler », un second **Annuler Dive Lens** le retire, ou supprimez-le dans Lightroom. Si l'écriture est refusée après la création de l'ensemble, l'ensemble vide reste : annulez-le, ou supprimez-le dans Lightroom.
 - Si Lightroom n'a pas laissé Dive Lens écrire le GPS et l'altitude, tout le reste est écrit et Dive Lens le signale : choisissez d'abord **Édition › Annuler Dive Lens** dans Lightroom, puis appliquez à nouveau.
 
 ---

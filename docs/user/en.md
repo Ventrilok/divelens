@@ -124,7 +124,7 @@ On the **Entire catalog** path:
 
 - Dive Lens looks in the whole catalog for the photos taken over the period of the dives ticked.
 - **Ignore** leaves out a camera, for example a phone that stayed on the boat: its photos are neither counted nor tagged.
-- **Include photos taken at the surface**: up to N minutes before and after each dive, for photos taken on the boat just before going in or just after getting out. 0 minutes by default, and back to 0 on every run. These photos get the dive data, without depth.
+- **Include photos taken at the surface**: up to N minutes before and after each dive, for photos taken on the boat just before going in or just after getting out. 0 minutes by default, and back to 0 on every run (**Handle dive N separately** and **Handle these dives separately** keep it). These photos get the dive data, without depth.
 - **Outside the dives**: the photos of the period that fall in no dive, even with the margin (on land, on the boat…). They get nothing (section 6).
 
 On the **Lightroom selection** path:
@@ -178,7 +178,7 @@ The bar at the bottom sums up what will be written ("N photos · N collections")
 ## 4. What is written
 
 - **Create collections**: one collection per dive, named **"<dive number> - <site>"**, in the **Dive Lens** collection set (the place can be changed in Settings). A dive without a number gets its start date and time in place of the number.
-- **Dive details**: on each photo, dive number, start and end, duration, max depth, min and max temperatures, rating and the dive application the data come from. On the photos taken during a dive that has a profile, also the photo's **depth, temperature and time into the dive**, estimated between the two profile points around the moment of the photo. And the clock offset applied: on every photo placed in a dive (**Entire catalog**), on the photos taken during the dive (**Lightroom selection**).
+- **Dive details**: on each photo, dive number, start and end, duration, max depth, min and max temperatures, rating and the dive application the data come from. On the photos taken during a dive that has a profile, also the photo's **depth, temperature and time into the dive**, estimated between the two profile points around the moment of the photo. And the clock offset applied: on every photo placed in a dive (**Entire catalog**), on the photos taken during the dive, when it has a profile (**Lightroom selection**).
 - **Site details**: country, city, location and GPS, in Lightroom's standard fields.
 
 Good to know, on both paths:
@@ -194,7 +194,7 @@ On the **Entire catalog** path:
 - A photo in the surface margin gets the dive data, the location and the clock offset, without per-photo data.
 - A photo that would fall in two dives goes to the closer one.
 - Running a group of dives again only adds: photos already filed stay where they are (correct them by hand if needed), and photos found again get their values rewritten.
-- A dive whose profile cannot be read stops **Apply**: nothing is written.
+- A dive whose profile cannot be read stops **Apply** when photos were taken during it: nothing is written.
 
 On the **Lightroom selection** path:
 
@@ -250,7 +250,7 @@ With **No dive — location only**, step 3 is skipped. At step 4, only **Site de
 **Edit › Undo** in Lightroom reverts everything one **Apply** wrote, in one step, GPS and altitude included, on both paths. Lightroom's Edit menu names it **Undo Dive Lens**.
 
 - A collection created by **Apply** goes away with it; photos added to an existing collection leave it.
-- **The first time**, when the collection set (**Dive Lens** by default) does not exist yet, Dive Lens creates it on its own, just before writing. Lightroom keeps that as a separate step, named after the set: the first Undo takes back what was written, and a second one removes the set, now empty. If the write is refused after the set was created, the empty set stays: undo it, or delete it in Lightroom.
+- **The first time**, when the collection set (**Dive Lens** by default) does not exist yet, Dive Lens creates it just before writing. If it is still there, empty, after the Undo, a second **Undo Dive Lens** removes it, or delete it in Lightroom. If the write is refused after the set was created, the empty set stays: undo it, or delete it in Lightroom.
 - If Lightroom did not let Dive Lens write the GPS and altitude, everything else is written and Dive Lens says so: choose **Edit › Undo Dive Lens** in Lightroom first, then apply again.
 
 ---
