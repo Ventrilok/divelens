@@ -1,5 +1,5 @@
-// "Other site" picker of Tag Selection: country › location › site, then the
-// site's GPS, which the user may edit (as in the previous plugin).
+// "Other site" picker of step 4 of the journey: country › location › site,
+// then the site's GPS, which the user may edit (as in the previous plugin).
 
 import { useMemo } from "react";
 import { t } from "../i18n";

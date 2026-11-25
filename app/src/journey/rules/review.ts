@@ -4,14 +4,13 @@
 // and extended to the options.
 
 import { formatInt, t, tn } from "../../i18n";
-import type { Search } from "../../collections/rules";
-import { gpsRefused } from "../../tag/rules";
-import { gpsInput } from "../../tag/sites";
+import type { Search } from "../readings";
+import { gpsInput } from "../sites";
 import { depthUnit } from "../../ui/format";
 import type { CollectionsPreview, DiveLog, LightroomStatus, OutsidePhoto, SelectionPhotos, TagPreview, Units } from "../../types";
 import type { Journey } from "../state";
 import { diveLabel, photoTime } from "../texts";
-import { bySide, chosenDive, pickedSite, siteDetails, siteGives, siteSource, tickedDives, writeOptions } from "./shared";
+import { bySide, chosenDive, gpsRefused, pickedSite, siteDetails, siteGives, siteSource, tickedDives, writeOptions } from "./shared";
 
 /** What the catalog path's photo search shows (useCatalogPhotos). */
 export interface CatalogReview {

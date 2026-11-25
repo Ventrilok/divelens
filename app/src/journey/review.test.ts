@@ -2,7 +2,7 @@
 // (rules/fixtures.ts). Texts are compared word for word with the specification (F5).
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage } from "../i18n";
-import { NO_PICK } from "../tag/SitePicker";
+import { NO_PICK } from "./SitePicker";
 import type { ApplyError, CollectionsResult, Period, TagApplied } from "../types";
 import {
   applyPlan,

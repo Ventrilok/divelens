@@ -17,9 +17,8 @@ import { searchFailure } from "../apply/failure";
 import { logRef, nextSearchNumber } from "../diveLog";
 import { useProfile } from "../dives/DiveDetail";
 import { t } from "../i18n";
-import { coveringDive } from "../tag/covers";
-import { readingAfterFailure } from "../tag/rules";
 import type { ApplyError, Dive, DiveLog, LightroomStatus, SelectionPhotos, TagPreview } from "../types";
+import { coveringDive } from "./covers";
 import type { SelectionReview } from "./rules";
 import {
   camerasToSuggest,
@@ -27,6 +26,7 @@ import {
   freshCountsOf,
   notesOfCameras,
   onlyCameras,
+  readingAfterFailure,
   readsSelection,
   suggestionNotes,
   withSuggestions,

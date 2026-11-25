@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NO_PICK } from "../tag/SitePicker";
+import { NO_PICK } from "./SitePicker";
 import { defaultOptions, reduce, start, stepStates, type Action, type Journey } from "./state";
 
 /** Runs the actions one after the other from `from`. */

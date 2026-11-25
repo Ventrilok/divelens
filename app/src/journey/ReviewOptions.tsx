@@ -8,7 +8,7 @@
 
 import { useId, type ReactNode } from "react";
 import { t } from "../i18n";
-import { SitePicker } from "../tag/SitePicker";
+import { SitePicker } from "./SitePicker";
 import type { DiveLog, Settings } from "../types";
 import {
   chooseOtherSite,

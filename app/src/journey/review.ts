@@ -7,8 +7,6 @@
 import { searchAgain } from "../apply/failure";
 import { groupName, placeLabel, type Place } from "../collections/collectionPlace";
 import { t } from "../i18n";
-import { pickAround } from "../tag/SitePicker";
-import { describeAgain } from "../tag/rules";
 import { DASH } from "../ui/format";
 import type {
   ApplyError,
@@ -36,6 +34,8 @@ import {
   type Applied,
   type ReviewInput,
 } from "./rules";
+import { describeAgain } from "./readings";
+import { pickAround } from "./SitePicker";
 import { noDive, type Journey, type Options, type Path } from "./state";
 
 /** A box as the screen shows it. */

@@ -2,7 +2,7 @@
 // for word with the specification (F5) in at least one language per rule.
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage } from "../i18n";
-import { NO_PICK } from "../tag/SitePicker";
+import { NO_PICK } from "./SitePicker";
 import { reduce, start } from "./state";
 import { canGoNext, otherSite, siteDetails, tagChoice, writeOptions } from "./rules";
 import {

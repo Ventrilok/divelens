@@ -1,8 +1,10 @@
 // Runs in UTC+14 (vitest.config.ts): every time below is a wall-clock time.
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { setLanguage, t } from "../i18n";
 import {
   camerasToSuggest,
   currentDescription,
+  describeAgain,
   diveKey,
   freshCountsOf,
   keysAfterSearch,
@@ -11,7 +13,9 @@ import {
   notesOfCameras,
   offsetsAfterSearch,
   onlyCameras,
+  readingAfterFailure,
   readsSelection,
+  selectionChanged,
   suggestionNotes,
   withSuggestions,
 } from "./readings";
@@ -189,5 +193,61 @@ describe("the description Apply may use", () => {
     expect(freshCountsOf({ search: 3, preview }, photos)).toBeNull();
     expect(freshCountsOf({ search: 4, preview }, null)).toBeNull();
     expect(freshCountsOf(null, photos)).toBeNull();
+  });
+});
+
+// Taken over with the rules of Tag Selection, unchanged.
+
+describe("selectionChanged", () => {
+  it("recognises a selection that moved on", () => {
+    expect(selectionChanged({ error: "lightroom", reason: "selectionChanged", detail: null })).toBe(true);
+    expect(selectionChanged({ error: "lightroom", reason: "staleSelection", detail: null })).toBe(true);
+    expect(selectionChanged({ error: "lightroom", reason: "busy", detail: null })).toBe(false);
+    expect(selectionChanged({ error: "noPhotos" } as never)).toBe(true);
+    expect(selectionChanged({ error: "badGps" } as never)).toBe(false);
+  });
+});
+
+describe("describeAgain", () => {
+  it("describes the selection again after a Lightroom answer when per-photo values were asked", () => {
+    const busy = { error: "lightroom", reason: "busy", detail: null } as const;
+    expect(describeAgain(busy, true)).toBe(true);
+    expect(describeAgain(busy, false)).toBe(false);
+  });
+
+  it("describes it again when the selection moved on, whatever was asked", () => {
+    expect(describeAgain({ error: "noPhotos" }, false)).toBe(true);
+    expect(describeAgain({ error: "lightroom", reason: "selectionChanged", detail: null }, false)).toBe(true);
+  });
+
+  it("leaves it as it is for a refusal before Lightroom was reached", () => {
+    expect(describeAgain({ error: "badGps" }, true)).toBe(false);
+    expect(describeAgain({ error: "notConnected" }, true)).toBe(false);
+  });
+});
+
+describe("readingAfterFailure", () => {
+  beforeEach(() => setLanguage("en"));
+
+  it("ends the reading of the latest description and describes again, once", () => {
+    expect(readingAfterFailure({ error: "noPhotos" }, true)).toEqual({ reading: false, message: null, describeAgain: true });
+    expect(readingAfterFailure({ error: "noPhotos" }, true, true)).toEqual({
+      reading: false,
+      message: t("tag.perPhoto.failedNoDetail"),
+      describeAgain: false,
+    });
+  });
+
+  it("changes nothing when a newer description replaced this one", () => {
+    expect(readingAfterFailure({ error: "noPhotos" }, false)).toBeNull();
+    expect(readingAfterFailure({ error: "linkLost" }, false)).toBeNull();
+  });
+
+  it("ends the reading without a message when the log changed (the app starts the screen again)", () => {
+    expect(readingAfterFailure({ error: "logChanged" }, true)).toEqual({ reading: false, message: null, describeAgain: false });
+  });
+
+  it("ends the reading and leaves the wording of any other failure to the screen", () => {
+    expect(readingAfterFailure({ error: "linkLost" }, true)).toEqual({ reading: false, describeAgain: false });
   });
 });

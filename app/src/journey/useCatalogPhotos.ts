@@ -16,7 +16,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { collectionsPreview, findCollectionPhotos, suggestOffsets } from "../api";
 import { clampMargin, clampOffset } from "../apply/cameras";
 import { searchFailure } from "../apply/failure";
-import type { Search } from "../collections/rules";
 import { logRef, nextSearchNumber } from "../diveLog";
 import { t } from "../i18n";
 import type {
@@ -38,6 +37,7 @@ import {
   offsetsAfterSearch,
   suggestionNotes,
   withSuggestions,
+  type Search,
 } from "./readings";
 
 export interface CatalogReading extends CatalogReview {

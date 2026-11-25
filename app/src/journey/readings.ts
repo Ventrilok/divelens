@@ -5,7 +5,15 @@
 // Selection, unchanged.
 
 import { initialOffsets } from "../apply/cameras";
-import type { Camera, Dive, LightroomStatus, SelectionPhotos, TagPreview } from "../types";
+import { t } from "../i18n";
+import type { ApplyError, Camera, Dive, LightroomStatus, Period, SelectionPhotos, TagPreview } from "../types";
+
+/** The catalog path's photo search, as it stands. */
+export type Search =
+  | { state: "idle" }
+  | { state: "searching" }
+  | { state: "ready"; period: Period }
+  | { state: "failed"; message: string };
 
 /** The selection described photo by photo; `version`: the selection's, as Lightroom numbers it. */
 export interface Described {
@@ -137,4 +145,43 @@ export function currentDescription(
 /** The counts of the description Apply may use; null until they arrive. */
 export function freshCountsOf(counts: Counts | null, current: SelectionPhotos | null): TagPreview | null {
   return counts && current && counts.search === current.search ? counts.preview : null;
+}
+
+/** Nothing was written because the selection is no longer the one described: it is described again. */
+export function selectionChanged(e: ApplyError): boolean {
+  if (e.error === "lightroom") return e.reason === "selectionChanged" || e.reason === "staleSelection";
+  return e.error === "noPhotos";
+}
+
+/**
+ * The selection is described again after a failed Apply: when the selection moved on, or when Lightroom
+ * answered while per-photo values were asked (the offsets applied may now be the remembered ones).
+ */
+export function describeAgain(e: ApplyError, needsValues: boolean): boolean {
+  return selectionChanged(e) || (e.error === "lightroom" && needsValues);
+}
+
+/** What the reading does when describing the selection failed; `message` undefined: the step words the failure. */
+export interface AfterFailure {
+  reading: boolean;
+  message?: string | null;
+  /** Describe the selection once more (the answer was lost, not the selection). */
+  describeAgain: boolean;
+}
+
+/**
+ * The state after a failed description of the selection. null: a newer description replaced this one and owns
+ * the reading, nothing changes. Otherwise the reading always ends. A lost description (noPhotos) is asked again
+ * once per selection (`retried`: already done); the second time it says why. A changed log needs nothing: the
+ * app reads it again and starts the journey again.
+ */
+export function readingAfterFailure(e: ApplyError, live: boolean, retried = false): AfterFailure | null {
+  if (!live) return null;
+  if (e.error === "logChanged") return { reading: false, message: null, describeAgain: false };
+  if (e.error === "noPhotos") {
+    return retried
+      ? { reading: false, message: t("tag.perPhoto.failedNoDetail"), describeAgain: false }
+      : { reading: false, message: null, describeAgain: true };
+  }
+  return { reading: false, describeAgain: false };
 }

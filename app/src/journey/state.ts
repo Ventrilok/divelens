@@ -3,7 +3,7 @@
 // paths. Pure, so that every rule of navigation is tested; the screens send
 // actions and show the state.
 
-import { NO_PICK, type SitePick } from "../tag/SitePicker";
+import { NO_PICK, type SitePick } from "./SitePicker";
 
 export type Path = "catalog" | "selection";
 export type Step = 1 | 2 | 3 | 4 | 5;

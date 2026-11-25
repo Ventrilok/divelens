@@ -2,7 +2,7 @@
 // journey's rules: invented sites and dives only.
 import { reduce, start, type Action, type Journey, type Options } from "../state";
 import type { ReviewInput, SelectionReview } from "../rules";
-import type { Search } from "../../collections/rules";
+import type { Search } from "../readings";
 import type { CollectionsPreview, Dive, OutsidePhoto, Site, TagPreview } from "../../types";
 
 export const run = (from: Journey, ...actions: Action[]) => actions.reduce(reduce, from);

@@ -3,7 +3,7 @@
 // reads what is written from writeOptions, never from the boxes, so that
 // "no dive" (dive details and collections greyed) holds everywhere.
 
-import { gpsInput } from "../../tag/sites";
+import { gpsInput } from "../sites";
 import type { Dive, LocationChoice, OutsidePhoto, Site, WriteOptions } from "../../types";
 import { noDive, type Journey, type Options } from "../state";
 
@@ -37,6 +37,18 @@ export function siteGives(site: Site, edited?: { lat: number | null; lon: number
   const lat = edited?.lat ?? site.lat;
   const lon = edited?.lon ?? site.lon;
   return { place: site.country !== null || site.location !== null || site.name !== null, gps: lat !== null && lon !== null };
+}
+
+/** The place written is another site, one is picked, and the position typed is not valid: Apply is refused. */
+export function gpsRefused(s: {
+  withPlace: boolean;
+  placeKind: "diveSite" | "site";
+  diveSiteUsable: boolean;
+  siteId: string | null;
+  gpsValid: boolean;
+}): boolean {
+  const usesDiveSite = s.withPlace && s.placeKind === "diveSite" && s.diveSiteUsable;
+  return s.withPlace && !usesDiveSite && s.siteId !== null && !s.gpsValid;
 }
 
 /** The site picked under "Other site", its GPS as typed; null until a site is picked. */
