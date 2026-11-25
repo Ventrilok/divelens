@@ -36,6 +36,7 @@ return {
         "com.adobe.city",
         "com.adobe.country",
         "com.adobe.GPS",
+        "com.adobe.GPSAltitude",
         "com.adobe.separator",
         section(LOC "$$$/DiveLens/Tagset/Technical=Technical"),
         "com.querton.divelens.ClockOffset",
