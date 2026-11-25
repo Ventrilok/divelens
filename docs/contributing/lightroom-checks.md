@@ -342,7 +342,7 @@ The six test photos are written too fast to click during the write: this test us
 **Before**
 
 1. **File › New Catalog…**, in another temporary folder. Import the test folder with **Copy**.
-2. Select all the photos and choose **Photo › Create Virtual Copy**. Repeat seven times, each time with every photo selected: 768 photos.
+2. Select all the photos and choose **Photo › Create Virtual Copy** (it may read **Create Virtual Copies** with several photos selected). Do it seven times in all, each time with every photo selected: 768 photos.
 
 **Steps**
 
@@ -375,7 +375,11 @@ The six test photos are written too fast to click during the write: this test us
 2. Open the new app from the plug-in folder: `~/Library/Application Support/Adobe/Lightroom/Modules/DiveLens.lrplugin`, right-click › **Show Package Contents**, then open **Dive Lens.app**.
 3. In Lightroom, open **Library › Plug-in Extras** and choose **Create Collections…**.
 4. Quit Lightroom and start it again.
-5. Reset: put the development build back ([Prepare Lightroom: macOS](#prepare-lightroom-macos)).
+5. Reset:
+   1. quit Lightroom and move the trial copy, `DiveLens.lrplugin` in Modules, to the Trash;
+   2. start Lightroom and add `plugin/DiveLens.lrdevplugin` again (**File › Plug-in Manager › Add**).
+
+   Leave the copy you set aside in [Prepare Lightroom: macOS](#prepare-lightroom-macos) where it is, until [After the tests](#after-the-tests).
 
 **Expected**
 
@@ -962,7 +966,7 @@ This test writes nothing.
 1. In Dive Lens settings, look at the sections.
 2. **Export or import › Import…**, choose that file, then **Replace**.
 3. **Export…** again, to a new file, and open it in the text editor.
-4. **Library › Plug-in Extras › Open Dive Lens…**, [catalog path to step 4](#shortcuts-used-in-the-steps), and leave without applying.
+4. [Catalog path to step 4](#shortcuts-used-in-the-steps), and leave without applying.
 
 **Expected**
 
