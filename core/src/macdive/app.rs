@@ -90,6 +90,37 @@ pub static APP: DiveApp = DiveApp {
                 ),
             ],
         },
+        de: Texts {
+            log: "MacDive-Datenbank",
+            log_hint: "Standardspeicherort von MacDive, sofern Sie keinen anderen wählen. Wird nur gelesen, nie verändert.",
+            reading: "Datenbank wird gelesen…",
+            read: &[("database", "Gültige Datenbank · {dives} · {sites}")],
+            file_type: "MacDive-Datenbank",
+            locate: Some("Datenbank suchen…"),
+            problems: &[
+                (
+                    "notFound",
+                    Problem {
+                        title: "MacDive-Datenbank nicht gefunden",
+                        text: "An diesem Ort gibt es keine Datenbank. Sie wurde vielleicht verschoben, zum Beispiel in iCloud.",
+                    },
+                ),
+                (
+                    "notADiveLog",
+                    Problem {
+                        title: "Das ist keine MacDive-Datenbank",
+                        text: "Wählen Sie die Datei MacDive.sqlite.",
+                    },
+                ),
+                (
+                    "database",
+                    Problem {
+                        title: "Die MacDive-Datenbank konnte nicht gelesen werden",
+                        text: "Wenn sie in iCloud liegt, prüfen Sie, ob sie auf diesen Mac geladen ist.",
+                    },
+                ),
+            ],
+        },
     },
     #[cfg(test)]
     conformance: super::tests::conformance,

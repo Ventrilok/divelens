@@ -1,14 +1,14 @@
 //! The dive applications Dive Lens reads, each described once by a
 //! [`DiveApp`] next to its reader: its name, where its log is, how the diver
 //! chooses it, how to read its unit preferences, the texts the screens show
-//! for it, in English and French. The app builds its settings, application
+//! for it, in English, French and German. The app builds its settings, application
 //! list, file chooser and dive-log error screen from these descriptions: it
 //! has no code of its own for any application.
 //!
 //! To add an application, write its reader and its description (`APP`, in
 //! `core/src/<application>/app.rs`, with its runs of the common tests), and
 //! add it to [`ALL`]. The tests of this module check every description is
-//! complete, in both languages; those of `core/src/conformance.rs` run every
+//! complete, in every language; those of `core/src/conformance.rs` run every
 //! registered reader on the reference log.
 
 use std::any::Any;
@@ -134,12 +134,13 @@ pub type PreferenceValue<'a> = dyn Fn(&str) -> Option<i64> + 'a;
 pub struct Localized<T> {
     pub en: T,
     pub fr: T,
+    pub de: T,
 }
 
 impl<T> Localized<T> {
     /// Each language, with its code.
-    pub fn each(&self) -> [(&'static str, &T); 2] {
-        [("en", &self.en), ("fr", &self.fr)]
+    pub fn each(&self) -> [(&'static str, &T); 3] {
+        [("en", &self.en), ("fr", &self.fr), ("de", &self.de)]
     }
 }
 
@@ -502,7 +503,7 @@ mod tests {
     }
 
     #[test]
-    fn every_application_is_fully_described_in_both_languages() {
+    fn every_application_is_fully_described_in_every_language() {
         assert!(!ALL.is_empty());
         let all = described();
         let mut problems: Vec<String> = all.iter().flat_map(|a| problems_of(a)).collect();
@@ -578,6 +579,15 @@ mod tests {
                     locate: None,
                     problems: &[],
                 },
+                de: Texts {
+                    log: "BlueDive-Logbuch",
+                    log_hint: "Wird nur gelesen.",
+                    reading: "",
+                    read: &[("db", "{dives} · {sites}")],
+                    file_type: "BlueDive-Logbuch",
+                    locate: None,
+                    problems: &[],
+                },
             },
             conformance: Vec::new,
         };
@@ -593,6 +603,9 @@ mod tests {
             "(fr): no text for the reader error notFound",
             "(fr): read db: \"{dives}\" needs {dives} and {sites}",
             "(fr): not the same texts as in English",
+            "(de): reading \"\"",
+            "(de): no text for the reader error database",
+            "(de): not the same texts as in English",
         ] {
             assert!(found.contains(expected), "{expected:?} not in:\n{found}");
         }

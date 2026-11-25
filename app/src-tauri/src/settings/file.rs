@@ -178,6 +178,7 @@ pub enum Language {
     System,
     En,
     Fr,
+    De,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -622,7 +623,7 @@ mod tests {
     #[test]
     fn unknown_values_fall_back_field_by_field() {
         let s: Settings = serde_json::from_str(
-            r#"{"version":9,"language":"de","units":{"depth":"fathoms","temp":"f"},
+            r#"{"version":9,"language":"tlh","units":{"depth":"fathoms","temp":"f"},
                 "checkUpdates":false,"logLevel":42,"futureSetting":{"a":1},
                 "collections":{"parent":"oops","group":"Plongées"}}"#,
         )

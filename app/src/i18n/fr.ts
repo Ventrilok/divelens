@@ -374,6 +374,7 @@ export const fr: Record<Key, string> = {
   "settings.languageSystem": "Système ({name})",
   "lang.en": "English",
   "lang.fr": "Français",
+  "lang.de": "Deutsch",
   "settings.depth": "Profondeur",
   "settings.temp": "Température",
   "settings.unitsHint": "Affichage et valeurs écrites sur les photos.",

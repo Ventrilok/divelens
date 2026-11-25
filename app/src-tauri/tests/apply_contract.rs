@@ -31,21 +31,27 @@ fn quoted_after<'a>(line: &'a str, marker: &str) -> Option<&'a str> {
     Some(&rest[start..end])
 }
 
-/// The English and French Undo names of the key `$$$/DiveLens/Undo/<key>`.
-fn undo_names(plugin_source: &str, key: &str) -> (String, String) {
+/// The English, French and German Undo names of the key
+/// `$$$/DiveLens/Undo/<key>`.
+fn undo_names(plugin_source: &str, key: &str) -> (String, String, String) {
     let marker = format!("$$$/DiveLens/Undo/{key}=");
     let english = plugin_source
         .lines()
         .find_map(|l| quoted_after(l, "LOC ").filter(|s| s.starts_with(&marker)))
         .unwrap_or_else(|| panic!("no LOC string {marker} in the plug-in source"))[marker.len()..]
         .to_string();
-    let french = plugin_file("TranslatedStrings_fr.txt")
-        .lines()
-        .find_map(|l| quoted_after(l, "").filter(|s| s.starts_with(&marker)))
-        .unwrap_or_else(|| panic!("no French string {marker} in TranslatedStrings_fr.txt"))
-        [marker.len()..]
-        .to_string();
-    (english, french)
+    let translated = |file: &str| {
+        plugin_file(file)
+            .lines()
+            .find_map(|l| quoted_after(l, "").filter(|s| s.starts_with(&marker)))
+            .unwrap_or_else(|| panic!("no string {marker} in {file}"))[marker.len()..]
+            .to_string()
+    };
+    (
+        english,
+        translated("TranslatedStrings_fr.txt"),
+        translated("TranslatedStrings_de.txt"),
+    )
 }
 
 #[test]
@@ -106,8 +112,10 @@ fn the_undo_names_match() {
     // Each language's texts are in a file of their own.
     const ENGLISH: &str = "app/src/i18n/en.ts";
     const FRENCH: &str = "app/src/i18n/fr.ts";
+    const GERMAN: &str = "app/src/i18n/de.ts";
     let english_texts = repo_file(ENGLISH);
     let french_texts = repo_file(FRENCH);
+    let german_texts = repo_file(GERMAN);
     // The line that holds the text of `key` in one language's file.
     let line_of = |texts: &str, file: &str, key: &str| -> String {
         let prefix = format!("\"{key}\":");
@@ -121,7 +129,7 @@ fn the_undo_names_match() {
     // Both paths of the journey write under the one Undo name of
     // CatalogWrite.lua (tests/plugin_manifest.rs checks they do) and say so
     // with the same texts: each names the item of Lightroom's Edit menu,
-    // "Undo <name>".
+    // "Undo <name>" ("Rückgängig: <name>" in the German Lightroom).
     for (source, key, i18n_key) in [
         ("CatalogWrite.lua", "DiveLens", "tag.err.gpsNotWritten"),
         (
@@ -130,9 +138,9 @@ fn the_undo_names_match() {
             "tag.err.gpsNotWrittenDetail",
         ),
     ] {
-        let (english, french) = undo_names(&plugin_file(source), key);
+        let (english, french, german) = undo_names(&plugin_file(source), key);
         assert!(
-            !english.is_empty() && !french.is_empty(),
+            !english.is_empty() && !french.is_empty() && !german.is_empty(),
             "empty Undo name for {key}"
         );
         let (undo, annuler) = (format!("Undo {english}"), format!("Annuler {french}"));
@@ -143,6 +151,11 @@ fn the_undo_names_match() {
         assert!(
             line_of(&french_texts, FRENCH, i18n_key).contains(&annuler),
             "{i18n_key} (French) does not name the Undo \"{annuler}\" of {source}"
+        );
+        let rueckgaengig = format!("Rückgängig: {german}");
+        assert!(
+            line_of(&german_texts, GERMAN, i18n_key).contains(&rueckgaengig),
+            "{i18n_key} (German) does not name the Undo \"{rueckgaengig}\" of {source}"
         );
     }
 }

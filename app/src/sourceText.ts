@@ -29,7 +29,7 @@ function unlisted(id: SourceKind): DiveApp {
     locate: null,
     problems: { notFound: problem, notADiveLog: problem, database: problem },
   };
-  return { id, name: id, choose: { file: [], folder: true }, texts: { en: texts, fr: texts } };
+  return { id, name: id, choose: { file: [], folder: true }, texts: { en: texts, fr: texts, de: texts } };
 }
 
 /**

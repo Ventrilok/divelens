@@ -372,6 +372,7 @@ export const en = {
   "settings.languageSystem": "System ({name})",
   "lang.en": "English",
   "lang.fr": "Français",
+  "lang.de": "Deutsch",
   "settings.depth": "Depth",
   "settings.temp": "Temperature",
   "settings.unitsHint": "In the app and in the values written on photos.",

@@ -41,7 +41,7 @@ pub static APP: DiveApp = DiveApp {
     },
     // ADAPT: `clock-offsets-<application>.json`, never changed afterwards.
     offsets_file: "clock-offsets-example.json",
-    // ADAPT: every text, in English and in French. The tests refuse one
+    // ADAPT: every text, in English, in French and in German. The tests refuse one
     // missing, empty, or with other placeholders than its translation.
     texts: Localized {
         en: Texts {
@@ -102,6 +102,37 @@ pub static APP: DiveApp = DiveApp {
                     Problem {
                         title: "Impossible de lire le carnet Example",
                         text: "Réessayez dans un instant.",
+                    },
+                ),
+            ],
+        },
+        de: Texts {
+            log: "Example-Logbuch",
+            log_hint: "Standardspeicherort von Example, sofern Sie keinen anderen wählen. Wird nur gelesen, nie verändert.",
+            reading: "Logbuch wird gelesen…",
+            read: &[("database", "Gültiges Logbuch · {dives} · {sites}")],
+            file_type: "Example-Logbuch",
+            locate: Some("Logbuch suchen…"),
+            problems: &[
+                (
+                    "notFound",
+                    Problem {
+                        title: "Example-Logbuch nicht gefunden",
+                        text: "An diesem Ort gibt es kein Logbuch. Es wurde vielleicht verschoben.",
+                    },
+                ),
+                (
+                    "notADiveLog",
+                    Problem {
+                        title: "Das ist kein Example-Logbuch",
+                        text: "Wählen Sie das von Example gespeicherte Logbuch.",
+                    },
+                ),
+                (
+                    "database",
+                    Problem {
+                        title: "Das Example-Logbuch konnte nicht gelesen werden",
+                        text: "Versuchen Sie es gleich noch einmal.",
                     },
                 ),
             ],
