@@ -94,11 +94,9 @@ pub struct TagRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub collection: Option<CollectionPlace>,
     /// The selection the per-photo values were computed for, as the plugin
-    /// numbered it when it described it, also kept with the dive details
-    /// unticked (the clock offsets remembered come from it); `None`: no
-    /// selection described (no dive, or a dive without a profile). The
-    /// plugin then writes only if the photos selected at that moment are
-    /// exactly those.
+    /// numbered it when it described it; `None`: no per-photo values (no
+    /// dive, or a dive without a profile). The plugin then writes only if
+    /// the photos selected at that moment are exactly those.
     pub selection: Option<u64>,
     /// Per-photo values of the photos taken during the dive (spec F6, F8).
     /// The other photos of the selection are not listed: they get the dive
@@ -246,11 +244,15 @@ impl CollectionsRequest {
     pub fn copy_depth_to_altitude(&mut self) {
         copy_depth_to_altitude(self.groups.iter_mut().flat_map(|g| &mut g.photos));
     }
+
+    /// Photos that get a depth (none with the dive details unticked).
+    pub fn with_depth(&self) -> usize {
+        with_depth(self.groups.iter().flat_map(|g| &g.photos))
+    }
 }
 
 impl TagRequest {
-    /// Removes what is not ticked. The selection described stays named
-    /// whatever is ticked: the plugin still checks it is the one selected.
+    /// Removes what is not ticked.
     pub fn keep(&mut self, kept: Kept) {
         if !kept.collections {
             self.collection = None;
@@ -261,6 +263,7 @@ impl TagRequest {
             .and_then(|l| l.keep(kept.place, kept.gps));
         if !kept.dive {
             self.dive = None;
+            self.selection = None;
             self.photos.clear();
         }
     }
@@ -274,12 +277,25 @@ impl TagRequest {
     pub fn copy_depth_to_altitude(&mut self) {
         copy_depth_to_altitude(&mut self.photos);
     }
+
+    /// Photos that get a depth, as Create Collections counts them (none
+    /// with the dive details unticked).
+    pub fn with_depth(&self) -> usize {
+        with_depth(&self.photos)
+    }
 }
 
 fn copy_depth_to_altitude<'a>(photos: impl IntoIterator<Item = &'a mut PhotoTags>) {
     for photo in photos {
         photo.gps_altitude = photo.depth_m.map(altitude);
     }
+}
+
+fn with_depth<'a>(photos: impl IntoIterator<Item = &'a PhotoTags>) -> usize {
+    photos
+        .into_iter()
+        .filter(|p| p.photo_depth.is_some())
+        .count()
 }
 
 /// Altitude for a depth: negative, to the decimetre (never `-0`).
@@ -717,6 +733,22 @@ mod tests {
     }
 
     #[test]
+    fn photos_with_a_depth_are_counted_until_the_dive_details_are_unticked() {
+        // Each group: photo 1 at 18.4 m, photo 2 at the surface.
+        let mut collections = sample_collections_request();
+        assert_eq!(collections.with_depth(), 2);
+        let mut tag = sample_tag_request();
+        assert_eq!(tag.with_depth(), 1);
+        let unticked = Kept {
+            dive: false,
+            ..Kept::ALL
+        };
+        collections.keep(unticked, None);
+        tag.keep(unticked);
+        assert_eq!((collections.with_depth(), tag.with_depth()), (0, 0));
+    }
+
+    #[test]
     fn tag_request_keep_all_changes_nothing() {
         let mut r = sample_tag_request();
         let before = serde_json::to_value(&r).unwrap();
@@ -740,9 +772,7 @@ mod tests {
                 continue;
             }
             assert_eq!(r.dive.is_some(), kept.dive);
-            // The selection described stays named, dive details ticked or
-            // not: the plug-in still checks it is the one selected.
-            assert_eq!(r.selection, Some(7));
+            assert_eq!(r.selection.is_some(), kept.dive);
             assert_eq!(!r.photos.is_empty(), kept.dive);
             assert_eq!(
                 r.location.as_ref().is_some_and(|l| l.country.is_some()),

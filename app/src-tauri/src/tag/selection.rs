@@ -546,9 +546,21 @@ mod tests {
             json["outside"][0],
             serde_json::json!({ "time": "2025-12-30T09:30:00", "camera": "TG-7|A1", "minutes": -30 })
         );
-        // Without the offset, the TG-7 photos are where their clock put them.
+        // Without the offset, the TG-7 photos are where their clock put them,
+        // all eight outside. Photos d (TG-7) and e (GoPro) then share 09:59:40:
+        // they stay in Lightroom's order, not the cameras' (GoPro first).
         let p = s.preview(Some(span), &HashMap::new());
-        assert_eq!(p.outside[0], out("08:30:00", "TG-7|A1", -90));
+        assert_eq!(
+            p.outside,
+            [
+                out("08:30:00", "TG-7|A1", -90),
+                out("09:10:00", "TG-7|A1", -50),
+                out("09:50:00", "GoPro|", -10),
+                out("09:59:40", "TG-7|A1", -1),
+                out("09:59:40", "GoPro|", -1),
+            ]
+        );
+        assert_eq!(p.outside_more, 3);
     }
 
     #[test]

@@ -171,7 +171,7 @@ pub(crate) async fn tag_selection(
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
         let (request, applied) = tag_request(&app, &info, &choice)?;
         let with_values = request.photos.len();
-        let with_depth = rules::with_depth(&request);
+        let with_depth = request.with_depth();
         let written = write_and_remember(
             &app,
             &info,

@@ -20,10 +20,9 @@ another one also clears that photo's own values (retagChanges).
 When the dive has a profile, a "tag the selection" request also carries the
 per-photo values of the photos taken during the dive (planPhotos), computed
 by the app for the selection the plugin described to it (`selection`): it is
-written only on exactly those photos (sameSelection), also when the dive
-details are unticked (the selection is then named without values). Those
-values replace what the other dive left (notOverwritten); the other photos
-get the dive data alone. photoWrites puts one photo's changes together.
+written only on exactly those photos (sameSelection). Those values replace
+what the other dive left (notOverwritten); the other photos get the dive
+data alone. photoWrites puts one photo's changes together.
 
 Request (built by the app, see core/src/tags.rs):
   dive:      { diveId, start, end, duration, maxDepth, tempHigh, tempLow, rating } or null
@@ -390,19 +389,15 @@ end
 --- { selection = number of the selection described, photos = { [id] =
 --- changes } } for the photos taken during the dive; nil when the request
 --- carries none (no `selection`: no dive, or a dive without a profile); nil
---- and a reason when it is not usable. A request without a dive (its
---- details unticked) still names the selection described, with no photo:
---- it is checked all the same (selectionRefusal), and no photo gets values.
+--- and a reason when it is not usable.
 function Tagging.planPhotos(request)
     if type(request) ~= "table" then return nil, "bad request" end
     local selection = value(request.selection)
     if selection == nil then return nil end
     if type(selection) ~= "number" then return nil, "bad selection" end
-    local list = value(request.photos) or {}
-    -- Per-photo values belong to a dive.
-    if not value(request.dive) and #list > 0 then return nil, "bad dive" end
+    if not value(request.dive) then return nil, "bad dive" end
     local byId = {}
-    for _, photo in ipairs(list) do
+    for _, photo in ipairs(value(request.photos) or {}) do
         local id, changes = photoChanges(photo)
         if not id then return nil, changes end
         byId[id] = changes

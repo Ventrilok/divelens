@@ -308,16 +308,10 @@ fn planned(
     if request.is_empty() {
         return Err(ApplyError::NothingToWrite);
     }
-    let with_depth = request
-        .groups
-        .iter()
-        .flat_map(|g| &g.photos)
-        .filter(|p| p.photo_depth.is_some())
-        .count();
     Ok(Planned {
+        with_depth: request.with_depth(),
         request,
         empty_dives,
-        with_depth,
     })
 }
 

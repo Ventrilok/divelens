@@ -23,10 +23,9 @@ local ApplyTags = {}
 -- reverts it all. A photo that carried another dive also loses that dive's
 -- own values (Tagging.retagChanges), read from the photo inside the first
 -- write; its altitude, when cleared, in the second, and its altitude
--- marker in the first, with the other Dive Lens fields. When the request
--- names a selection (Tagging.planPhotos: per-photo values, or none with the
--- dive details unticked), it must be exactly the one described to the app
--- (Selection.describe): otherwise nothing is written.
+-- marker in the first, with the other Dive Lens fields. With per-photo
+-- values (Tagging.planPhotos), the selection must be exactly the one
+-- described to the app (Selection.describe): otherwise nothing is written.
 -- The photos taken during the dive get their values, and the other dive's
 -- are not cleared on them first (Tagging.notOverwritten). When the request
 -- names a collection (Tagging.planCollection), the selected photos also go
