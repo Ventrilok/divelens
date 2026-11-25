@@ -14,7 +14,6 @@ export type Applied =
   | {
       path: "selection";
       result: TagApplied;
-      total: number;
       outside: OutsidePhoto[];
       outsideMore: number;
       /** Per-photo values were written (dive details ticked, a profile that could be read). */

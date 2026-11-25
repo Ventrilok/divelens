@@ -152,6 +152,22 @@ describe("pickDive", () => {
     expect(j.options).toEqual({ ...other.options, site: "diveSite" });
   });
 
+  it("keeps the site chosen when another dive is chosen, as before", () => {
+    const pick = { country: "Nowhere Islands", location: "North Bay", siteId: "s1", lat: "-8.5", lon: "115.25" };
+    const other = reduce(selectionAt3, { type: "setOptions", options: { site: "other", pick } });
+    const j = reduce(other, { type: "pickDive", pick: { kind: "dive", id: "d2" } });
+    expect(j.dive).toEqual({ kind: "dive", id: "d2" });
+    expect(j.options).toBe(other.options);
+  });
+
+  it("puts the site on the dive's site for a first dive", () => {
+    const first = reduce(reduce(at2, { type: "setOptions", options: { site: "other" } }), {
+      type: "pickDive",
+      pick: { kind: "dive", id: "d1" },
+    });
+    expect(first.options.site).toBe("diveSite");
+  });
+
   it("changes nothing when the same choice is made again", () => {
     const other = reduce(selectionAt3, { type: "setOptions", options: { site: "other" } });
     expect(reduce(other, { type: "pickDive", pick: { kind: "dive", id: "d1" } })).toBe(other);
@@ -278,9 +294,14 @@ describe("logRead", () => {
     expect(after.dive).toEqual({ kind: "none" });
   });
 
-  it("leaves the summary and step 2 where they are", () => {
+  it("leaves the summary as it is: what was written does not change", () => {
     const at5 = run(catalogAt3, { type: "next" }, { type: "applied" });
-    expect(reduce(at5, { type: "logRead", ids: [] }).step).toBe(5);
+    expect(reduce(at5, { type: "logRead", ids: [] })).toBe(at5);
+    const selectionAt5 = run(selectionAt3, { type: "next" }, { type: "applied" });
+    expect(reduce(selectionAt5, { type: "logRead", ids: [] })).toBe(selectionAt5);
+  });
+
+  it("leaves step 2 where it is", () => {
     const at2 = reduce(catalogAt3, { type: "back" });
     expect(reduce(at2, { type: "logRead", ids: [] }).step).toBe(2);
   });

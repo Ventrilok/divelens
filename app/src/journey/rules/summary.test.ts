@@ -74,7 +74,6 @@ describe("summary, selection path", () => {
   const applied: Applied = {
     path: "selection",
     result: { count: 3, withDepth: 2, collection: { collection: "12 - Blue Arch", count: 3, created: true } },
-    total: 3,
     outside: [after7],
     outsideMore: 0,
     perPhoto: true,

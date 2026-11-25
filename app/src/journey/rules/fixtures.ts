@@ -14,6 +14,8 @@ export const blueArch: Site = { id: "s1", name: "Blue Arch", location: "North Ba
 /** A site without GPS. */
 export const sandPatch: Site = { id: "s2", name: "Sand Patch", location: "North Bay", country: "Nowhere Islands", lat: null, lon: null };
 export const noSite: Site = { id: null, name: null, location: null, country: null, lat: null, lon: null };
+/** A site of the log with a position but no name, location or country. */
+export const nameless: Site = { id: "s3", name: null, location: null, country: null, lat: -8.4, lon: 115.3 };
 
 export const dive = (id: string, number: number, site: Site, start: string, end: string, hasProfile: boolean): Dive => ({
   id,
@@ -34,7 +36,8 @@ export const dive = (id: string, number: number, site: Site, start: string, end:
 export const d1 = dive("d1", 12, blueArch, "2025-12-30T09:00:00", "2025-12-30T09:50:00", true);
 export const d2 = dive("d2", 13, sandPatch, "2025-12-31T10:00:00", "2025-12-31T10:45:00", false);
 export const d3 = dive("d3", 14, noSite, "2026-01-02T08:00:00", "2026-01-02T08:40:00", true);
-export const log = { dives: [d1, d2, d3], sites: [blueArch, sandPatch] };
+export const d4 = dive("d4", 15, nameless, "2026-01-03T08:00:00", "2026-01-03T08:40:00", false);
+export const log = { dives: [d1, d2, d3, d4], sites: [blueArch, sandPatch, nameless] };
 
 /** The site picked under "Other site", its GPS as the picker fills it. */
 export const pickBlueArch = { country: "Nowhere Islands", location: "North Bay", siteId: "s1", lat: "-8.5", lon: "115.25" };

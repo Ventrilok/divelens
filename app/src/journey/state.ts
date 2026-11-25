@@ -129,6 +129,8 @@ const done = (j: Journey): Journey => ({ ...start, path: j.path, run: j.run + 1 
 
 /** The dive log holds only `ids` now: what it lost is no longer chosen. */
 function logRead(j: Journey, ids: Set<string>): Journey {
+  // The summary shows what was written: it does not change.
+  if (j.step === 5) return j;
   const dives = [...j.dives].filter((id) => ids.has(id));
   const diveGone = j.dive.kind === "dive" && !ids.has(j.dive.id);
   if (dives.length === j.dives.size && !diveGone) return j;
@@ -166,7 +168,9 @@ export function reduce(j: Journey, a: Action): Journey {
       return { ...j, dives: new Set(a.ids) };
     case "pickDive": {
       if (samePick(a.pick, j.dive)) return j;
-      // The site follows the choice: another site for no dive, the dive's site for a dive.
+      // Another site for no dive; the dive's site for a first dive, or after no dive. From
+      // one dive to another, the site chosen stays, as before the journey.
+      if (a.pick.kind === "dive" && j.dive.kind === "dive") return { ...j, dive: a.pick };
       const site = a.pick.kind === "noDive" ? "other" : a.pick.kind === "dive" ? "diveSite" : j.options.site;
       return { ...j, dive: a.pick, options: { ...j.options, site } };
     }

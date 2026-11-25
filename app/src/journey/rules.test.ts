@@ -5,44 +5,59 @@ import { setLanguage } from "../i18n";
 import { NO_PICK } from "../tag/SitePicker";
 import { reduce, start } from "./state";
 import { canGoNext, otherSite, siteDetails, tagChoice, writeOptions } from "./rules";
-import { catalog, catalogAt4, d1, d3, noDiveAt4, pickBlueArch, pickSandPatch, run, selection, selectionAt4, withOptions } from "./rules/fixtures";
+import {
+  catalog,
+  catalogAt4,
+  d1,
+  d3,
+  noDiveAt4,
+  pickBlueArch,
+  pickSandPatch,
+  read,
+  run,
+  selection,
+  selectionAt4,
+  withOptions,
+} from "./rules/fixtures";
 
 beforeEach(() => setLanguage("en"));
 
 // --- Next ---------------------------------------------------------------------
 
 describe("canGoNext", () => {
+  const allowed = { allowed: true, prompt: null };
+
   it("step 1: greyed without a prompt until a path is chosen", () => {
-    expect(canGoNext(start, { selected: 4 })).toBe("");
-    expect(canGoNext(catalog, { selected: 0 })).toBeNull();
+    expect(canGoNext(start, { selected: 4 })).toEqual({ allowed: false, prompt: null });
+    expect(canGoNext(catalog, { selected: 0 })).toEqual(allowed);
   });
 
   it("step 1, selection path: greyed while nothing is selected in Lightroom", () => {
-    expect(canGoNext(selection, { selected: 0 })).toBe("Select photos in Lightroom");
+    expect(canGoNext(selection, { selected: 0 })).toEqual({ allowed: false, prompt: "Select photos in Lightroom" });
     setLanguage("fr");
-    expect(canGoNext(selection, { selected: 0 })).toBe("Sélectionnez des photos dans Lightroom");
-    expect(canGoNext(selection, { selected: 2 })).toBeNull();
+    expect(canGoNext(selection, { selected: 0 })).toEqual({ allowed: false, prompt: "Sélectionnez des photos dans Lightroom" });
+    expect(canGoNext(selection, { selected: 2 })).toEqual(allowed);
   });
 
   it("step 2, catalog path: asks to tick dives", () => {
     const at2 = reduce(catalog, { type: "next" });
-    expect(canGoNext(at2, { selected: 0 })).toBe("Check one or more dives");
+    expect(canGoNext(at2, { selected: 0 })).toEqual({ allowed: false, prompt: "Check one or more dives" });
     setLanguage("fr");
-    expect(canGoNext(at2, { selected: 0 })).toBe("Cochez une ou plusieurs plongées");
-    expect(canGoNext(reduce(at2, { type: "toggleDive", id: "d1" }), { selected: 0 })).toBeNull();
+    expect(canGoNext(at2, { selected: 0 })).toEqual({ allowed: false, prompt: "Cochez une ou plusieurs plongées" });
+    expect(canGoNext(reduce(at2, { type: "toggleDive", id: "d1" }), { selected: 0 })).toEqual(allowed);
   });
 
   it("step 2, selection path: asks to choose a dive, or no dive", () => {
     const at2 = reduce(selection, { type: "next" });
-    expect(canGoNext(at2, { selected: 3 })).toBe("Choose a dive");
+    expect(canGoNext(at2, { selected: 3 })).toEqual({ allowed: false, prompt: "Choose a dive" });
     setLanguage("fr");
-    expect(canGoNext(at2, { selected: 3 })).toBe("Choisissez une plongée");
-    expect(canGoNext(reduce(at2, { type: "pickDive", pick: { kind: "noDive" } }), { selected: 3 })).toBeNull();
-    expect(canGoNext(reduce(at2, { type: "pickDive", pick: { kind: "dive", id: "d1" } }), { selected: 3 })).toBeNull();
+    expect(canGoNext(at2, { selected: 3 })).toEqual({ allowed: false, prompt: "Choisissez une plongée" });
+    expect(canGoNext(reduce(at2, { type: "pickDive", pick: { kind: "noDive" } }), { selected: 3 })).toEqual(allowed);
+    expect(canGoNext(reduce(at2, { type: "pickDive", pick: { kind: "dive", id: "d1" } }), { selected: 3 })).toEqual(allowed);
   });
 
   it("step 3 lets the diver go on", () => {
-    expect(canGoNext(reduce(catalogAt4, { type: "back" }), { selected: 0 })).toBeNull();
+    expect(canGoNext(reduce(catalogAt4, { type: "back" }), { selected: 0 })).toEqual(allowed);
   });
 });
 
@@ -83,7 +98,7 @@ describe("writeOptions", () => {
 });
 
 describe("tagChoice", () => {
-  const base = { journey: selectionAt4, dive: d1, needsValues: true, described: 7, offsets: { a: 60 } };
+  const base = { journey: selectionAt4, dive: d1, selection: read, offsets: { a: 60 } };
 
   it("names the selection described and its offsets when per-photo values are written", () => {
     expect(tagChoice(base)).toEqual({
@@ -95,14 +110,24 @@ describe("tagChoice", () => {
     });
   });
 
+  it("names the description the reading shows, never another", () => {
+    const newer = { ...read, current: { ...read.current!, search: 9 } };
+    expect(tagChoice({ ...base, selection: newer }).search).toBe(9);
+  });
+
   it("names no selection with the dive details unticked, the dive still sent for its site and collection", () => {
     const choice = tagChoice({ ...base, journey: withOptions(selectionAt4, { dive: false }) });
-    expect(choice).toMatchObject({ diveId: "d1", search: null, offsets: {}, options: { dive: false, altitude: false } });
+    expect(choice).toMatchObject({ diveId: "d1", search: null, options: { dive: false, altitude: false } });
+    expect(choice.offsets).toEqual({});
   });
 
   it("names no selection for a dive without a readable profile, or before the selection is described", () => {
-    expect(tagChoice({ ...base, needsValues: false })).toMatchObject({ search: null, offsets: {} });
-    expect(tagChoice({ ...base, described: null })).toMatchObject({ search: null, offsets: {} });
+    const unreadable = tagChoice({ ...base, selection: { ...read, needsValues: false } });
+    expect(unreadable.search).toBeNull();
+    expect(unreadable.offsets).toEqual({});
+    const undescribed = tagChoice({ ...base, selection: { ...read, current: null } });
+    expect(undescribed.search).toBeNull();
+    expect(undescribed.offsets).toEqual({});
   });
 
   it("sends no location with neither location nor GPS ticked", () => {
@@ -126,7 +151,7 @@ describe("tagChoice", () => {
 
   it("for no dive: no dive, the site picked, only the site details", () => {
     const j = withOptions(noDiveAt4, { pick: pickBlueArch });
-    expect(tagChoice({ journey: j, dive: null, needsValues: false, described: 7, offsets: { a: 60 } })).toEqual({
+    expect(tagChoice({ journey: j, dive: null, selection: read, offsets: { a: 60 } })).toEqual({
       diveId: null,
       location: { kind: "site", siteId: "s1", lat: -8.5, lon: 115.25 },
       search: null,

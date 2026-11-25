@@ -132,8 +132,9 @@ export function reviewBlocker(i: ReviewInput): string | null {
 
   const other = siteSource(j, catalog ? null : chosenDive(j, i.log.dives)) === "other";
   if (siteDetails(o) && other && pickedSite(j, i.log.sites) === null) return t("tag.chooseSite");
+  // A position typed wrong matters only when the GPS is written: otherwise none is sent.
   const gpsError = gpsRefused({
-    withPlace: siteDetails(o),
+    withPlace: o.gps,
     placeKind: other ? "site" : "diveSite",
     diveSiteUsable: !other,
     siteId: j.options.pick.siteId,
@@ -150,6 +151,24 @@ export function reviewBlocker(i: ReviewInput): string | null {
     return t("tag.err.nothingChosen");
   }
   return null;
+}
+
+/**
+ * "Apply" can be clicked: nothing blocks it and no write is in progress; on the catalog
+ * path the counts must be in too (without them there is no blocker yet, but nothing to
+ * write either), as before.
+ */
+export function canApply(i: ReviewInput, writing: boolean): boolean {
+  if (writing || reviewBlocker(i) !== null) return false;
+  return i.journey.path !== "catalog" || i.catalog.preview !== null;
+}
+
+/**
+ * The number on "Apply to N photos", as before: every photo found in the dives (catalog
+ * path, 0 until counted), or the photos selected in Lightroom (selection path).
+ */
+export function applyCount(i: ReviewInput): number {
+  return i.journey.path === "catalog" ? (i.catalog.preview?.total ?? 0) : i.lr.selected;
 }
 
 /** The effect of each option on this run, shown on its right. */

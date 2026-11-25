@@ -2,7 +2,7 @@
 // are compared word for word with the specification (F5).
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage } from "../../i18n";
-import { barSummary, effects, goodToKnow, reviewBlocker, reviewCounts, unitsText } from "../rules";
+import { applyCount, barSummary, canApply, effects, goodToKnow, otherSite, reviewBlocker, reviewCounts, unitsText } from "../rules";
 import {
   after7,
   before3,
@@ -87,6 +87,28 @@ describe("reviewBlocker, catalog path", () => {
     expect(reviewBlocker(input(bad))).toBe("Latitude between -90 and 90, longitude between -180 and 180, or both empty.");
   });
 
+  it("ignores a GPS position typed wrong while GPS is unticked: nothing of it is sent", () => {
+    const placeOnly = withOptions(catalogAt4, { site: "other", gps: false, pick: { ...pickBlueArch, lat: "91" } });
+    expect(reviewBlocker(input(placeOnly))).toBeNull();
+    expect(otherSite(placeOnly)).toEqual({ kind: "site", siteId: "s1", lat: null, lon: null });
+  });
+
+  it("location alone on a site without names: nothing to write, Apply greyed", () => {
+    const j = run(catalogAt4, { type: "goTo", step: 2 }, { type: "setDives", ids: ["d4"] }, { type: "next" }, { type: "next" });
+    const placeOnly = withOptions(j, { dive: false, gps: false, collections: false });
+    const d4Photos = {
+      search: ready,
+      preview: { ...preview, dives: [{ id: "d4", photos: 5, inDive: 5, cameras: 1 }], total: 5, outside: 0 },
+      previewFailed: false,
+    };
+    expect(reviewBlocker(input(placeOnly, { catalog: d4Photos }))).toBe("No photo falls in the dives: adjust the clock offsets.");
+    // Its GPS position is something to write.
+    expect(reviewBlocker(input(withOptions(placeOnly, { gps: true }), { catalog: d4Photos }))).toBeNull();
+    // The same site picked as another site.
+    const picked = withOptions(catalogAt4, { dive: false, gps: false, collections: false, site: "other", pick: { ...pickSandPatch, siteId: "s3" } });
+    expect(reviewBlocker(input(picked))).toBe("No photo falls in the dives: adjust the clock offsets.");
+  });
+
   it("says there is nothing to write when no photo falls in the dives", () => {
     const empty = { search: ready, preview: { ...preview, dives: [], total: 0 }, previewFailed: false };
     expect(reviewBlocker(input(catalogAt4, { catalog: empty }))).toBe("No photo falls in the dives: adjust the clock offsets.");
@@ -162,10 +184,70 @@ describe("reviewBlocker, selection path", () => {
     );
   });
 
+  it("ignores a GPS position typed wrong while GPS is unticked", () => {
+    const placeOnly = withOptions(selectionAt4, { site: "other", gps: false, pick: { ...pickBlueArch, lat: "91" } });
+    expect(reviewBlocker(input(placeOnly))).toBeNull();
+    expect(reviewBlocker(input(withOptions(placeOnly, { gps: true })))).toBe(
+      "Latitude between -90 and 90, longitude between -180 and 180, or both empty.",
+    );
+  });
+
+  it("location alone on a dive site without names: nothing to write, Apply greyed", () => {
+    const j = run(selectionAt4, { type: "goTo", step: 2 }, { type: "pickDive", pick: { kind: "dive", id: "d4" } }, { type: "next" }, { type: "next" });
+    const placeOnly = withOptions(j, { dive: false, gps: false, collections: false });
+    expect(reviewBlocker(input(placeOnly, { selection: nothingRead }))).toBe("Nothing was written: choose a dive or a site first.");
+  });
+
+  it("asks to tick at least one option when all three are unticked", () => {
+    const none = withOptions(selectionAt4, { dive: false, place: false, gps: false, collections: false });
+    expect(reviewBlocker(input(none))).toBe("Tick at least one option");
+  });
+
+  it("checks the selection's reading before the collection set, as the photos are checked first", () => {
+    expect(reviewBlocker(input(selectionAt4, { selection: { ...read, current: null }, parentMissing: true }))).toBe(
+      "Reading the selection in Lightroom…",
+    );
+    expect(reviewBlocker(input(selectionAt4, { selection: { ...read, readFailure: "Reading failed" }, parentMissing: true }))).toBe(
+      "Reading failed",
+    );
+  });
+
+  it("no dive: a missing collection set does not block, as no collection is created", () => {
+    expect(reviewBlocker(input(withOptions(noDiveAt4, { pick: pickBlueArch }), { parentMissing: true }))).toBeNull();
+  });
+
   it("no dive: only the site details count, and a site must be chosen", () => {
     expect(reviewBlocker(input(noDiveAt4))).toBe("Choose a site");
     expect(reviewBlocker(input(withOptions(noDiveAt4, { place: false, gps: false })))).toBe("Tick at least one option");
     expect(reviewBlocker(input(withOptions(noDiveAt4, { pick: pickBlueArch })))).toBeNull();
+  });
+});
+
+describe("canApply", () => {
+  it("catalog path: no blocker, the counts in, no write in progress", () => {
+    expect(canApply(input(catalogAt4), false)).toBe(true);
+    expect(canApply(input(catalogAt4), true)).toBe(false);
+    expect(canApply(input(catalogAt4, { catalog: { search: ready, preview: null, previewFailed: false } }), false)).toBe(false);
+    expect(canApply(input(catalogAt4, { parentMissing: true }), false)).toBe(false);
+  });
+
+  it("selection path: no blocker, no write in progress", () => {
+    expect(canApply(input(selectionAt4), false)).toBe(true);
+    expect(canApply(input(selectionAt4), true)).toBe(false);
+    expect(canApply(input(selectionAt4, { lr: { connected: true, selected: 0 } }), false)).toBe(false);
+  });
+});
+
+describe("applyCount", () => {
+  it("catalog path: the photos found in the dives, 0 until they are counted", () => {
+    expect(applyCount(input(catalogAt4))).toBe(26);
+    // Not only the photos that get something on them (20 here): every photo found, as before.
+    expect(applyCount(input(withOptions(catalogAt4, { dive: false, place: false, collections: false })))).toBe(26);
+    expect(applyCount(input(catalogAt4, { catalog: { search: ready, preview: null, previewFailed: false } }))).toBe(0);
+  });
+
+  it("selection path: the photos selected in Lightroom", () => {
+    expect(applyCount(input(selectionAt4, { lr: { connected: true, selected: 24 } }))).toBe(24);
   });
 });
 
