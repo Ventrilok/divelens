@@ -56,9 +56,8 @@ export function applyFailure(e: ApplyError, feature: ApplyFeature): string {
     case "busy":
       return tag ? t("tag.err.busy") : t("coll.err.busy");
     case "gpsNotWritten":
-      // Written but for the GPS and altitude: Undo, then apply again.
-      if (tag) return e.detail ? t("tag.err.gpsNotWrittenDetail", { detail: e.detail }) : t("tag.err.gpsNotWritten");
-      return e.detail ? t("coll.err.gpsNotWrittenDetail", { detail: e.detail }) : t("coll.err.gpsNotWritten");
+      // Written but for the GPS and altitude, on either path: Undo, then apply again.
+      return e.detail ? t("tag.err.gpsNotWrittenDetail", { detail: e.detail }) : t("tag.err.gpsNotWritten");
     case "staleSearch": // Collections only
       if (!tag) return t("coll.err.noPhotos");
       break;

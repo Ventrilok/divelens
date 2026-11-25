@@ -118,21 +118,16 @@ fn the_undo_names_match() {
             .unwrap_or_else(|| panic!("no text {key} in {file}"))
             .to_string()
     };
-    // Both features write under the one Undo name of CatalogWrite.lua
-    // (tests/plugin_manifest.rs checks they do): each text names the item
-    // of Lightroom's Edit menu, "Undo <name>".
+    // Both paths of the journey write under the one Undo name of
+    // CatalogWrite.lua (tests/plugin_manifest.rs checks they do) and say so
+    // with the same texts: each names the item of Lightroom's Edit menu,
+    // "Undo <name>".
     for (source, key, i18n_key) in [
         ("CatalogWrite.lua", "DiveLens", "tag.err.gpsNotWritten"),
         (
             "CatalogWrite.lua",
             "DiveLens",
             "tag.err.gpsNotWrittenDetail",
-        ),
-        ("CatalogWrite.lua", "DiveLens", "coll.err.gpsNotWritten"),
-        (
-            "CatalogWrite.lua",
-            "DiveLens",
-            "coll.err.gpsNotWrittenDetail",
         ),
     ] {
         let (english, french) = undo_names(&plugin_file(source), key);

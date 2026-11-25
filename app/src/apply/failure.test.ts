@@ -194,6 +194,13 @@ describe.each(["en", "fr"] as const)("Refusals both paths share (%s)", (lang) =>
     );
   });
 
+  it("the GPS and altitude not written read the same on both paths", () => {
+    for (const detail of ["The photo is locked", null]) {
+      const e: ApplyError = { error: "lightroom", reason: "gpsNotWritten", detail };
+      expect(applyFailure(e, "collections")).toBe(applyFailure(e, "tag"));
+    }
+  });
+
   it("another site refused on the catalog path reads as on the selection path", () => {
     for (const error of ["badGps", "unknownSite"] as const) {
       expect(applyFailure({ error }, "collections")).toBe(applyFailure({ error }, "tag"));
