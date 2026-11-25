@@ -93,7 +93,7 @@ export const tagSelection = (log: LogRef, choice: TagChoice) =>
  */
 export const findSelectionPhotos = (log: LogRef, search: number) =>
   onLog(invoke<SelectionPhotos>("find_selection_photos", { log, search }));
-/** Tag Selection's live counts for description `search`; rejects with noPhotos once a newer one replaced it. */
+/** The selection path's live counts for description `search`; rejects with noPhotos once a newer one replaced it. */
 export const tagPreview = (search: number, dive: DiveSpan | null, offsets: Record<string, number>) =>
   invoke<TagPreview>("tag_preview", { search, dive, offsets });
 /** Suggested offset (minutes) per camera key of description `search`, for `dive`; null when no offset fits. */
@@ -124,14 +124,14 @@ export const suggestOffsets = (search: number, cameras: string[]) =>
   invoke<Record<string, number | null>>("suggest_offsets", { search, cameras });
 /**
  * Writes the dives found with photo search `search`, which must come from `log`; rejects with an ApplyError.
- * `options`: what is ticked (absent: everything, the altitude following the setting); `otherSite`:
- * one site of the log for every photo instead of each dive's own.
+ * `options`: what is ticked, the altitude included; `otherSite`: one site of the log for every photo
+ * instead of each dive's own.
  */
 export const applyCollections = (
   log: LogRef,
   search: number,
   choices: CollectionChoices,
-  options?: WriteOptions,
+  options: WriteOptions,
   otherSite?: LocationChoice,
 ) =>
   onLog(
@@ -139,7 +139,7 @@ export const applyCollections = (
       log,
       search,
       choices,
-      options: options ?? null,
+      options,
       otherSite: otherSite ?? null,
     }),
     true,

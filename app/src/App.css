@@ -84,7 +84,7 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .gear:not(:disabled):hover { background: var(--btn); color: var(--text); }
 .gear[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-text); }
 .gear:disabled { opacity: 0.45; cursor: not-allowed; }
-.gear:focus-visible, .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .status-bar { flex: none; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 24px; min-height: 36px; padding: 8px 20px; background: var(--bg-side); border-top: 1px solid #2c2e33; font-size: 12px; color: var(--muted); }
 .status-group { display: flex; flex-wrap: wrap; align-items: center; row-gap: 6px; min-width: 0; }
 .status-title { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; }
@@ -92,15 +92,11 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .status-group > .status-item:first-child { margin-left: 0; padding-left: 0; border-left: 0; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .dot-warn { background: var(--warn); box-shadow: 0 0 0 3px rgba(242, 118, 46, 0.2); }
-/* Every screen of the journey stays mounted while Settings are shown, so that
-   its choices are still there on return; [hidden] must beat the display below. */
+/* The journey stays mounted while Settings are shown or the dive log is read
+   again, so that its choices are still there on return; [hidden] must beat
+   the display below. */
 .journey { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .journey[hidden] { display: none; }
-/* Temporary tabs, until the journey replaces the two screens. */
-.tabs { flex: none; display: flex; gap: 4px; padding: 8px 28px 0; border-bottom: 1px solid var(--line-soft); }
-.tab { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--text-3); font-weight: 500; cursor: pointer; }
-.tab:hover { color: var(--text); }
-.tab-on { color: var(--accent-text); border-bottom-color: var(--accent); }
 .settings-back { align-self: flex-start; }
 
 .content { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
@@ -110,12 +106,9 @@ input[type="checkbox"], input[type="radio"] { width: 16px; height: 16px; accent-
 .screen { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 24px 28px; }
 .screen-center { align-items: center; justify-content: center; }
 .screen-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
-.screen-head h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
 .sort { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
 
-/* Create Collections: the three steps, joined by a line like a checkout */
-.flow-head { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
-.flow-head h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+/* The journey: the five steps, joined by a line like a checkout */
 .flow { display: flex; align-items: center; width: 100%; list-style: none; margin: 0; padding: 14px 20px; font-size: 13px; }
 .flow-step { display: flex; align-items: center; color: var(--muted); }
 .flow-step:not(:last-child) { flex: 1; }
@@ -130,6 +123,7 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .flow-on .flow-n { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .flow-done { color: var(--text-3); }
 .flow-done .flow-n { border-color: var(--accent); color: var(--accent); }
+.flow-skipped { opacity: 0.45; }
 .sort .inp { min-width: 190px; }
 
 /* Filters */
@@ -158,6 +152,7 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .dives-body { flex: 1; min-height: 0; display: flex; gap: 16px; align-items: stretch; }
 .list-card { flex: 1 1 auto; min-width: 0; overflow: auto; outline: none; }
 .list-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.list-empty-under { padding: 32px 16px; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl th { position: sticky; top: 0; z-index: 1; background: var(--bg-head); text-align: left; font-weight: 600; font-size: 12px; color: var(--muted); padding: 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .tbl td { padding: 0 10px; height: 44px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; color: var(--text-2); cursor: default; }
@@ -223,25 +218,9 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .path { font-size: 12px; color: var(--muted); word-break: break-all; font-variant-numeric: tabular-nums; }
 .actions { display: flex; gap: 8px; margin-top: 4px; }
 
-/* Tag Selection */
+/* Shared by the steps */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .screen-scroll { overflow-y: auto; }
-.tag-selection { padding: 14px 18px; display: flex; flex-direction: column; gap: 2px; }
-.tag-live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-.tag-count { font-size: 18px; font-weight: 700; }
-.tag-what { display: flex; flex-direction: column; flex: none; }
-.blk { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
-.blk-sep { border-top: 1px solid var(--line-soft); }
-.chk { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: var(--text); cursor: pointer; }
-.tag-dives { flex: none; height: 420px; }
-.tag-clock { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
-.tag-clock-head { display: flex; flex-direction: column; gap: 4px; }
-.tag-clock h2 { font-size: 15px; font-weight: 700; }
-.opts { display: flex; flex-wrap: wrap; gap: 8px; }
-.opt { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; border: 1px solid #2c2e33; background: var(--bg); font-size: 14px; cursor: pointer; flex: 0 1 220px; }
-.opt-wide { flex: 1 1 320px; }
-.opt-on { border-color: var(--accent); background: rgba(105, 183, 191, 0.08); }
-.opt-off { opacity: 0.55; cursor: not-allowed; }
 .pick { display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
 .pick-cols { flex: 999 1 480px; min-width: 0; display: flex; border: 1px solid #2c2e33; border-radius: 10px; overflow: hidden; background: #1c1d20; height: 280px; }
 .pick-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid #2c2e33; }
@@ -269,14 +248,11 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .bar-fill { height: 6px; border-radius: 3px; background: var(--accent); transition: width 0.2s; }
 .badge { display: inline-flex; align-items: center; margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); font-size: 11px; font-weight: 600; }
 .badge-invalid { background: rgba(242, 118, 46, 0.16); color: var(--warn-text); }
-.tag-selection { flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; }
-.tag-selection-text { display: flex; flex-direction: column; gap: 2px; }
-.tag-span { font-size: 13px; font-weight: 400; color: var(--text-3); }
 .thumbs { display: flex; gap: 6px; }
 .thumb { width: 54px; aspect-ratio: 3 / 2; border-radius: 5px; background: linear-gradient(160deg, #3a4a52, #22303a); object-fit: cover; display: flex; align-items: center; justify-content: center; flex: none; }
 .thumb-more { background: #26282c; color: var(--text-2); font-size: 12px; font-weight: 600; }
 
-/* Create Collections */
+/* The journey, step 3: camera clocks, margin, preview by dive */
 .warn { color: var(--warn-text); }
 .coll-sec { padding: 20px; display: flex; flex-direction: column; gap: 16px; flex: none; }
 .coll-sec h2, .coll-table h2 { font-size: 16px; font-weight: 700; }
@@ -320,7 +296,63 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .coll-table .tbl th:first-child, .coll-table .tbl td:first-child { padding-left: 20px; }
 .coll-table .tbl th:last-child, .coll-table .tbl td:last-child { padding-right: 20px; }
 .tbl tr.row-warn td { background: rgba(242, 118, 46, 0.07); }
-.coll-total { padding: 14px 20px; }
+
+/* The journey, step 1: two cards separated by "or" */
+.photos-head { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.photos-head h2 { font-size: 18px; font-weight: 700; }
+.choices { display: flex; flex-direction: column; gap: 12px; max-width: 760px; }
+.choice { display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); cursor: pointer; }
+.choice input[type="radio"] { width: 18px; height: 18px; margin-top: 2px; flex: none; }
+.choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.choice-on { border-color: var(--accent); background: rgba(105, 183, 191, 0.08); }
+.choice-off { cursor: not-allowed; }
+.choice-off .choice-text { opacity: 0.55; }
+.choice-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 13px; line-height: 1.45; color: var(--text-3); }
+.choice-text b { font-size: 16px; font-weight: 700; color: var(--text); }
+.choice-text .thumbs { margin-top: 6px; }
+.choices-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.choices-or::before, .choices-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+/* The journey, step 2: the "Photos: …" line, "No dive" and why a dive covers the selection */
+.dives-head { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tbl tr.mark-note td { height: auto; padding: 7px 12px 9px 48px; background: rgba(105, 183, 191, 0.14); color: var(--accent-text); font-size: 12px; white-space: normal; }
+.mark-note-text { display: flex; align-items: center; gap: 8px; }
+
+/* The journey, step 3 */
+.journey-line { color: var(--text-2); }
+.clocks-note { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; font-size: 13px; color: var(--text-2); }
+.clocks-outside { display: flex; flex-direction: column; gap: 3px; padding: 16px 20px; border-top: 1px solid var(--line-strong); background: #1c1d20; }
+.clocks-outside-title { font-size: 15px; font-weight: 600; }
+.clocks-outside-how { margin-top: 6px; color: var(--text-3); }
+
+/* The journey, step 4: each option with its effect on the right */
+.review { flex: none; overflow: hidden; }
+.review-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
+.review-head { padding: 18px 20px 14px; display: flex; flex-direction: column; gap: 4px; }
+.review-head h2, .review-know h2 { font-size: 16px; font-weight: 700; }
+.review-grp { padding: 9px 20px; background: var(--bg-head); border-top: 1px solid var(--line-soft); }
+.review-opt, .review-sub { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px 24px; padding: 18px 20px; border-top: 1px solid var(--line-soft); }
+.review-sub { padding: 12px 20px 12px 50px; border-top-style: dashed; }
+.review-off { opacity: 0.45; }
+.review-t { display: flex; align-items: flex-start; gap: 12px; flex: 1 1 420px; min-width: 0; }
+.review-t input { margin-top: 2px; }
+.review-body { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.review-body label { display: flex; flex-direction: column; gap: 4px; cursor: pointer; }
+.review-off .review-body label, .review-radio:has(input:disabled) { cursor: not-allowed; }
+.review-body b { font-size: 15px; font-weight: 700; color: var(--text); }
+.review-sub .review-body b { font-size: 14px; font-weight: 600; }
+.review-text { font-size: 13px; line-height: 1.45; color: var(--muted); }
+.review-eff { flex: 0 1 260px; text-align: right; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.review-site { flex: 1 1 100%; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.review-src { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 14px; color: var(--text-2); }
+.review-radio { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.review-radio:has(input:disabled) { color: var(--muted); }
+.review-know { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; flex: none; }
+.review-line { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-2); }
+.link { padding: 0; background: none; border: 0; color: var(--accent); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.link:not(:disabled):hover { color: var(--accent-hover); text-decoration: underline; text-underline-offset: 3px; }
+.link:disabled { opacity: 0.5; cursor: not-allowed; }
+.link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .result { width: 100%; display: flex; flex-direction: column; gap: 20px; }
 .result-head { display: flex; align-items: center; gap: 16px; }
 .result-head h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
@@ -370,4 +402,3 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .sw:checked { background: var(--accent); }
 .sw:checked::after { left: 21px; background: var(--accent-ink); }
 .sw:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.coll-place-warn { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }

@@ -69,7 +69,7 @@ pub struct LocationTags {
     pub lon: Option<f64>,
 }
 
-/// Where "Tag Selection" puts the selected photos: the collection, inside
+/// Where the selection path puts the selected photos: the collection, inside
 /// the collection set `parent` leads to.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,7 +83,7 @@ pub struct CollectionPlace {
     pub group: Option<String>,
 }
 
-/// Everything one "Tag Selection › Apply" writes. At least one of `dive`,
+/// Everything one Apply of the selection path writes. At least one of `dive`,
 /// `location` and `collection` is present.
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -126,7 +126,7 @@ pub struct PhotoTags {
     pub depth_m: Option<f64>,
 }
 
-/// One dive of a "Create Collections" write: its collection, its data and
+/// One dive of a catalog-path write: its collection, its data and
 /// location, and its photos.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -198,7 +198,7 @@ impl PhotoTags {
     }
 }
 
-/// Everything one "Create Collections › Apply" writes, in one Undo step.
+/// Everything one Apply of the catalog path writes, in one Undo step.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CollectionsRequest {
@@ -244,6 +244,11 @@ impl CollectionsRequest {
     pub fn copy_depth_to_altitude(&mut self) {
         copy_depth_to_altitude(self.groups.iter_mut().flat_map(|g| &mut g.photos));
     }
+
+    /// Photos that get a depth (none with the dive details unticked).
+    pub fn with_depth(&self) -> usize {
+        with_depth(self.groups.iter().flat_map(|g| &g.photos))
+    }
 }
 
 impl TagRequest {
@@ -268,9 +273,15 @@ impl TagRequest {
     }
 
     /// Copies the depth of each photo taken during the dive to its GPS
-    /// altitude, negative (spec F7), as Create Collections does.
+    /// altitude, negative (spec F7), as on the catalog path.
     pub fn copy_depth_to_altitude(&mut self) {
         copy_depth_to_altitude(&mut self.photos);
+    }
+
+    /// Photos that get a depth, as the catalog path counts them (none
+    /// with the dive details unticked).
+    pub fn with_depth(&self) -> usize {
+        with_depth(&self.photos)
     }
 }
 
@@ -278,6 +289,13 @@ fn copy_depth_to_altitude<'a>(photos: impl IntoIterator<Item = &'a mut PhotoTags
     for photo in photos {
         photo.gps_altitude = photo.depth_m.map(altitude);
     }
+}
+
+fn with_depth<'a>(photos: impl IntoIterator<Item = &'a PhotoTags>) -> usize {
+    photos
+        .into_iter()
+        .filter(|p| p.photo_depth.is_some())
+        .count()
 }
 
 /// Altitude for a depth: negative, to the decimetre (never `-0`).
@@ -693,6 +711,40 @@ mod tests {
     }
 
     #[test]
+    fn a_group_left_with_nothing_goes_while_the_other_stays() {
+        // The second dive's site has no field at all: with the site details
+        // alone ticked, nothing is left to write on its group, which goes.
+        let mut r = sample_collections_request();
+        r.groups[1].location = Some(LocationTags {
+            country: None,
+            city: None,
+            location: None,
+            lat: None,
+            lon: None,
+        });
+        let site_only = Kept {
+            dive: false,
+            place: true,
+            gps: true,
+            collections: false,
+        };
+        r.keep(site_only, None);
+        // The first stays, with its location alone, and all its photos
+        // without the dive's values.
+        assert_eq!(r.groups.len(), 1);
+        let g = &r.groups[0];
+        assert_eq!(g.location, Some(full_location("Three Arches Reef")));
+        assert_eq!((g.dive.as_ref(), g.collection.as_deref()), (None, None));
+        let ids: Vec<_> = g.photos.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["1", "2"]);
+        assert!(
+            g.photos
+                .iter()
+                .all(|p| p.photo_depth.is_none() && p.gps_altitude.is_none())
+        );
+    }
+
+    #[test]
     fn another_site_replaces_every_groups_location_not_its_collection() {
         let beach = LocationTags {
             country: None,
@@ -712,6 +764,22 @@ mod tests {
         }
         let after: Vec<_> = r.groups.iter().map(|g| g.collection.clone()).collect();
         assert_eq!(names, after);
+    }
+
+    #[test]
+    fn photos_with_a_depth_are_counted_until_the_dive_details_are_unticked() {
+        // Each group: photo 1 at 18.4 m, photo 2 at the surface.
+        let mut collections = sample_collections_request();
+        assert_eq!(collections.with_depth(), 2);
+        let mut tag = sample_tag_request();
+        assert_eq!(tag.with_depth(), 1);
+        let unticked = Kept {
+            dive: false,
+            ..Kept::ALL
+        };
+        collections.keep(unticked, None);
+        tag.keep(unticked);
+        assert_eq!((collections.with_depth(), tag.with_depth()), (0, 0));
     }
 
     #[test]
@@ -803,9 +871,9 @@ mod tests {
     }
 
     #[test]
-    fn tag_request_another_site_is_not_applied_here() {
-        // TagRequest::keep takes no other site: its location is already the
-        // chosen one. Unticking everything empties it.
+    fn tag_request_is_empty_once_dive_place_and_gps_are_unticked() {
+        // The sample names no collection: with the dive details, the place
+        // and the GPS unticked, nothing is left, the collections tick or not.
         let mut r = sample_tag_request();
         r.keep(Kept {
             dive: false,

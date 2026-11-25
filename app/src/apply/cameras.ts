@@ -1,4 +1,4 @@
-// Cameras and clock offsets on the Create Collections screen (spec F5).
+// Cameras and clock offsets at step 3 of the journey (spec F5).
 
 import type { Camera } from "../types";
 
@@ -28,7 +28,7 @@ export function initialOffsets(cameras: Camera[]): Record<string, number> {
 }
 
 /**
- * Offsets once the cameras change (Tag Selection, a new selection): a
+ * Offsets once the cameras change (selection path, a new selection): a
  * camera still there keeps the offset shown, a new one starts from the
  * offset last applied to it, else none.
  */

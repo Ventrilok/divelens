@@ -1,12 +1,12 @@
-//! Tag Selection's per-photo values (spec F8, F6): the photos selected in
-//! Lightroom and their cameras, one clock offset each as in Create
-//! Collections, the live counts and "Suggest" for the chosen dive, and the
-//! values written on the photos taken during it. Nothing here talks to
-//! Lightroom; the Tag Selection commands (`tag.rs`) do.
+//! The selection path's per-photo values (spec F8, F6): the photos selected
+//! in Lightroom and their cameras, one clock offset each as on the catalog
+//! path, the live counts and "Suggest" for the chosen dive, and the values
+//! written on the photos taken during it. Nothing here talks to Lightroom;
+//! the selection path's commands (`tag.rs`) do.
 //!
 //! A photo is in the dive when its capture time corrected by its camera's
-//! offset falls between the dive's start and end, exactly as in Create
-//! Collections without a margin. Only those photos get per-photo values and
+//! offset falls between the dive's start and end, exactly as on the catalog
+//! path without a margin. Only those photos get per-photo values and
 //! the clock offset; the others get the dive data alone.
 
 use std::collections::{BTreeMap, HashMap};
@@ -78,6 +78,26 @@ pub struct TagPreview {
     /// by its camera's offset: what the "covers the selection" hint checks.
     pub cover_from: Option<String>,
     pub cover_to: Option<String>,
+    /// The first photos with a capture time taken outside the chosen dive,
+    /// by corrected time (none without a dive)...
+    pub outside: Vec<OutsidePhoto>,
+    /// ...and how many more there are.
+    pub outside_more: usize,
+}
+
+/// A photo of the selection taken outside the chosen dive, with the
+/// offsets shown.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OutsidePhoto {
+    /// Capture time corrected by its camera's offset, wall-clock
+    /// `YYYY-MM-DDTHH:MM:SS`.
+    pub time: String,
+    /// Its camera's key.
+    pub camera: String,
+    /// Whole minutes before the dive's start (negative) or after its end
+    /// (positive), rounded away from zero: never 0.
+    pub minutes: i64,
 }
 
 /// A photo of the selection taken during the dive, with the offsets given.
@@ -96,6 +116,21 @@ fn inside(dive: Span, corrected: NaiveDateTime) -> bool {
         matching::place(&[dive], corrected, 0),
         Some(Placement::InDive(_))
     )
+}
+
+/// Photos outside the dive the live counts detail; the others are counted.
+const OUTSIDE_SHOWN: usize = 5;
+
+/// How far a photo taken at `corrected`, outside `dive`, is from it: whole
+/// minutes before its start (negative) or after its end, rounded away from
+/// zero so a photo 20 s after the end reads 1, never 0.
+fn minutes_outside(dive: Span, corrected: NaiveDateTime) -> i64 {
+    let away = |seconds: i64| (seconds + 59) / 60;
+    if corrected < dive.start {
+        -away((dive.start - corrected).num_seconds())
+    } else {
+        away((corrected - dive.end).num_seconds())
+    }
 }
 
 impl Selection {
@@ -147,30 +182,49 @@ impl Selection {
             .collect();
         let mut in_dive = 0;
         let mut cover: Option<(NaiveDateTime, NaiveDateTime)> = None;
+        let mut outside: Vec<(NaiveDateTime, usize, i64)> = Vec::new();
         for (camera, _, _, t) in self.corrected(offsets) {
             if dive.is_some_and(|d| inside(d, t)) {
                 cameras[camera].in_dives += 1;
                 in_dive += 1;
             } else {
                 cameras[camera].outside += 1;
+                if let Some(d) = dive {
+                    outside.push((t, camera, minutes_outside(d, t)));
+                }
             }
             cover = Some(match cover {
                 None => (t, t),
                 Some((a, b)) => (a.min(t), b.max(t)),
             });
         }
+        // By corrected time; photos taken at the same time stay in
+        // Lightroom's order.
+        outside.sort_by_key(|&(t, _, _)| t);
+        let outside_more = outside.len().saturating_sub(OUTSIDE_SHOWN);
+        let outside = outside
+            .into_iter()
+            .take(OUTSIDE_SHOWN)
+            .map(|(t, camera, minutes)| OutsidePhoto {
+                time: format_time(t),
+                camera: self.shots.cameras[camera].key.clone(),
+                minutes,
+            })
+            .collect();
         TagPreview {
             total: self.shots.photos.len() + self.shots.undated,
             in_dive,
             cameras,
             cover_from: cover.map(|(a, _)| format_time(a)),
             cover_to: cover.map(|(_, b)| format_time(b)),
+            outside,
+            outside_more,
         }
     }
 
     /// Suggested offset of each camera `keys` names: the one that puts the
-    /// most of its selected photos in `dive` (same search as Create
-    /// Collections, spec F5).
+    /// most of its selected photos in `dive` (same search as on the catalog
+    /// path, spec F5).
     pub fn suggest(&self, dive: Span, keys: &[String]) -> HashMap<String, Option<i32>> {
         self.shots.suggest(&[dive], keys)
     }
@@ -190,8 +244,8 @@ impl Selection {
 }
 
 /// Per-photo values (spec F6) of `photos`, taken during `dive`, from its
-/// profile: depth, temperature and elapsed time interpolated as Create
-/// Collections does, and the clock offset applied.
+/// profile: depth, temperature and elapsed time interpolated as on the
+/// catalog path, and the clock offset applied.
 pub fn photo_tags(
     dive: &Dive,
     profile: &[Sample],
@@ -215,7 +269,7 @@ pub fn photo_tags(
 }
 
 /// The offset applied to each camera with a photo taken during the dive:
-/// remembered once written, shared with Create Collections (spec F5). A
+/// remembered once written, shared with the catalog path (spec F5). A
 /// camera without one had no offset applied.
 pub fn applied_offsets(photos: &[InDive]) -> BTreeMap<String, i32> {
     photos
@@ -224,7 +278,7 @@ pub fn applied_offsets(photos: &[InDive]) -> BTreeMap<String, i32> {
         .collect()
 }
 
-/// What Tag Selection writes per photo, for a dive with a profile.
+/// What the selection path writes per photo, for a dive with a profile.
 #[derive(Debug)]
 pub enum PerPhoto {
     /// Per-photo values for the selection described (the plugin's number
@@ -239,7 +293,7 @@ pub enum PerPhoto {
     Unreadable(Error),
 }
 
-/// Why Tag Selection writes nothing.
+/// Why the selection path writes nothing.
 #[derive(Debug)]
 pub enum Refusal {
     /// The profile reads, but the screen did not describe the selection: it
@@ -419,6 +473,96 @@ mod tests {
         assert_eq!((p.total, p.cover_from), (1, None));
     }
 
+    /// A photo outside the dive, as the preview lists it.
+    fn out(time: &str, camera: &str, minutes: i64) -> OutsidePhoto {
+        OutsidePhoto {
+            time: format!("2025-12-30T{time}"),
+            camera: camera.into(),
+            minutes,
+        }
+    }
+
+    #[test]
+    fn preview_lists_photos_outside_the_dive() {
+        // A dive from 10:00 to 10:45, as the screen shows it.
+        let span = DiveSpan {
+            start: "2025-12-30T10:00:00".into(),
+            end: "2025-12-30T10:45:00".into(),
+        }
+        .span()
+        .unwrap();
+        let found = vec![
+            photo("1", Some("2025-12-30T09:53:00"), "GoPro", None),
+            photo("2", Some("2025-12-30T10:20:00"), "GoPro", None),
+            photo("3", Some("2025-12-30T10:52:00"), "GoPro", None),
+            photo("4", None, "GoPro", None),
+        ];
+        let s = Selection::new(1, found, &Offsets::default());
+        let p = s.preview(Some(span), &HashMap::new());
+        // 7 minutes before going in, 7 minutes after getting out; the photo
+        // taken during the dive and the one without a capture time are not
+        // listed.
+        assert_eq!(
+            p.outside,
+            [out("09:53:00", "GoPro|", -7), out("10:52:00", "GoPro|", 7)]
+        );
+        assert_eq!(p.outside_more, 0);
+        // No dive chosen: nothing listed.
+        let p = s.preview(None, &HashMap::new());
+        assert_eq!((p.outside, p.outside_more), (vec![], 0));
+
+        // Seven photos outside, in Lightroom's order; the TG-7 one hour
+        // behind the dive computer, the offset shown applied.
+        let found = vec![
+            photo("a", Some("2025-12-30T11:30:00"), "GoPro", None),
+            photo("b", Some("2025-12-30T08:30:00"), "TG-7", Some("A1")),
+            photo("c", Some("2025-12-30T09:50:00"), "GoPro", None),
+            photo("d", Some("2025-12-30T09:59:40"), "TG-7", Some("A1")),
+            photo("e", Some("2025-12-30T09:59:40"), "GoPro", None),
+            photo("f", Some("2025-12-30T10:45:20"), "GoPro", None),
+            photo("g", Some("2025-12-30T10:52:00"), "GoPro", None),
+            photo("h", Some("2025-12-30T09:10:00"), "TG-7", Some("A1")),
+            photo("i", None, "TG-7", Some("A1")),
+        ];
+        let s = Selection::new(2, found, &Offsets::default());
+        let p = s.preview(Some(span), &offsets(&[("TG-7|A1", 60)]));
+        // The first five by corrected time; 20 s off the dive reads 1 minute,
+        // never 0.
+        assert_eq!(
+            p.outside,
+            [
+                out("09:30:00", "TG-7|A1", -30),
+                out("09:50:00", "GoPro|", -10),
+                out("09:59:40", "GoPro|", -1),
+                out("10:45:20", "GoPro|", 1),
+                out("10:52:00", "GoPro|", 7),
+            ]
+        );
+        // The TG-7 at 10:59:40 (15 minutes after) and the GoPro at 11:30.
+        assert_eq!(p.outside_more, 2);
+        let json = serde_json::to_value(&p).unwrap();
+        assert_eq!(json["outsideMore"], 2);
+        assert_eq!(
+            json["outside"][0],
+            serde_json::json!({ "time": "2025-12-30T09:30:00", "camera": "TG-7|A1", "minutes": -30 })
+        );
+        // Without the offset, the TG-7 photos are where their clock put them,
+        // all eight outside. Photos d (TG-7) and e (GoPro) then share 09:59:40:
+        // they stay in Lightroom's order, not the cameras' (GoPro first).
+        let p = s.preview(Some(span), &HashMap::new());
+        assert_eq!(
+            p.outside,
+            [
+                out("08:30:00", "TG-7|A1", -90),
+                out("09:10:00", "TG-7|A1", -50),
+                out("09:50:00", "GoPro|", -10),
+                out("09:59:40", "TG-7|A1", -1),
+                out("09:59:40", "GoPro|", -1),
+            ]
+        );
+        assert_eq!(p.outside_more, 3);
+    }
+
     #[test]
     fn suggests_the_time_zone_difference() {
         // Spec F5, same criterion: photos on French time, the dive in the
@@ -506,7 +650,7 @@ mod tests {
         assert_eq!(remembered.get("GoPro|"), None);
         assert_eq!(remembered.get("Nikon|"), Some(60), "other cameras kept");
 
-        // Saved in the application's own file, the one Create Collections
+        // Saved in the application's own file, the one the catalog path
         // reads: another application does not see it.
         assert_eq!(Offsets::load(&dir, ss).get("TG-7|A1"), Some(240));
         assert_eq!(Offsets::load(&dir, md).get("TG-7|A1"), None);

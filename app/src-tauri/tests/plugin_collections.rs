@@ -59,7 +59,9 @@ fn collections_plan_writes_dive_data_and_per_photo_values() {
             assert(#root.parent == 0 and root.group == nil)
             request.parent = { "Trips", "" }
             assert(Tagging.planCollections(request, tostring) == nil)
-            assert(Tagging.planCollections({ groups = { { collection = "x" } } }, tostring) == nil)
+            -- A group may lack its dive, not its list of photos.
+            local none, why = Tagging.planCollections({ groups = { { collection = "x" } } }, tostring)
+            assert(none == nil and why == "bad group", why)
             return lines
             "#,
         )
@@ -569,6 +571,43 @@ fn a_second_group_of_the_same_new_name_is_completed() {
             { "collection": "101 - Coral Garden", "count": 1, "created": false },
         ])
     );
+}
+
+/// Which groups write their collection in the catalogue (the envelope makes
+/// or completes `plan.groups[gi].collectionToWrite` with the group's photos found):
+/// only a group with a name and at least one photo found, whether the
+/// collection is new or already there.
+#[test]
+fn only_a_named_group_with_a_photo_found_writes_its_collection() {
+    let out = json_of(
+        &lua(),
+        &format!(
+            r#"{GROUPS_LUA}
+        local groups = {{
+            group(nil, {{ {{ id = "1" }} }}),
+            group("102 - North Reef", {{}}),
+            group("103 - Coral Garden", {{ {{ id = "3" }} }}),
+        }}
+        local function written(plan)
+            local out = {{}}
+            for gi, g in ipairs(plan.groups) do
+                if g.collectionToWrite then
+                    local ids = {{}}
+                    for i, p in ipairs(g.photos) do ids[i] = p.id end
+                    out[#out + 1] = {{ group = gi, collection = g.collectionToWrite, photos = ids }}
+                end
+            end
+            return #out > 0 and out or Json.emptyArray
+        end
+        return Json.encode {{
+            new = written(Tagging.collectionWrites(groups, {{}}, {{}})),
+            there = written(Tagging.collectionWrites(groups, {{}}, {{ ["103 - Coral Garden"] = true }})),
+        }}"#
+        ),
+    );
+    let last =
+        serde_json::json!([{ "group": 3, "collection": "103 - Coral Garden", "photos": ["3"] }]);
+    assert_eq!(out, serde_json::json!({ "new": last, "there": last }));
 }
 
 #[test]

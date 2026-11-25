@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage } from "../i18n";
-import { applyFailure, searchFailure } from "./failure";
+import { applyFailure, searchAgain, searchFailure } from "./failure";
 import type { ApplyError } from "../types";
 
 const DETAIL = "disk full";
@@ -65,7 +65,7 @@ describe.each(["en", "fr"] as const)("Tag Selection failure texts (%s)", (lang) 
   });
 
   const nothingWritten = lang === "en" ? "Nothing was written" : "Rien n'a été écrit";
-  const undo = lang === "en" ? "Undo Tag Selection (Dive Lens)" : "Annuler Tagger la sélection (Dive Lens)";
+  const undo = lang === "en" ? "Edit › Undo Dive Lens in Lightroom" : "Édition › Annuler Dive Lens dans Lightroom";
 
   it("gpsNotWritten and linkLost say what was written, never that nothing was", () => {
     for (const detail of [DETAIL, null]) {
@@ -78,9 +78,19 @@ describe.each(["en", "fr"] as const)("Tag Selection failure texts (%s)", (lang) 
 
   it("every other write failure says that nothing was written", () => {
     const others = writeErrors.filter(
-      (e) => e.error !== "linkLost" && !(e.error === "lightroom" && e.reason === "gpsNotWritten"),
+      (e) =>
+        e.error !== "linkLost" &&
+        e.error !== "nothingChosen" &&
+        !(e.error === "lightroom" && e.reason === "gpsNotWritten"),
     );
     for (const e of others) expect(applyFailure(e, "tag"), JSON.stringify(e)).toContain(nothingWritten);
+  });
+
+  it("the options ticked leaving nothing to write say so, as the bar does before Apply", () => {
+    // A dive or "no dive" and a site are chosen before step 4: only the options are left as a cause.
+    expect(applyFailure({ error: "nothingChosen" }, "tag")).toBe(
+      lang === "en" ? "Nothing to write with these options." : "Rien à écrire avec ces options.",
+    );
   });
 
   it("a vanished dive or site says to reopen Dive Lens", () => {
@@ -156,7 +166,7 @@ const collWriteErrors: ApplyError[] = [
 describe.each(["en", "fr"] as const)("Create Collections write failure texts (%s)", (lang) => {
   beforeEach(() => setLanguage(lang));
   const nothingWritten = lang === "en" ? "Nothing was written" : "Rien n'a été écrit";
-  const undo = lang === "en" ? "Undo Create Collections (Dive Lens)" : "Annuler Créer les collections (Dive Lens)";
+  const undo = lang === "en" ? "Edit › Undo Dive Lens in Lightroom" : "Édition › Annuler Dive Lens dans Lightroom";
 
   it.each(collWriteErrors.map((e) => [JSON.stringify(e), e] as const))("%s", (_, e) => {
     const text = applyFailure(e, "collections");
@@ -176,5 +186,66 @@ describe.each(["en", "fr"] as const)("Create Collections write failure texts (%s
       expect(text).toContain(undo);
     }
     expect(applyFailure({ error: "linkLost" }, "collections")).not.toContain(nothingWritten);
+  });
+});
+
+// The journey: the selection path may create a collection, and the catalog path may
+// write another site; each refusal reads the same on both paths (spec F5).
+describe.each(["en", "fr"] as const)("Refusals both paths share (%s)", (lang) => {
+  beforeEach(() => setLanguage(lang));
+
+  it("a missing collection set is named on the selection path as on the catalog path", () => {
+    const e: ApplyError = { error: "lightroom", reason: "parentNotFound", detail: "Trips › 2025" };
+    expect(applyFailure(e, "tag")).toBe(applyFailure(e, "collections"));
+    expect(applyFailure(e, "tag")).toBe(
+      lang === "en"
+        ? "The collection set chosen in Settings (Trips › 2025) is no longer in the catalog. Choose another place in Settings."
+        : "L'ensemble choisi dans les réglages (Trips › 2025) n'est plus dans le catalogue. Choisissez un autre emplacement dans les réglages.",
+    );
+  });
+
+  it("nothing left to write reads the same on both paths, true whatever the cause", () => {
+    // Catalog path: the engine refuses the same way for no photo in the dives and for
+    // options that leave nothing on the photos found; the text holds for both.
+    expect(applyFailure({ error: "nothingToWrite" }, "collections")).toBe(applyFailure({ error: "nothingChosen" }, "tag"));
+    expect(applyFailure({ error: "nothingToWrite" }, "collections")).toBe(
+      lang === "en" ? "Nothing to write with these options." : "Rien à écrire avec ces options.",
+    );
+  });
+
+  it("the GPS and altitude not written read the same on both paths", () => {
+    for (const detail of ["The photo is locked", null]) {
+      const e: ApplyError = { error: "lightroom", reason: "gpsNotWritten", detail };
+      expect(applyFailure(e, "collections")).toBe(applyFailure(e, "tag"));
+    }
+  });
+
+  it("another site refused on the catalog path reads as on the selection path", () => {
+    for (const error of ["badGps", "unknownSite"] as const) {
+      expect(applyFailure({ error }, "collections")).toBe(applyFailure({ error }, "tag"));
+    }
+    expect(applyFailure({ error: "unknownSite" }, "collections")).toContain(
+      lang === "en" ? "This site is no longer in the dive log." : "Ce site n'est plus dans le carnet de plongée.",
+    );
+  });
+});
+
+describe("searchAgain: the catalog path looks for the photos again after a refused Apply", () => {
+  it("when the photos found are gone", () => {
+    expect(searchAgain({ error: "noPhotos" })).toBe(true);
+    expect(searchAgain({ error: "lightroom", reason: "staleSearch", detail: null })).toBe(true);
+  });
+
+  it("never otherwise", () => {
+    const others: ApplyError[] = [
+      { error: "notConnected" },
+      { error: "linkLost" },
+      { error: "nothingToWrite" },
+      { error: "logChanged" },
+      { error: "lightroom", reason: "busy", detail: null },
+      { error: "lightroom", reason: "gpsNotWritten", detail: null },
+      { error: "lightroom", reason: "selectionChanged", detail: null },
+    ];
+    for (const e of others) expect(searchAgain(e), JSON.stringify(e)).toBe(false);
   });
 });

@@ -20,26 +20,17 @@ import { revertChange } from "./settings/save";
 import { unitsInUse } from "./collections/collectionPlace";
 import { latestOnly, logChangedNotice, logWatch, sameLogSetting } from "./diveLog";
 import { profiles } from "./dives/profiles";
-import { isReadyScreen, shownScreen, type Screen } from "./ui/screens";
+import { isReadyScreen, type Screen } from "./ui/screens";
 import { Header } from "./ui/Header";
 import { StatusBar } from "./ui/AppStatusBar";
-import { Icon } from "./ui/Icon";
 import { lang, setLanguage, t, type Key } from "./i18n";
-import { CollectionsScreen, type Phase } from "./collections/CollectionsScreen";
-import { DivesStep } from "./collections/DivesStep";
-import { TagScreen } from "./tag/TagScreen";
+import { Journey } from "./journey/Journey";
 import { SettingsScreen, type LogState } from "./settings/SettingsScreen";
 import { SourceError } from "./settings/SourceError";
 import { UpdateBanner } from "./updates/UpdateBanner";
 import { noticeVersion } from "./updates/updates";
-import type { AppInfo, LightroomStatus, LoadError, Settings, Sort, SourceInfo, SourceKind, UpdateStatus } from "./types";
+import type { AppInfo, DiveLog, LightroomStatus, LoadError, Settings, Sort, SourceInfo, SourceKind, UpdateStatus } from "./types";
 import "./App.css";
-
-// Temporary navigation between the two screens, until the journey (phase 3).
-const tabs = [
-  { id: "collections", icon: "folder", label: "nav.collections" },
-  { id: "tag", icon: "tag", label: "nav.tag" },
-] as const;
 
 const offline: LightroomStatus = {
   connected: false,
@@ -51,57 +42,42 @@ const offline: LightroomStatus = {
   selectionVersion: 0,
   selectionFrom: null,
   selectionTo: null,
+  selectionCameras: [],
   coverFrom: null,
   coverTo: null,
   restartLightroom: false,
 };
 
 function App({ initialSettings }: { initialSettings: Settings }) {
-  const [screen, setScreen] = useState<Screen>("collections");
-  // The screen Settings were opened from: "Back" returns there.
-  const [before, setBefore] = useState<Screen>("collections");
-  // Create Collections: step 1 checks the dives, step 2 adjusts and applies
-  // (its summary is step 3). The checked dives are kept between steps.
-  const [step, setStep] = useState<"dives" | "adjust">("dives");
-  const [chosen, setChosen] = useState<Set<string>>(new Set());
-  // Tag Selection's Cancel starts it again from scratch.
-  const [tagRun, setTagRun] = useState(0);
-  // Why a flow started again (an action was refused: the dive log changed).
-  // Shown once on the screen the diver lands on, until the next step,
-  // Apply, Cancel, another screen, or Close.
+  // The journey, or Settings in its place (the journey stays mounted, hidden).
+  const [screen, setScreen] = useState<Screen>("journey");
+  // Why the journey started again (an action was refused: the dive log
+  // changed). Shown once at step 1, until Close, leaving step 1, a menu or the gear.
   const [logNotice, setLogNotice] = useState<Key | null>(null);
+  // "Open Dive Lens…", counted: each one brings the journey back to step 1.
+  const [menu, setMenu] = useState(0);
+  // Apply is writing in Lightroom (the journey says so at once, the back end
+  // once the write reached it): no menu and no Settings leave the screen
+  // meanwhile, so that the summary shows. Read by the menus' listener.
+  const [journeyWriting, setJourneyWriting] = useState(false);
+  const writingNow = useRef(false);
 
-  // While collections are being written, the screen stays put so that the
-  // summary is seen. Leaving the summary, whichever way, unchecks the dives.
-  const phase = useRef<Phase>("adjust");
-  const onPhase = useCallback((p: Phase) => {
-    phase.current = p;
-  }, []);
-
-  // Entering Create Collections, from its tab or the Lightroom menu,
-  // always opens step 1, with the checked dives kept (none after a summary).
+  // A Lightroom menu (or the Plug-in Manager, or an update): the journey at
+  // step 1 with its choices kept, or Settings. Dropped while writing, as before.
   const open = useCallback((s: Screen) => {
-    if (phase.current === "writing") return;
+    if (writingNow.current) return;
     setLogNotice(null);
-    if (s === "settings") {
-      // From a Lightroom menu: Back leads to the default screen. The screens
-      // stay as they are meanwhile (a summary included).
-      setBefore("collections");
-    } else {
-      if (phase.current === "summary") setChosen(new Set());
-      if (s === "collections") setStep("dives");
-    }
+    if (s === "journey") setMenu((n) => n + 1);
     setScreen(s);
   }, []);
-  // The gear (or the update notice): Settings in place of the screen in use.
+  // The gear (or the update notice): Settings in place of the journey.
   const openSettings = useCallback(() => {
+    if (writingNow.current) return;
     setLogNotice(null);
-    setBefore(screen === "settings" ? before : screen);
     setScreen("settings");
-  }, [screen, before]);
-  // Under Settings, the screen they were opened from stays mounted.
-  const shown = shownScreen(screen, before);
-  const closeSettings = useCallback(() => setScreen(before), [before]);
+  }, []);
+  // "Back": the journey, at the step it was on, with its choices.
+  const closeSettings = useCallback(() => setScreen("journey"), []);
   const [state, setState] = useState<LogState>({ status: "loading" });
   const [settings, setSettings] = useState<Settings>(initialSettings);
   // What the settings file holds: the screen may show a change not saved yet.
@@ -117,19 +93,19 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   // Each read of the dive log forgets the profiles shown so far, and only the
   // latest read counts: a slow read of the previous log never replaces it.
   // A read showing another log than the previous one (application in use and
-  // location, as the back end checks them) starts every flow again: no dive
-  // checked, Create Collections at step 1, Tag Selection from scratch.
+  // location, as the back end checks them), even one that fails, starts the
+  // journey again at step 1 with nothing chosen. The journey keeps the last
+  // log that loaded while another read is under way.
   const reads = useMemo(latestOnly, []);
   const [otherLog] = useState(logWatch);
+  const [logChanges, setLogChanges] = useState(0);
+  const [lastLog, setLastLog] = useState<DiveLog | null>(null);
   const load = useCallback(() => {
     profiles.clear();
     setState({ status: "loading" });
     const show = (next: LogState, source: SourceInfo | undefined) => {
-      if (source && otherLog(source)) {
-        setChosen(new Set());
-        setStep("dives");
-        setTagRun((n) => n + 1);
-      }
+      if (source && otherLog(source)) setLogChanges((n) => n + 1);
+      if (next.status === "ok") setLastLog(next.log);
       setState(next);
     };
     reads(
@@ -161,8 +137,8 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   }, [load, sourceKey]);
 
   // The back end refused an action on a dive log that is no longer the
-  // configured one: read the log and the settings again, and say why on the
-  // screen the diver lands on.
+  // configured one: read the log and the settings again, and say why at step 1,
+  // where the journey starts again.
   useEffect(() => {
     onLogChanged((applied) => {
       setLogNotice((current) => logChangedNotice(current, applied));
@@ -189,6 +165,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
       stop.then((f) => f());
     };
   }, []);
+  writingNow.current = writing || journeyWriting;
 
   // Settings changed elsewhere (back end) reach this window too.
   useEffect(() => {
@@ -250,28 +227,26 @@ function App({ initialSettings }: { initialSettings: Settings }) {
   const newVersion = screen === "settings" ? null : noticeVersion(update);
 
   // Units in use: the dive application's unless forced in Settings.
-  const okLog = state.status === "ok" ? state.log : null;
-  const log = useMemo(
-    () => okLog && { ...okLog, units: unitsInUse(settings.units, okLog.sourceUnits) },
-    [okLog, settings.units],
+  const journeyLog = useMemo(
+    () => lastLog && { ...lastLog, units: unitsInUse(settings.units, lastLog.sourceUnits) },
+    [lastLog, settings.units],
   );
+  // The log the status bar names: the one read, once it is (the journey's then).
+  const log = state.status === "ok" ? journeyLog : null;
 
-  // Step 2 needs checked dives of this log (another dive log may have been chosen meanwhile).
-  const hasChosen = useMemo(() => !!log && log.dives.some((d) => chosen.has(d.id)), [log, chosen]);
-  const adjusting = step === "adjust" && hasChosen;
-  useEffect(() => {
-    if (log && !hasChosen) setStep("dives");
-  }, [log, hasChosen]);
-
+  // A change of language shows every text again in the new one; the journey
+  // is not mounted again, so that it keeps its step and its choices (spec F2).
   return (
-    <div className="app" key={lang}>
+    <div className="app">
       <Header
+        key={`header-${lang}`}
         onSettings={() => (screen === "settings" ? closeSettings() : openSettings())}
-        settingsDisabled={writing}
+        settingsDisabled={writing || journeyWriting}
         inSettings={screen === "settings"}
       />
       <div className="content">
         <UpdateBanner
+          key={`update-${lang}`}
           version={newVersion}
           restartLightroom={lr.restartLightroom}
           onSee={openSettings}
@@ -279,6 +254,7 @@ function App({ initialSettings }: { initialSettings: Settings }) {
         />
         {screen === "settings" && (
           <SettingsScreen
+            key={`settings-${lang}`}
             settings={settings}
             logState={state}
             lr={lr}
@@ -290,81 +266,34 @@ function App({ initialSettings }: { initialSettings: Settings }) {
             onBack={closeSettings}
           />
         )}
-        {/* Hidden, not unmounted, while Settings are shown: choices survive. */}
-        <div className="journey" hidden={screen === "settings"}>
-          {/* Temporary: the two tabs disappear with the journey (phase 3). */}
-          <div className="tabs" role="tablist">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={screen === tab.id}
-                className={`tab ${screen === tab.id ? "tab-on" : ""}`}
-                onClick={() => screen !== tab.id && open(tab.id)}
-              >
-                <Icon name={tab.icon} />
-                {t(tab.label)}
-              </button>
-            ))}
-          </div>
-          {state.status === "loading" && (
-            <main className="screen screen-center">
-              <p className="muted">{t("dives.loading")}</p>
-            </main>
-          )}
-          {state.status === "error" && <SourceError failure={state.failure} onRetry={load} />}
-          {log && shown === "collections" && !adjusting && (
-            <DivesStep
-              log={log}
-              selected={chosen}
-              onSelect={setChosen}
+        {screen === "journey" && state.status === "loading" && (
+          <main key={`loading-${lang}`} className="screen screen-center">
+            <p className="muted">{t("dives.loading")}</p>
+          </main>
+        )}
+        {screen === "journey" && state.status === "error" && (
+          <SourceError key={`error-${lang}`} failure={state.failure} onRetry={load} />
+        )}
+        {/* Hidden, not unmounted, while Settings show or the log is read again: choices survive. */}
+        {journeyLog && (
+          <div className="journey" hidden={screen === "settings" || state.status !== "ok"}>
+            <Journey
+              log={journeyLog}
+              lr={lr}
+              settings={settings}
               sort={sort}
               onSort={onSort}
               notice={notice}
               onDismissNotice={dismissNotice}
-              onNext={() => {
-                setLogNotice(null);
-                setStep("adjust");
-              }}
-            />
-          )}
-          {log && shown === "collections" && adjusting && (
-            <CollectionsScreen
-              log={log}
-              lr={lr}
-              settings={settings}
-              chosen={chosen}
-              onChooseDives={() => {
-                setLogNotice(null);
-                setStep("dives");
-              }}
-              onDone={() => {
-                setChosen(new Set());
-                setStep("dives");
-              }}
-              onRetryDives={(ids) => setChosen(new Set(ids))}
               onOpenSettings={openSettings}
-              onPhase={onPhase}
+              onWriting={setJourneyWriting}
+              menu={menu}
+              logChanges={logChanges}
             />
-          )}
-          {log && shown === "tag" && (
-            <TagScreen
-              key={tagRun}
-              log={log}
-              lr={lr}
-              sort={sort}
-              notice={notice}
-              onDismissNotice={dismissNotice}
-              onCancel={() => {
-                setLogNotice(null);
-                setTagRun((n) => n + 1);
-              }}
-            />
-          )}
-        </div>
+          </div>
+        )}
       </div>
-      <StatusBar lr={lr} log={log} />
+      <StatusBar key={`status-${lang}`} lr={lr} log={log} />
     </div>
   );
 }

@@ -141,13 +141,13 @@ pub struct CameraCount {
     pub outside: usize,
 }
 
-/// The photo searches of "Create Collections". The screen numbers each one,
+/// The photo searches of the catalog path. The screen numbers each one,
 /// in the order it asks for them; only the latest one keeps its session, and
 /// every later step (live counts, "Suggest", "Apply") names the search it
 /// works on. A slower, older search (more dives, more profiles to read) can
 /// then never replace the newer one the screen shows.
 ///
-/// Tag Selection keeps the photos of the selection the same way, in a
+/// The selection path keeps the photos of the selection the same way, in a
 /// `Searches` of its own (`S` is then [`crate::tag::selection::Selection`]).
 pub struct Searches<S> {
     started: u64,
@@ -200,8 +200,8 @@ impl<S> Searches<S> {
 
 /// Keeps the session of photo search `number` once it is done, unless the
 /// configured log changed during it (its dives belong to the previous log)
-/// or a newer search started since (the screen shows that one). Tag
-/// Selection keeps its descriptions of the selection the same way.
+/// or a newer search started since (the screen shows that one). The
+/// selection path keeps its descriptions of the selection the same way.
 pub(crate) fn keep_search<S>(
     searches: &Mutex<Searches<S>>,
     number: u64,

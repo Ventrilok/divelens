@@ -37,6 +37,12 @@ const paths = {
     </>
   ),
   spark: <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />,
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 8v4M12 16h.01" />
+    </>
+  ),
   database: (
     <>
       <ellipse cx="12" cy="6" rx="7" ry="3" />

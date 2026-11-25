@@ -13,8 +13,8 @@ Each message is one JSON object on one line. The plugin's hello carries the
 previous plugin's settings (same plug-in identifier, so the same
 preferences) for the app to take over once. Messages are handled in the
 link's own task, never inside socket callbacks, so they may use the
-catalog: the selection (Selection.lua), Tag Selection (ApplyTags.lua) and
-Create Collections (ApplyCollections.lua).
+catalog: the selection (Selection.lua), the selection path's writes
+(ApplyTags.lua) and the catalog path's (ApplyCollections.lua).
 
 When the app goes away, both sockets are opened again for the next app
 launch. The link stays up as long as Lightroom runs.

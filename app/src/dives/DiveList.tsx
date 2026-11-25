@@ -1,9 +1,10 @@
-// Dive list. Shared by Create Collections, step 1 (several dives can be ticked) and
-// Tag Selection (one dive is chosen: mode "single", radio buttons). The
-// focused row (shown in the detail card, moved with the arrow keys) is not
+// Dive list, step 2 of the journey on either path: several dives can be
+// ticked (catalog path, mode "multi") or one is chosen (selection path, mode
+// "single", radio buttons, a first row "No dive — location only", kept when
+// no dive is listed). The focused row (shown in the detail card, moved with the arrow keys) is not
 // the chosen dive: browsing never changes what gets written.
 
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useEffect, useRef, type ReactNode } from "react";
 import { formatDepth, formatDuration, formatMonth, formatRowDate, formatTemp, monthKey } from "../ui/format";
 import { t } from "../i18n";
 import type { Capabilities, Dive, Units } from "../types";
@@ -22,16 +23,20 @@ interface Props {
   onToggleAll?: () => void;
   /** Single mode: the chosen dive. */
   chosenId?: string | null;
-  /** A dive to point out with a badge (e.g. it covers the Lightroom selection). */
-  mark?: { id: string; label: string } | null;
+  /** A dive to point out with a badge (e.g. it covers the Lightroom selection), and why, under its row. */
+  mark?: { id: string; label: string; note?: string | null } | null;
   onChoose?: (id: string) => void;
+  /** Single mode: a first row to choose no dive at all. */
+  noDive?: { chosen: boolean; label: string; hint: string; onChoose: () => void } | null;
+  /** Shown under the rows when no dive is listed. */
+  empty?: ReactNode;
   capabilities: Capabilities;
   units: Units;
   /** Name of the dive application the dives come from. */
   source: string;
 }
 
-export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, onToggle, onToggleAll, chosenId, onChoose, mark, capabilities, units, source }: Props) {
+export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, onToggle, onToggleAll, chosenId, onChoose, mark, noDive, empty, capabilities, units, source }: Props) {
   const multi = mode === "multi";
   const bodyRef = useRef<HTMLTableSectionElement>(null);
 
@@ -97,6 +102,17 @@ export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, o
           </tr>
         </thead>
         <tbody ref={bodyRef}>
+          {!multi && noDive && (
+            <tr className={`no-dive ${noDive.chosen ? "sel" : ""}`} onClick={noDive.onChoose}>
+              <td className="col-check">
+                <input type="radio" name="dive-choice" checked={noDive.chosen} onChange={noDive.onChoose} aria-label={noDive.label} />
+              </td>
+              <td colSpan={columns - 1}>
+                <span className="site-name">{noDive.label}</span>
+                <span className="muted"> · {noDive.hint}</span>
+              </td>
+            </tr>
+          )}
           {dives.map((d) => {
             const month = monthKey(d.start);
             const header = grouped && month !== lastMonth;
@@ -171,11 +187,22 @@ export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, o
                     </td>
                   )}
                 </tr>
+                {mark?.id === d.id && mark.note && (
+                  <tr className="mark-note">
+                    <td colSpan={columns}>
+                      <span className="mark-note-text">
+                        <Icon name="info" size={14} />
+                        <span>{mark.note}</span>
+                      </span>
+                    </td>
+                  </tr>
+                )}
               </Fragment>
             );
           })}
         </tbody>
       </table>
+      {dives.length === 0 && empty && <div className="list-empty list-empty-under">{empty}</div>}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-// One camera and its clock offset (spec F5), as Create Collections step 2
-// and Tag Selection show it: photo count, offset slider and field,
+// One camera and its clock offset (spec F5), as step 3 of the journey
+// shows it on either path: photo count, offset slider and field,
 // "Suggest", and a gauge of its photos in the dives. Ignoring the camera is
-// offered only where the screen allows it.
+// offered only where the path allows it.
 
 import { useEffect, useState } from "react";
 import { clampOffset, offsetField, parseOffset, SLIDER_RANGE_MIN, SLIDER_STEP_MIN } from "./cameras";

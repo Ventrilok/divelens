@@ -1,6 +1,7 @@
-// Why a search or a write of Tag Selection or Create Collections failed, in words
-// for the diver: one translator for both screens. `feature` chooses the texts that
-// belong to each screen (the Undo step's name, "selection" or "photos found").
+// Why a search or a write of the selection path or the catalog path failed, in words
+// for the diver: one translator for both paths. `feature` chooses the texts that
+// belong to each path ("selection" or "photos found"); both name the same Undo
+// step, "Dive Lens" (the plug-in's CatalogWrite.UNDO_NAME).
 
 import { t } from "../i18n";
 import type { ApplyError } from "../types";
@@ -27,18 +28,23 @@ export function applyFailure(e: ApplyError, feature: ApplyFeature): string {
       // Tag: the selection must be described again. Collections: the search is gone.
       return tag ? t("tag.err.selectionChanged") : t("coll.err.noPhotos");
     case "nothingChosen":
-      return tag ? t("tag.err.nothingChosen") : t("coll.err.nothingChosen");
+      // Tag: a dive or "no dive" and a site are chosen before Apply, so the options ticked
+      // are what leaves nothing to write. Collections: only a search refuses so.
+      return tag ? t("journey.review.nothingWithOptions") : t("coll.err.nothingChosen");
     case "logChanged":
       // Not seen: the app reads the log again and says why.
       return t("log.changedNothingWritten");
     case "nothingToWrite":
-      return tag ? t("tag.err.lightroom") : t("coll.err.nothingToWrite");
+      // Collections: no photo in the dives, or options that leave nothing on those found;
+      // the refusal does not tell which, and this text holds for both.
+      return tag ? t("tag.err.lightroom") : t("journey.review.nothingWithOptions");
     case "badGps":
-      return tag ? t("tag.err.badGps") : t("coll.err.lightroom");
+      // Another site's position (both paths): the same refusal.
+      return t("tag.err.badGps");
     case "unknownDive":
       return tag ? t("tag.err.unknownDive") : t("coll.err.lightroom");
     case "unknownSite":
-      return tag ? t("tag.err.unknownSite") : t("coll.err.lightroom");
+      return t("tag.err.unknownSite");
     case "lightroom":
       break;
   }
@@ -54,15 +60,13 @@ export function applyFailure(e: ApplyError, feature: ApplyFeature): string {
     case "busy":
       return tag ? t("tag.err.busy") : t("coll.err.busy");
     case "gpsNotWritten":
-      // Written but for the GPS and altitude: Undo, then apply again.
-      if (tag) return e.detail ? t("tag.err.gpsNotWrittenDetail", { detail: e.detail }) : t("tag.err.gpsNotWritten");
-      return e.detail ? t("coll.err.gpsNotWrittenDetail", { detail: e.detail }) : t("coll.err.gpsNotWritten");
+      // Written but for the GPS and altitude, on either path: Undo, then apply again.
+      return e.detail ? t("tag.err.gpsNotWrittenDetail", { detail: e.detail }) : t("tag.err.gpsNotWritten");
     case "staleSearch": // Collections only
       if (!tag) return t("coll.err.noPhotos");
       break;
-    case "parentNotFound": // Collections only
-      if (!tag) return t("coll.parentMissing", { path: e.detail ?? "" });
-      break;
+    case "parentNotFound": // Collections, on either path
+      return t("coll.parentMissing", { path: e.detail ?? "" });
     case "badRequest":
       // Its detail is internal ("bad group"): never shown.
       return tag ? t("tag.err.badRequest") : t("coll.err.badRequest");
@@ -70,6 +74,11 @@ export function applyFailure(e: ApplyError, feature: ApplyFeature): string {
       break; // Lightroom's own message is the detail: worded as an unknown reason
   }
   return unknownReason(e.detail, feature);
+}
+
+/** Catalog path: Apply was refused because the photos found are gone, so they are looked for again. */
+export function searchAgain(e: ApplyError): boolean {
+  return e.error === "noPhotos" || (e.error === "lightroom" && e.reason === "staleSearch");
 }
 
 /**
@@ -82,7 +91,7 @@ export function searchFailure(e: ApplyError, feature: ApplyFeature): string | nu
   if (feature === "tag") {
     switch (e.error) {
       case "noPhotos":
-      case "logChanged": // the app reads the log again and starts the screen again
+      case "logChanged": // the app reads the log again and starts the journey again
         return null;
       case "notConnected":
       case "linkLost":

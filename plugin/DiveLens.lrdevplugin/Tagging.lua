@@ -4,10 +4,11 @@ make on each photo. Pure Lua (no Lightroom import) so it is tested outside
 Lightroom. ApplyTags.lua and ApplyCollections.lua make the two catalog
 writes, through CatalogWrite.lua, the GPS and altitude in the second
 (splitGps); what goes in each, photo by photo (tagWrites,
-collectionWrites), and what the app is told afterwards (applyReply), is
-decided here.
+collectionWrites), which collections the first makes or completes
+(collectionWrites, selectionCollectionToWrite), and what the app is told
+afterwards (applyReply), is decided here.
 
-"Create Collections" requests are planned per dive with planCollections;
+Catalog-path requests are planned per dive with planCollections;
 a photo's GPS altitude (the depth, negative) is written only when the
 request carries one, and recorded in the altitude marker (WrittenAltitude,
 photoChanges). Otherwise the photo keeps its altitude, unless it is the one
@@ -124,7 +125,7 @@ Tagging.REASONS = {
     "parentNotFound",
 }
 
---- DiveLens fields "Tag Selection" and "Create Collections" read on each
+--- DiveLens fields both paths of the journey read on each
 --- photo before writing a dive (see retagChanges, photoWrites): the dive
 --- identity, then the photo's own values, then the altitude marker.
 Tagging.RETAG_FIELDS = {}
@@ -218,7 +219,7 @@ function Tagging.writesDive(changes)
     return false
 end
 
---- Extra changes for one photo of a "Tag Selection" request (`changes`, from
+--- Extra changes for one photo of a selection-path request (`changes`, from
 --- Tagging.plan) when the photo already carries another dive (spec F8): its
 --- own values belonged to that dive and are cleared (only those it has, so
 --- an empty list means nothing to clear). Its GPS altitude is cleared only
@@ -385,7 +386,7 @@ local function photoChanges(photo)
     return photo.id, changes
 end
 
---- The per-photo values of a "Tag Selection" request:
+--- The per-photo values of a selection-path request:
 --- { selection = number of the selection described, photos = { [id] =
 --- changes } } for the photos taken during the dive; nil when the request
 --- carries none (no `selection`: no dive, or a dive without a profile); nil
@@ -429,13 +430,13 @@ local function writesDepth(own)
     return false
 end
 
---- One photo of a "Tag Selection" or "Create Collections" write, as
+--- One photo of a selection-path or catalog-path write, as
 --- tagWrites and collectionWrites plan it: `changes` (from plan, or a group's common changes) for every
 --- photo; what the other dive the photo carried left (retagChanges, from
 --- `before`, what the photo carries; nil: nothing read); and the photo's
 --- own values, `own` (from planPhotos or planCollections; nil: none, the
 --- photo is not in the dive), which replace what the other dive left. When
---- `own` clears the photo's depth (Create Collections: a photo now at the
+--- `own` clears the photo's depth (catalog path: a photo now at the
 --- surface, or in a dive without a profile), the altitude Dive Lens derived
 --- from the old depth goes too, even for the same dive (altitudeClears).
 --- Returns the changes of the first catalog write, those of the second (GPS
@@ -489,7 +490,7 @@ function Tagging.sameSelection(set, photos, idOf)
     return true
 end
 
---- Why "Tag Selection" writes nothing on `photos`, those selected now, or
+--- Why the selection path writes nothing on `photos`, those selected now, or
 --- nil. With per-photo values (`perPhoto`, from planPhotos), the selection
 --- must be exactly the one described to the app (`described` = { id, set
 --- }, kept by Selection.describe): "staleSelection" when the
@@ -503,7 +504,17 @@ function Tagging.selectionRefusal(perPhoto, described, photos, idOf)
     return nil
 end
 
---- The two catalog writes of a "Tag Selection", planned photo by photo
+-- The collection `name` (nil: none asked for) as the first write makes or
+-- completes it with `photos`: the name when there is at least one photo to
+-- put in it, nil otherwise (no collection made or touched). For the groups
+-- of the catalog path (collectionWrites) and the selection of the
+-- selection path (selectionCollectionToWrite) alike.
+local function collectionToWrite(name, photos)
+    if name ~= nil and #photos > 0 then return name end
+    return nil
+end
+
+--- The two catalog writes of a selection-path request, planned photo by photo
 --- (photoWrites) in the order of `photos`: `changes` (from plan) for every
 --- photo, what each carries before (`before` = { [photo] = ... }, read
 --- inside the first write; empty when not read) and its own values
@@ -512,7 +523,8 @@ end
 --- per photo, even with nothing to write; later = { { photo, changes },
 --- ... }, the second write's, for the photos with a GPS position or
 --- altitude to write; cleared = photos that carried another dive's values;
---- withValues = photos with their own values }.
+--- withValues = photos with their own values }. Its collection:
+--- selectionCollectionToWrite.
 function Tagging.tagWrites(changes, photos, before, perPhoto, idOf)
     local plan = { writes = {}, later = {}, cleared = 0, withValues = 0 }
     for _, photo in ipairs(photos) do
@@ -526,7 +538,7 @@ function Tagging.tagWrites(changes, photos, before, perPhoto, idOf)
     return plan
 end
 
---- Changes for one group of a "Create Collections" request:
+--- Changes for one group of a catalog-path request:
 --- { collection = name or nil, common = changes for every photo,
 ---   photos = { { id = photo id, changes = per-photo changes or nil }, ... },
 ---   writesDive = true when the group writes a dive },
@@ -564,7 +576,7 @@ local function planGroup(group, formatDate)
     return { collection = name, common = common, photos = photos, writesDive = dive ~= nil }
 end
 
---- The collection a "Tag Selection" request asks for (core/src/tags.rs,
+--- The collection a selection-path request asks for (core/src/tags.rs,
 --- TagRequest.collection): { name, parent = list of set names from the
 --- root, group = set name or nil }; nil without one; nil and "bad
 --- collection" when it is unusable (same checks as planCollections).
@@ -584,14 +596,26 @@ function Tagging.planCollection(request)
     return { name = c.name, parent = parent, group = group }
 end
 
---- What "Tag Selection" tells the app about its collection: `count` photos
+--- What the selection path tells the app about its collection: `count` photos
 --- were put in `name`; `existing` = { [name] = true } for the collections
 --- already in that place, which is then completed, not created.
 function Tagging.selectionCollection(name, count, existing)
     return { collection = name, count = count, created = not existing[name] and count > 0 }
 end
 
---- Plans a "Create Collections" request (core/src/tags.rs, CollectionsRequest):
+--- The collection a selection-path request writes and what the app is told of it,
+--- one value: nil when the request names none (`name`, from
+--- planCollection, nil) or no photo is selected; otherwise
+--- selectionCollection(name, number of `photos`, existing). The first write
+--- makes or completes its `collection` with `photos`, and the answer to the
+--- app carries it as it is: what the app is told is what was written.
+function Tagging.selectionCollectionToWrite(name, photos, existing)
+    local written = collectionToWrite(name, photos)
+    if written == nil then return nil end
+    return Tagging.selectionCollection(written, #photos, existing)
+end
+
+--- Plans a catalog-path request (core/src/tags.rs, CollectionsRequest):
 --- a list of groups (see planGroup) and where the collections go
 --- ({ parent = list of set names from the root, group = set name or nil }),
 --- or nil and a reason.
@@ -655,15 +679,19 @@ function Tagging.resolvePhotos(groups, byId)
     return total, found
 end
 
---- The two catalog writes of a "Create Collections", planned group by
+--- The two catalog writes of a catalog-path request, planned group by
 --- group and photo by photo (photoWrites): `groups` from planCollections,
 --- their photos found (resolvePhotos); `before` = { [photo] = what it
 --- carries }, read inside the first write; `existing` = { [name] = true }
 --- for the collections already there. Returns:
----   groups  = { [gi] = { steps, photos } }: one step per photo requested,
----             found or not, { photo, changes } for the first write, or {}
----             for a photo not found; `photos`, those found, for the
----             collection;
+---   groups  = { [gi] = { steps, photos, collectionToWrite } }: one step
+---             per photo requested, found or not, { photo, changes } for
+---             the first write, or {} for a photo not found; `photos`,
+---             those found; `collectionToWrite`, the name of the collection
+---             the first write makes or completes with them, right after
+---             the group's steps: only for a group with a name and a photo
+---             found, nil otherwise (the name the group asks for is in
+---             `results`);
 ---   later   = { { photo, changes }, ... }: the second write's, for the
 ---             photos with a GPS position or altitude to write;
 ---   results = { [gi] = { collection (nil without a name), count = photos
@@ -692,10 +720,10 @@ function Tagging.collectionWrites(groups, before, existing)
             end
             steps[#steps + 1] = step
         end
-        plan.groups[gi] = { steps = steps, photos = photos }
-        local created = g.collection ~= nil and #photos > 0
-            and not existing[g.collection] and not made[g.collection]
-        if created then made[g.collection] = true end
+        local written = collectionToWrite(g.collection, photos)
+        plan.groups[gi] = { steps = steps, photos = photos, collectionToWrite = written }
+        local created = written ~= nil and not existing[written] and not made[written]
+        if created then made[written] = true end
         plan.results[gi] = { collection = g.collection, count = #photos, created = created }
     end
     return plan

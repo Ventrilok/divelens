@@ -1,11 +1,11 @@
 --[[
-What Tag Selection (ApplyTags.lua) and Create Collections
-(ApplyCollections.lua) share to write in the catalog: Lightroom's date
-format, one photo's changes, what the photos carry before a write, the
-progress messages to the app, the envelope of an "Apply" (the first catalog
-write and the one answer to the app) and its second catalog write, the GPS
-positions and altitudes. What goes on each photo is decided by
-Tagging.lua.
+What the selection path (ApplyTags.lua) and the catalog path
+(ApplyCollections.lua) share to write in the catalog: the one Undo name of
+their writes, Lightroom's date format, one photo's changes, what the photos
+carry before a write, the progress messages to the app, the envelope of an
+"Apply" (the first catalog write and the one answer to the app) and its
+second catalog write, the GPS positions and altitudes. What goes on each
+photo is decided by Tagging.lua.
 
 Part of DiveLens, GPL-3.0-or-later.
 ]]
@@ -21,6 +21,11 @@ local CatalogWrite = {}
 
 CatalogWrite.WRITE_TIMEOUT = 10 -- seconds to wait for Lightroom's write access
 CatalogWrite.PROGRESS_EVERY = 50 -- photos between two progress messages
+
+-- The Undo name of both writes of an "Apply", whichever the feature:
+-- Lightroom's Edit menu then reads "Undo Dive Lens" (spec section 3). The
+-- app's texts quote it (tests/apply_contract.rs).
+CatalogWrite.UNDO_NAME = LOC "$$$/DiveLens/Undo/DiveLens=Dive Lens"
 
 -- Lightroom's own date format for StartDate and EndDate, exactly as the
 -- previous plugin wrote them (the time zone does not matter: the same one
@@ -116,7 +121,7 @@ end
 -- protected handler reads when an unexpected error ends the request
 -- (Tagging.crashReply). `job`:
 --   catalog    the catalog the feature already works on
---   undoName   the Undo name of both writes
+--   undoName   the Undo name of both writes (CatalogWrite.UNDO_NAME)
 --   total      photos requested, found or not, for the progress messages
 --   fail       function(reason, detail): the feature's refusal (logs, then
 --              tells the app "applyFailed"), used when the first write fails or

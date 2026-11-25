@@ -1,12 +1,10 @@
-export type Screen = "collections" | "tag" | "settings";
+/** Screens a request (a Lightroom menu, the Plug-in Manager, an update) may open. */
+export type RequestedScreen = "journey" | "settings";
 
-/** Screens a request (a Lightroom menu) may open; anything else is ignored. */
-export function isReadyScreen(id: string): id is Screen {
-  return id === "settings" || id === "collections" || id === "tag";
-}
+/** The journey, or Settings in its place. */
+export type Screen = RequestedScreen;
 
-/** The screen of the journey that is mounted: the one in use, or, under Settings, the one they were opened from. */
-export function shownScreen(screen: Screen, before: Screen): Exclude<Screen, "settings"> {
-  const s = screen === "settings" ? before : screen;
-  return s === "settings" ? "collections" : s;
+/** Whether a request names a screen it may open; anything else is ignored. */
+export function isReadyScreen(id: string): id is RequestedScreen {
+  return id === "journey" || id === "settings";
 }

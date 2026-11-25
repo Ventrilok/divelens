@@ -1,8 +1,8 @@
 --[[
-Tag Selection's "Apply", for an "apply" message from the DiveLens app:
+The selection path's "Apply", for an "apply" message from the DiveLens app:
 writes a dive, its site and each photo's own values on the photos selected
 in Lightroom (ApplyTags.run). What goes on each photo is decided by
-Tagging.lua; the write helpers it shares with Create Collections are in
+Tagging.lua; the write helpers it shares with the catalog path are in
 CatalogWrite.lua.
 
 Part of DiveLens, GPL-3.0-or-later.
@@ -18,7 +18,8 @@ local Tagging = require "Tagging"
 local ApplyTags = {}
 
 -- Tags the photos selected in Lightroom now (not when the app last looked),
--- in two catalog writes under one Undo name, the GPS and altitude in the
+-- in two catalog writes under one Undo name, the same as the catalog
+-- path's (CatalogWrite.UNDO_NAME), the GPS and altitude in the
 -- second (Tagging.splitGps, CatalogWrite.writeGpsLater), so one Undo
 -- reverts it all. A photo that carried another dive also loses that dive's
 -- own values (Tagging.retagChanges), read from the photo inside the first
@@ -30,7 +31,9 @@ local ApplyTags = {}
 -- are not cleared on them first (Tagging.notOverwritten). When the request
 -- names a collection (Tagging.planCollection), the selected photos also go
 -- in it, made when missing, in the first write; where it goes is looked up
--- before any photo is written (CatalogWrite.holder). Always answers the app.
+-- before any photo is written (CatalogWrite.holder). The collection written
+-- and the app's answer about it are one value
+-- (Tagging.selectionCollectionToWrite). Always answers the app.
 function ApplyTags.run(s, message)
     local id = message.id
     s.applyStage = { id = id, stage = "before" }
@@ -63,10 +66,13 @@ function ApplyTags.run(s, message)
         if not holder then return end
         for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
     end
+    -- The collection the first write makes or completes, as the app is told
+    -- of it; nil for none.
+    local collection = Tagging.selectionCollectionToWrite(place and place.name, photos, existing)
 
     CatalogWrite.apply(s, id, {
         catalog = catalog,
-        undoName = LOC "$$$/DiveLens/Undo/TagSelection=Tag Selection (Dive Lens)",
+        undoName = CatalogWrite.UNDO_NAME,
         total = total,
         fail = fail,
         before = function(cat)
@@ -78,9 +84,9 @@ function ApplyTags.run(s, message)
                 CatalogWrite.write(w.photo, w.changes)
                 advance()
             end
-            if place then
+            if collection then
                 -- All the selected photos: Lightroom ignores those already in it.
-                cat:createCollection(place.name, container, true):addPhotos(photos)
+                cat:createCollection(collection.collection, container, true):addPhotos(photos)
             end
             return { later = planned.later, cleared = planned.cleared, withValues = planned.withValues }
         end,
@@ -89,7 +95,7 @@ function ApplyTags.run(s, message)
                 type = "applied",
                 id = id,
                 count = total,
-                collection = place and Tagging.selectionCollection(place.name, total, existing) or nil,
+                collection = collection,
             }
         end,
         log = function(result, second)

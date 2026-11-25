@@ -117,6 +117,7 @@ fn plugin_modules_load_without_lightroom() {
         check("Selection", "push sendThumbnails describe describePhotos sendPhotos")
         local write = check("CatalogWrite", "formatDate write writeGpsLater advance photosBefore logSecondWrite")
         assert(type(write.WRITE_TIMEOUT) == "number" and type(write.PROGRESS_EVERY) == "number")
+        assert(write.UNDO_NAME == "Dive Lens", tostring(write.UNDO_NAME))
         check("ApplyTags", "run")
         check("ApplyCollections", "find run listSets")
         check("Link", "start stop isStopped isConnected show showWhenConnected appSettingsFolder")
@@ -332,15 +333,20 @@ fn plugin_globals_are_known() {
     assert!(unknown.is_empty(), "unknown globals: {unknown:?}");
 }
 
+/// One item in Library › Plug-in Extras and one in Help › Plug-in Extras,
+/// both always enabled: the journey opens with or without photos selected
+/// (spec section 3).
 #[test]
 fn menu_items_open_existing_plugin_files() {
     let lua = lua();
-    let menus: Vec<(String, String)> = lua
+    let menus: Vec<(String, String, String)> = lua
         .load(
             r#"
             local info, found = require "Info", {}
             for _, list in ipairs { info.LrLibraryMenuItems, info.LrHelpMenuItems } do
-                for _, item in ipairs(list) do found[#found + 1] = { item.title, item.file } end
+                for _, item in ipairs(list) do
+                    found[#found + 1] = { item.title, item.file, tostring(item.enabledWhen) }
+                end
             end
             return found
             "#,
@@ -348,19 +354,61 @@ fn menu_items_open_existing_plugin_files() {
         .eval::<Vec<Vec<String>>>()
         .unwrap()
         .into_iter()
-        .map(|pair| (pair[0].clone(), pair[1].clone()))
+        .map(|item| (item[0].clone(), item[1].clone(), item[2].clone()))
         .collect();
     assert_eq!(
-        menus.iter().map(|(t, _)| t.as_str()).collect::<Vec<_>>(),
-        [
-            "Create Collections…",
-            "Tag Selection…",
-            "Dive Lens Settings…"
-        ]
+        menus.iter().map(|(t, _, _)| t.as_str()).collect::<Vec<_>>(),
+        ["Open Dive Lens…", "Dive Lens Settings…"]
     );
-    for (title, file) in &menus {
+    for (title, file, enabled_when) in &menus {
         assert!(plugin_dir().join(file).is_file(), "{title}: no {file}");
+        assert_eq!(
+            enabled_when, "nil",
+            "{title}: enabled only when {enabled_when}"
+        );
     }
+}
+
+/// Both writes of an "Apply", in both features, carry one Undo name, "Dive
+/// Lens" in English and in French: Lightroom's Edit menu then reads "Undo
+/// Dive Lens" (spec section 3). No other Undo name is left in the plug-in.
+#[test]
+fn both_features_write_under_one_undo_name() {
+    let dir = plugin_dir();
+    let read = |file: &str| std::fs::read_to_string(dir.join(file)).unwrap();
+    const KEY: &str = "$$$/DiveLens/Undo/DiveLens";
+    let undo_keys = |texts: Vec<(String, String)>| -> Vec<(String, String)> {
+        texts
+            .into_iter()
+            .filter(|(key, _)| key.starts_with("$$$/DiveLens/Undo/"))
+            .collect()
+    };
+    assert_eq!(
+        undo_keys(localized_texts(&read("CatalogWrite.lua"))),
+        [(KEY.to_string(), "Dive Lens".to_string())]
+    );
+    assert_eq!(
+        undo_keys(localized_texts(&read("TranslatedStrings_fr.txt"))),
+        [(KEY.to_string(), "Dive Lens".to_string())]
+    );
+    for envelope in ["ApplyTags.lua", "ApplyCollections.lua"] {
+        let code = read(envelope);
+        assert!(
+            code.contains("undoName = CatalogWrite.UNDO_NAME,"),
+            "{envelope} does not write under CatalogWrite.UNDO_NAME"
+        );
+    }
+    let mut elsewhere = Vec::new();
+    for entry in std::fs::read_dir(&dir).unwrap() {
+        let path = entry.unwrap().path();
+        let file = path.file_name().unwrap().to_string_lossy().into_owned();
+        if path.extension().is_some_and(|e| e == "lua") && file != "CatalogWrite.lua" {
+            for (key, _) in undo_keys(localized_texts(&read(&file))) {
+                elsewhere.push(format!("{file}: {key}"));
+            }
+        }
+    }
+    assert!(elsewhere.is_empty(), "other Undo names: {elsewhere:?}");
 }
 
 /// The `$$$/DiveLens/…` texts of `source`: key and text, in order. A text runs

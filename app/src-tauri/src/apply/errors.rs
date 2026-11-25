@@ -4,7 +4,7 @@ use serde::Serialize;
 use crate::dive_log::LogChanged;
 use crate::lightroom::ApplyOutcome;
 
-/// Why "Create Collections" or "Tag Selection" could not go on (also
+/// Why the catalog path or the selection path could not go on (also
 /// `gpsNotWritten` as a Lightroom failure: everything written but the GPS
 /// and altitude).
 #[derive(Debug, Serialize)]
@@ -18,7 +18,7 @@ pub(crate) enum ApplyError {
     UnknownDive,
     UnknownSite,
     /// No photo search to work on (link reconnected, app restarted, or a
-    /// newer search replaced it). In Tag Selection: the dive has a profile
+    /// newer search replaced it). On the selection path: the dive has a profile
     /// but the selection the screen shows is no longer kept, it must be
     /// described again.
     NoPhotos,
@@ -80,11 +80,11 @@ mod tests {
             serde_json::to_value(refused).unwrap(),
             serde_json::json!({ "error": "lightroom", "reason": "busy", "detail": null })
         );
-        // As Tag Selection returns a written answer.
+        // As the selection path returns a written answer.
         let tagged = answered(Ok(2), |_| ()).map(TagApplied::from).unwrap();
         assert_eq!(
             serde_json::to_value(tagged).unwrap(),
-            serde_json::json!({ "count": 2, "collection": null })
+            serde_json::json!({ "count": 2, "withDepth": 0, "collection": null })
         );
     }
 

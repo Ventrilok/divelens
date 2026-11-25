@@ -1,4 +1,4 @@
-//! "Tag Selection" (spec F8): the commands the screen calls. The photos
+//! The selection path (spec F8): the commands the journey calls. The photos
 //! selected in Lightroom and their per-photo values are in `selection`; what
 //! a choice writes, and which refusal wins, in `rules`.
 
@@ -23,7 +23,7 @@ use crate::lightroom::{Command, WrittenCollection};
 use crate::settings::{Settings, units_in_use};
 use selection::{DiveSpan, Selection, SelectionPhotos, TagPreview};
 
-/// Where the location written by Tag Selection comes from.
+/// Where the location written on the selection path comes from.
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum LocationChoice {
@@ -41,9 +41,10 @@ pub(crate) enum LocationChoice {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TagChoice {
-    /// Write this dive's data; `None`: dive data unticked.
+    /// The chosen dive, even when its details are unticked (it gives the
+    /// site and the collection's name); `None`: no dive.
     dive_id: Option<String>,
-    /// Write a location; `None`: location unticked.
+    /// Where the location comes from; `None`: no location.
     location: Option<LocationChoice>,
     /// The description of the selection the screen shows
     /// (`find_selection_photos`): needed when the dive has a profile, for
@@ -54,21 +55,19 @@ pub(crate) struct TagChoice {
     /// The clock offsets shown, in minutes by camera key.
     #[serde(default)]
     offsets: std::collections::HashMap<String, i32>,
-    /// What the diver ticked. `None` (the current screens): everything the
-    /// choice names is written, the altitude follows the setting. With
-    /// options, `dive_id` is the chosen dive even when its details are
-    /// unticked (it gives the site and the collection's name); `None` there
-    /// is "no dive".
-    #[serde(default)]
-    options: Option<WriteOptions>,
+    /// What the diver ticked: it alone decides what is written, the
+    /// altitude included.
+    options: WriteOptions,
 }
 
-/// What "Tag Selection › Apply" wrote: the number of photos tagged, and the
-/// collection the selection was put in, if one was written.
+/// What Apply wrote on the selection path: the number of photos tagged, of which
+/// with per-photo values and a depth (0 with the dive details unticked), and
+/// the collection the selection was put in, if one was written.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TagApplied {
     count: usize,
+    with_depth: usize,
     collection: Option<WrittenCollection>,
 }
 
@@ -76,13 +75,14 @@ impl From<usize> for TagApplied {
     fn from(count: usize) -> Self {
         Self {
             count,
+            with_depth: 0,
             collection: None,
         }
     }
 }
 
-/// Tag Selection's descriptions of the Lightroom selection: the latest one
-/// only is kept (its own, never Create Collections' photo search).
+/// The selection path's descriptions of the Lightroom selection: the latest
+/// one only is kept (its own, never the catalog path's photo search).
 #[derive(Default)]
 pub(crate) struct TagState {
     selections: Mutex<Searches<Selection>>,
@@ -110,16 +110,16 @@ fn tag_request(
     };
     let location = rules::location(choice.location.as_ref(), dive.as_ref(), || source.sites())?;
     let dive_id = dive.as_ref().map(|d| d.id.clone());
-    let ticked = choice.options.map(|options| rules::Ticked {
+    let options = choice.options;
+    let ticked = rules::Ticked {
         kept: options.kept(),
+        altitude: options.copies_altitude(),
         collection: rules::collection_place(options.collections, dive.as_ref(), || {
             let place = Settings::load(&config_dir(app)).collections;
             let group = place.group_name();
             (place.parent, group)
         }),
-    });
-    // The setting is read only when the altitude follows it, and last.
-    let depth_to_altitude = || Settings::load(&config_dir(app)).depth_to_altitude;
+    };
     let built = rules::build_request(
         dive,
         location,
@@ -134,10 +134,6 @@ fn tag_request(
             )
         },
         |id| source.profile(id),
-        || match choice.options {
-            None => depth_to_altitude(),
-            Some(options) => options.copies_altitude(depth_to_altitude),
-        },
         ticked,
     )?;
     if let Some(e) = built.unreadable {
@@ -155,7 +151,7 @@ fn tag_request(
 /// the dive has a profile, the photos taken during it also get their
 /// per-photo values and clock offset, computed for the selection the
 /// screen shows; the plugin refuses if the selection changed since. The
-/// offsets applied are then remembered, as Create Collections does (also
+/// offsets applied are then remembered, as on the catalog path (also
 /// when only the GPS and altitude could not be written).
 #[tauri::command]
 pub(crate) async fn tag_selection(
@@ -168,6 +164,7 @@ pub(crate) async fn tag_selection(
         let (_writing, info) = writes.begin(&log, || source_info(&app))?;
         let (request, applied) = tag_request(&app, &info, &choice)?;
         let with_values = request.photos.len();
+        let with_depth = request.with_depth();
         let written = write_and_remember(
             &app,
             &info,
@@ -182,6 +179,7 @@ pub(crate) async fn tag_selection(
         log::info!("selection tagged: {count} photos, per-photo values on {with_values}");
         Ok(TagApplied {
             count,
+            with_depth,
             collection: written.collection,
         })
     })
@@ -189,7 +187,7 @@ pub(crate) async fn tag_selection(
     .expect("tagging task failed")
 }
 
-/// Describes the photos selected in Lightroom now, for Tag Selection's
+/// Describes the photos selected in Lightroom now, for the selection path's
 /// per-photo values: their cameras, each with the offset last applied to it
 /// for the application of `log`, the dive log the screen shows. `search`
 /// numbers the description, higher than any the screen asked for before:

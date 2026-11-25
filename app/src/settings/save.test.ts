@@ -7,7 +7,6 @@ const base = {
   source: { kind: "macdive", locations: {} },
   units: { depth: "source", temp: "source" },
   language: "en",
-  depthToAltitude: false,
   collections: { parent: [], group: "" },
   logLevel: "normal",
   diveSort: null,

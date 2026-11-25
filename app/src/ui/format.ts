@@ -130,20 +130,6 @@ export function formatDiveSpan(start: string, end: string): string {
   return `${cap(fFullDate.format(s))} · ${fTime.format(s)} → ${endText}`;
 }
 
-/** Photos' capture times: "30 déc. 2025, 07:31 → 08:12", or both dates when they differ. */
-export function formatPhotoSpan(start: string, end: string): string {
-  if (start.slice(0, 10) !== end.slice(0, 10)) return formatRange(start, end);
-  const s = parseWallClock(start);
-  return `${fDate.format(s)}, ${fTime.format(s)} → ${fTime.format(parseWallClock(end))}`;
-}
-
-/** Selection: "31 déc. 2025, 07:14 → 1 janv. 2026, 08:23". */
-export function formatRange(start: string, end: string): string {
-  const s = parseWallClock(start);
-  const e = parseWallClock(end);
-  return `${fDate.format(s)}, ${fTime.format(s)} → ${fDate.format(e)}, ${fTime.format(e)}`;
-}
-
 /** A day: "30 déc. 2025" ("YYYY-MM-DD" or a wall-clock date-time). */
 export function formatDay(day: string): string {
   return fDate.format(parseWallClock(day.slice(0, 10)));

@@ -1,5 +1,5 @@
-//! What the diver ticked to write when tagging the selection: the options a
-//! screen may send. Without them, the current screens' behaviour holds.
+//! What the diver ticked to write: the options every write sends, on both
+//! paths. They alone decide; the engine reads no setting for them.
 
 use divelens_core::tags::Kept;
 use serde::Deserialize;
@@ -8,24 +8,14 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WriteOptions {
     pub dive: bool,
-    /// `None`: the "depth copied to altitude" setting decides (current screens).
-    pub altitude: Option<bool>,
+    /// Copy each photo's depth to its GPS altitude (with the dive details).
+    pub altitude: bool,
     pub place: bool,
     pub gps: bool,
     pub collections: bool,
 }
 
 impl WriteOptions {
-    /// Everything ticked, the altitude following the setting: what the
-    /// current screens write.
-    pub(crate) const EVERYTHING: WriteOptions = WriteOptions {
-        dive: true,
-        altitude: None,
-        place: true,
-        gps: true,
-        collections: true,
-    };
-
     pub(crate) fn kept(&self) -> Kept {
         Kept {
             dive: self.dive,
@@ -35,10 +25,9 @@ impl WriteOptions {
         }
     }
 
-    /// True only when the dive details are written; `setting` is read only
-    /// when `altitude` is `None`.
-    pub(crate) fn copies_altitude(&self, setting: impl FnOnce() -> bool) -> bool {
-        self.dive && self.altitude.unwrap_or_else(setting)
+    /// True only when the dive details are written: the depth comes with them.
+    pub(crate) fn copies_altitude(&self) -> bool {
+        self.dive && self.altitude
     }
 }
 
@@ -46,7 +35,7 @@ impl WriteOptions {
 mod tests {
     use super::*;
 
-    fn options(dive: bool, altitude: Option<bool>) -> WriteOptions {
+    fn options(dive: bool, altitude: bool) -> WriteOptions {
         WriteOptions {
             dive,
             altitude,
@@ -57,12 +46,10 @@ mod tests {
     }
 
     #[test]
-    fn the_altitude_follows_the_setting_only_when_unset() {
-        assert!(options(true, None).copies_altitude(|| true));
-        assert!(!options(true, None).copies_altitude(|| false));
-        assert!(!options(true, Some(false)).copies_altitude(|| panic!("setting read")));
-        assert!(options(true, Some(true)).copies_altitude(|| panic!("setting read")));
-        assert!(!options(false, None).copies_altitude(|| panic!("setting read")));
-        assert!(!options(false, Some(true)).copies_altitude(|| panic!("setting read")));
+    fn the_altitude_is_copied_only_with_the_dive_details() {
+        assert!(!options(true, false).copies_altitude());
+        assert!(options(true, true).copies_altitude());
+        assert!(!options(false, true).copies_altitude());
+        assert!(!options(false, false).copies_altitude());
     }
 }

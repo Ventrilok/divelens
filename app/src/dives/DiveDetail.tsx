@@ -1,4 +1,4 @@
-// Dive detail card. Shared by Create Collections (step 1) and Tag Selection.
+// Dive detail card, at step 2 of the journey on either path.
 
 import { lazy, Suspense, useEffect, useState } from "react";
 import { formatDepth, formatDiveSpan, formatDuration, formatGps, formatTemps } from "../ui/format";

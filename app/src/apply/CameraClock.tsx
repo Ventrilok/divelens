@@ -1,5 +1,5 @@
-// The cards of the cameras' clock offsets (spec F5), as Create Collections step 2 and
-// Tag Selection show them. The screens keep what differs around them (title, "Suggest
+// The cards of the cameras' clock offsets (spec F5), as step 3 of the journey shows
+// them on either path. Each path keeps what differs around them (title, "Suggest
 // all", the empty case); ignoring a camera is offered only when `onIgnore` is given.
 
 import { CameraCard } from "./CameraCard";

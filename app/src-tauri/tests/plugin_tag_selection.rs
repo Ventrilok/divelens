@@ -459,6 +459,57 @@ fn a_collection_already_there_is_completed_not_created() {
     );
 }
 
+/// The collection "Tag Selection" writes and what the app is told of it are
+/// one value (Tagging.selectionCollectionToWrite): the envelope makes or
+/// completes its `collection` with the selected photos, and sends it as it
+/// is. Only when the request names one, with photos selected, as for the
+/// groups of "Create Collections"; what the app is told is what it was told
+/// before (selectionCollection, with the number of photos selected).
+#[test]
+fn the_selection_is_told_the_collection_it_writes() {
+    use serde_json::json;
+    let out = json_of(
+        &lua(),
+        r#"
+        local Json = require "Json"
+        local Tagging = require "Tagging"
+        local p1, p2 = { id = "p1" }, { id = "p2" }
+        local name = "101 - Three Arches Reef"
+        local function told(c) return c == nil and Json.null or c end
+        local new = Tagging.selectionCollectionToWrite(name, { p1, p2 }, {})
+        local there = Tagging.selectionCollectionToWrite(name, { p1, p2 }, { [name] = true })
+        return Json.encode {
+            new = told(new),
+            there = told(there),
+            unchanged = Json.encode(new) == Json.encode(Tagging.selectionCollection(name, 2, {}))
+                and Json.encode(there) == Json.encode(Tagging.selectionCollection(name, 2, { [name] = true })),
+            none = told(Tagging.selectionCollectionToWrite(nil, { p1, p2 }, {})),
+            noPhoto = told(Tagging.selectionCollectionToWrite(name, {}, {})),
+        }
+        "#,
+    );
+    assert_eq!(
+        out,
+        json!({
+            "new": { "collection": "101 - Three Arches Reef", "count": 2, "created": true },
+            "there": { "collection": "101 - Three Arches Reef", "count": 2, "created": false },
+            "unchanged": true,
+            "none": null,
+            "noPhoto": null,
+        })
+    );
+    // The envelope takes that one value for both: it asks for it once and
+    // never makes the answer on its own.
+    let envelope = std::fs::read_to_string(common::plugin_dir().join("ApplyTags.lua")).unwrap();
+    assert_eq!(
+        envelope
+            .matches("Tagging.selectionCollectionToWrite(")
+            .count(),
+        1
+    );
+    assert!(!envelope.contains("Tagging.selectionCollection("));
+}
+
 /// What `lua` returns, a JSON text (Json.encode), as a value to compare.
 #[test]
 fn apply_reply_says_why_nothing_or_part_was_written() {

@@ -44,7 +44,7 @@ Faits pour ce plan, visibles à l'écran, à corriger s'ils ne conviennent pas :
 1. La sélection change dans Lightroom entre l'étape 3 et « Appliquer » : rien n'est écrit, le refus s'affiche à l'étape 4, la sélection est relue, on reste à l'étape 4 (Tasks 2, 6, 7).
 2. La sélection devient vide en cours de parcours : on reste sur l'étape, « Appliquer » grisé avec « Sélectionnez des photos dans Lightroom » ; à l'étape 1, la carte se grise et « Suivant » aussi si ce chemin était choisi (Tasks 5, 8).
 3. Lightroom se déconnecte à l'étape 3 ou 4, puis revient : avertissement, « Appliquer » grisé, puis nouvelle recherche des photos qui garde les décalages, les appareils ignorés et la marge déjà réglés (Task 6).
-4. Le carnet change pendant que les Réglages sont ouverts : « Retour » ramène à l'étape 1 avec le bandeau, plus aucune plongée de l'ancien carnet n'est cochée ni envoyée (Tasks 1, 5, 8).
+4. Le carnet change pendant que les Réglages sont ouverts : « Retour » ramène à l'étape 1 sans bandeau : il n'apparaît qu'après un refus (F2) ; plus aucune plongée de l'ancien carnet n'est cochée ni envoyée (Tasks 1, 5, 8).
 5. « GPS » seul coché avec un site sans GPS, ou les trois options décochées : « Appliquer » grisé ou refus « rien à écrire » affiché, jamais une écriture vide qui crée une étape d'annulation (Tasks 5, 7).
 
 ---
@@ -121,14 +121,13 @@ Branche `feat/unified-journey`, une seule pull request `feat: replace the two fe
   - `TagApplied { count, with_depth: usize, collection }` (`withDepth`) : nombre de photos qui ont reçu des données par photo ; 0 quand « Détails de la plongée » est décochée.
   - `TagPreview.outside: Vec<OutsidePhoto>` et `TagPreview.outside_more: usize` ; `OutsidePhoto { time: String /* heure corrigée, "YYYY-MM-DDTHH:MM:SS" */, camera: String /* clé */, minutes: i64 /* négatif : avant la mise à l'eau ; positif : après la sortie */ }`. Les 5 premières photos datées hors de la plongée, par heure corrigée ; `outside_more` : les autres. Sans plongée : vide.
   - `CollectionsResult` avec des options : `photos` = photos écrites ou rangées dans une collection ; `with_depth` = photos qui ont reçu des données par photo (0 si la plongée est décochée) ; `empty_dives` = plongées cochées sans aucune photo rangée, **calculé avant** la passe `keep` : une plongée dont le groupe est retiré parce qu'il ne reste rien à écrire n'est pas « sans photo ».
-  - Demande du chemin « sélection » : `TagRequest.selection` est renseigné dès que `TagChoice.search` l'est, **même plongée décochée** ; `TagRequest::keep` le conserve. Le plug-in refuse alors si la sélection n'est plus celle décrite, comme plongée cochée.
+  - Demande du chemin « sélection » : `TagRequest.selection` n'est renseigné que lorsque des données par photo sont envoyées, comme dans la 2.1.1. « Détails de la plongée » décochée, plongée sans courbe ou « Aucune plongée » : « Appliquer » écrit sur la sélection du moment (F5, « Refus “La sélection a changé” »). Corrigé le 2026-11-25 : la première version de ce plan nommait la sélection même plongée décochée, contre la spécification.
   - Chemin « catalogue », « Autre site » avec ni lieu ni GPS gardés : le site n'est pas cherché dans le carnet (pas de refus « site inconnu » pour rien).
 
 - [ ] **Step 1 : tests qui échouent**, un par ligne ci-dessus :
   - `tag_applied_counts_photos_with_depth` : 3 photos, 2 dans la plongée → `with_depth == 2` ; mêmes photos, plongée décochée → `0`.
   - `preview_lists_photos_outside_the_dive` : plongée 10:00–10:45, photos à 09:53, 10:20, 10:52 → `outside` = `[(09:53, -7), (10:52, 7)]` ; 7 photos dehors → 5 listées, `outside_more == 2` ; les décalages affichés s'appliquent ; une photo sans heure n'est pas listée.
   - `a_group_left_with_nothing_is_not_an_empty_dive` : seule option « Détails du site », plongée sans site → le groupe disparaît de la demande, la plongée n'est pas dans `empty_dives` ; une plongée sans aucune photo y est toujours.
-  - `the_described_selection_is_named_without_dive_details` : `search` donné, `options.dive == false` → `request.selection == Some(n)` ; test plug-in dans `plugin_tag_selection.rs` : cette demande sur une autre sélection → refus `selectionChanged`, aucune écriture.
   - `another_site_without_place_or_gps_reads_no_site` : `otherSite` vers un site inconnu, `place == false && gps == false`, collections cochées → pas de refus.
 - [ ] **Step 2 :** `cargo test -p divelens`, les voir échouer pour la bonne raison.
 - [ ] **Step 3 :** implémenter.

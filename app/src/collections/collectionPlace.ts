@@ -1,4 +1,4 @@
-// Where Create Collections puts the collections (spec F2): a collection set
+// Where the "Create collections" option puts the collections (spec F2): a collection set
 // of the catalog (or its root), optionally a named set inside it. Pure
 // functions, no UI.
 

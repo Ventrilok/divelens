@@ -142,11 +142,21 @@ export interface LightroomStatus {
   /** Earliest and latest capture times, wall-clock "YYYY-MM-DDTHH:MM:SS". */
   selectionFrom: string | null;
   selectionTo: string | null;
+  /** Same, per camera of the selection, in the order Lightroom first gave them. */
+  selectionCameras: CameraRange[];
   /** The selection's range moved by each camera's remembered clock offset. */
   coverFrom: string | null;
   coverTo: string | null;
   /** Lightroom runs the plug-in of another version (Dive Lens was updated): it must restart. */
   restartLightroom: boolean;
+}
+
+/** Capture times of the selected photos of one camera, wall-clock "YYYY-MM-DDTHH:MM:SS". */
+export interface CameraRange {
+  model: string | null;
+  serial: string | null;
+  from: string;
+  to: string;
 }
 
 /** Thumbnails of the selection received so far (data URLs, by position). */
@@ -158,32 +168,30 @@ export interface SelectionPreview {
 /** Where a location written comes from: the chosen dive's site, or another site of the log with its position possibly edited. */
 export type LocationChoice = { kind: "diveSite" } | { kind: "site"; siteId: string; lat: number | null; lon: number | null };
 
-/** What Tag Selection writes (app/src-tauri/src/tag.rs, TagChoice). */
+/** What the selection path writes (app/src-tauri/src/tag.rs, TagChoice). */
 export interface TagChoice {
+  /** The chosen dive, even when its details are unticked (it gives the site and the collection's name); null: no dive. */
   diveId: string | null;
   location: LocationChoice | null;
   /** The description of the selection shown (SelectionPhotos.search): needed for a dive with a profile. */
   search: number | null;
   /** Clock offsets shown, in minutes by camera key. */
   offsets: Record<string, number>;
-  /**
-   * What is ticked. Absent: today's behaviour (everything the choice names; the altitude follows
-   * the setting). With options, diveId is the chosen dive even when its details are unticked.
-   */
-  options?: WriteOptions;
+  /** What is ticked: it alone decides what is written, the altitude included. */
+  options: WriteOptions;
 }
 
-/** What the diver ticked to write when tagging the selection (app/src-tauri/src/apply/options.rs). */
+/** What the diver ticked to write, on both paths (app/src-tauri/src/apply/options.rs). */
 export interface WriteOptions {
   dive: boolean;
-  /** null: the "depth copied to altitude" setting decides. */
-  altitude: boolean | null;
+  /** Copy each photo's depth to its GPS altitude (only with the dive details). */
+  altitude: boolean;
   place: boolean;
   gps: boolean;
   collections: boolean;
 }
 
-/** The photos selected in Lightroom, described for Tag Selection's per-photo values (app/src-tauri/src/tag/selection.rs). */
+/** The photos selected in Lightroom, described for the selection path's per-photo values (app/src-tauri/src/tag/selection.rs). */
 export interface SelectionPhotos {
   /** Number of the description: the counts, Suggest and Apply name it (a newer one replaces it). */
   search: number;
@@ -194,13 +202,13 @@ export interface SelectionPhotos {
   cameras: Camera[];
 }
 
-/** The chosen dive as the counts and Suggest of Tag Selection take it. */
+/** The chosen dive as the counts and Suggest of the selection path take it. */
 export interface DiveSpan {
   start: string;
   end: string;
 }
 
-/** Tag Selection's live counts for the offsets shown. */
+/** The selection path's live counts for the offsets shown. */
 export interface TagPreview {
   total: number;
   /** Photos taken during the chosen dive (0 without one). */
@@ -209,18 +217,34 @@ export interface TagPreview {
   /** The selection's range moved by the offsets shown ("covers the selection"). */
   coverFrom: string | null;
   coverTo: string | null;
+  /** The first five photos with a capture time taken outside the dive, by corrected time; empty without a dive. */
+  outside: OutsidePhoto[];
+  /** How many more photos are outside the dive. */
+  outsideMore: number;
 }
 
-/** What Tag Selection wrote: the number of photos tagged. */
+/** A selected photo taken outside the chosen dive, with the offsets shown. */
+export interface OutsidePhoto {
+  /** Capture time corrected by its camera's offset, wall-clock "YYYY-MM-DDTHH:MM:SS". */
+  time: string;
+  /** Its camera's key. */
+  camera: string;
+  /** Whole minutes before the dive's start (negative) or after its end (positive), never 0. */
+  minutes: number;
+}
+
+/** What the selection path wrote: the number of photos tagged. */
 export interface TagApplied {
   count: number;
+  /** Of which with per-photo values and a depth; 0 with the dive details unticked. */
+  withDepth: number;
   /** The collection the selection was put in; null when none was written. */
   collection: WrittenCollection | null;
 }
 
 /**
- * Why a Tag Selection or Create Collections command failed (app/src-tauri/src/apply/): the same
- * shape for both screens.
+ * Why a command of the selection path or the catalog path failed (app/src-tauri/src/apply/):
+ * the same shape for both paths.
  */
 export type ApplyError =
   | {
@@ -257,7 +281,7 @@ export type ApplyError =
       detail: string | null;
     };
 
-// --- Create Collections (app/src-tauri/src/collections.rs, collections/plan.rs) ------------------
+// --- The catalog path (app/src-tauri/src/collections.rs, collections/plan.rs) --------------------
 
 export interface Camera {
   key: string;
@@ -331,8 +355,7 @@ export interface Settings {
   source: { kind: SourceKind; locations: Record<SourceKind, string> };
   units: { depth: "source" | "m" | "ft"; temp: "source" | "c" | "f" };
   language: "system" | "en" | "fr";
-  depthToAltitude: boolean;
-  /** Where Create Collections puts the collections. */
+  /** Where "Create collections" (step 4 of the journey) puts the collections. */
   collections: { parent: string[]; group: string };
   logLevel: "normal" | "detailed";
   diveSort: Sort | null;

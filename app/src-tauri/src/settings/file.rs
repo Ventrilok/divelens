@@ -1,7 +1,9 @@
 //! App settings (spec F2), stored as one versioned JSON file in the app config
 //! folder. Unknown fields are ignored and a missing or unreadable field takes
 //! its default, so older and newer files both load without losing the rest
-//! (spec F11: a file from another version stays usable).
+//! (spec F11: a file from another version stays usable). A setting that left
+//! the app is simply no longer read: "depthToAltitude" (copy depth to GPS
+//! altitude) became an option of each run of the journey (spec F7).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -17,7 +19,7 @@ pub const FILE_NAME: &str = "settings.json";
 /// 4: one location per application, in `source.locations`.
 const CURRENT_VERSION: u32 = 4;
 
-/// Name of the collection set "Create Collections" uses by default
+/// Name of the collection set "Create collections" uses by default
 /// (compatibility contract: never translated, never renamed).
 pub const DEFAULT_GROUP: &str = "Dive Lens";
 
@@ -195,7 +197,7 @@ pub enum DiveSort {
     Depth,
 }
 
-/// Where "Create Collections" puts the collections.
+/// Where the "Create collections" option puts the collections.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CollectionsPlace {
@@ -236,9 +238,6 @@ pub struct Settings {
     pub units: UnitChoices,
     #[serde(deserialize_with = "lenient")]
     pub language: Language,
-    /// Copy each photo's depth to its GPS altitude (spec F7).
-    #[serde(deserialize_with = "lenient")]
-    pub depth_to_altitude: bool,
     #[serde(deserialize_with = "lenient")]
     pub collections: CollectionsPlace,
     #[serde(deserialize_with = "lenient")]
@@ -262,7 +261,6 @@ impl Default for Settings {
             source: Source::default(),
             units: UnitChoices::default(),
             language: Language::default(),
-            depth_to_altitude: false,
             collections: CollectionsPlace::default(),
             log_level: LogLevel::default(),
             dive_sort: None,
@@ -447,7 +445,6 @@ mod tests {
         let s = Settings::default();
         assert_eq!(s.collections.parent, Vec::<String>::new());
         assert_eq!(s.collections.group, "Dive Lens");
-        assert!(!s.depth_to_altitude);
         assert_eq!(s.units, UnitChoices::default());
         assert_eq!(s.language, Language::System);
         assert_eq!(s.log_level, LogLevel::Normal);
@@ -506,7 +503,7 @@ mod tests {
             locations(&[("macDive", "/A.sqlite"), ("subsurface", "/Logs/diver.ssrf")])
         );
         // Saved in today's form: one list of locations, nothing else.
-        Settings::update(&dir, |s| s.depth_to_altitude = true).unwrap();
+        Settings::update(&dir, |s| s.log_level = LogLevel::Detailed).unwrap();
         let file: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(dir.join(FILE_NAME)).unwrap()).unwrap();
         assert_eq!(file["version"], 4);
@@ -626,14 +623,14 @@ mod tests {
     fn unknown_values_fall_back_field_by_field() {
         let s: Settings = serde_json::from_str(
             r#"{"version":9,"language":"de","units":{"depth":"fathoms","temp":"f"},
-                "depthToAltitude":true,"logLevel":42,"futureSetting":{"a":1},
+                "checkUpdates":false,"logLevel":42,"futureSetting":{"a":1},
                 "collections":{"parent":"oops","group":"Plongées"}}"#,
         )
         .unwrap();
         assert_eq!(s.language, Language::System);
         assert_eq!(s.units.depth, DepthChoice::Source);
         assert_eq!(s.units.temp, TempChoice::Fahrenheit);
-        assert!(s.depth_to_altitude);
+        assert!(!s.check_updates);
         assert_eq!(s.log_level, LogLevel::Normal);
         assert_eq!(s.collections.parent, Vec::<String>::new());
         assert_eq!(s.collections.group, "Plongées");
@@ -667,7 +664,7 @@ mod tests {
     #[test]
     fn patch_changes_only_what_it_names() {
         let mut s = Settings {
-            depth_to_altitude: true,
+            check_updates: false,
             ..Settings::default()
         };
         s.patch(&serde_json::json!({
@@ -680,7 +677,7 @@ mod tests {
         assert_eq!(s.units.depth, DepthChoice::Feet);
         assert_eq!(s.collections.parent, ["Trips"]);
         assert_eq!(s.collections.group_name(), None);
-        assert!(s.depth_to_altitude, "untouched");
+        assert!(!s.check_updates, "untouched");
         assert!(!s.legacy_imported, "never patched");
         assert_eq!(s.version, CURRENT_VERSION);
         // A value that does not read is ignored, not a reset.
@@ -695,8 +692,8 @@ mod tests {
         let dir = dir("nochange");
         Settings::update(&dir, |_| {}).unwrap();
         assert!(!dir.join(FILE_NAME).exists());
-        Settings::update(&dir, |s| s.depth_to_altitude = true).unwrap();
-        assert!(Settings::load(&dir).depth_to_altitude);
+        Settings::update(&dir, |s| s.check_updates = false).unwrap();
+        assert!(!Settings::load(&dir).check_updates);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -724,7 +721,6 @@ mod tests {
                 temp: TempChoice::Celsius,
             },
             language: Language::Fr,
-            depth_to_altitude: true,
             collections: CollectionsPlace {
                 parent: vec!["Trips".into(), "2026".into()],
                 group: "Plongées".into(),
@@ -822,6 +818,58 @@ mod tests {
             on_mac.source.location(&macdive::APP),
             Some(&PathBuf::from("/Dives/MacDive.sqlite"))
         );
+    }
+
+    /// Written by a version whose Settings had "Copy depth to GPS altitude":
+    /// that setting is now an option of each run (spec F2, F7).
+    #[test]
+    fn a_settings_file_with_the_altitude_setting_still_loads() {
+        let dir = dir("altitude");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(FILE_NAME),
+            r#"{"version":4,"source":{"kind":"subsurface","locations":{"subsurface":"/Dives/diver.ssrf"}},
+                "language":"fr","depthToAltitude":true,"logLevel":"detailed","checkUpdates":false}"#,
+        )
+        .unwrap();
+        let s = Settings::load(&dir);
+        assert_eq!(s.version, 4, "the format keeps its version");
+        assert_eq!(s.source.kind, "subsurface");
+        assert_eq!(
+            s.source.location(&subsurface::APP),
+            Some(&PathBuf::from("/Dives/diver.ssrf"))
+        );
+        assert_eq!(s.language, Language::Fr);
+        assert_eq!(s.log_level, LogLevel::Detailed);
+        assert!(!s.check_updates);
+        // Saved again: the setting is no longer written, the rest stays.
+        Settings::update(&dir, |s| s.language = Language::En).unwrap();
+        let text = std::fs::read_to_string(dir.join(FILE_NAME)).unwrap();
+        assert!(!text.contains("depthToAltitude"), "{text}");
+        let file: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(file["version"], 4);
+        assert_eq!(file["logLevel"], "detailed");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn an_export_with_the_altitude_setting_still_imports() {
+        let s = Settings::from_export(
+            r#"{"version":4,"language":"fr","depthToAltitude":true,"units":{"depth":"ft","temp":"c"},
+                "collections":{"parent":["Trips"],"group":"Plongées"},"diveSort":"oldest"}"#,
+        )
+        .unwrap();
+        assert_eq!(s.version, 4, "the format keeps its version");
+        assert_eq!(s.language, Language::Fr);
+        assert_eq!(s.units.depth, DepthChoice::Feet);
+        assert_eq!(s.units.temp, TempChoice::Celsius);
+        assert_eq!(s.collections.parent, ["Trips"]);
+        assert_eq!(s.collections.group, "Plongées");
+        assert_eq!(s.dive_sort, Some(DiveSort::Oldest));
+        // Exported again: without the setting, and read back the same.
+        let again = s.to_export();
+        assert!(!again.contains("depthToAltitude"), "{again}");
+        assert_eq!(Settings::from_export(&again).unwrap(), s);
     }
 
     #[test]

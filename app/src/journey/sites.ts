@@ -1,6 +1,6 @@
 // Sites of the dive log arranged as country › location › site, for the
-// "other site" picker of Tag Selection. Missing country or location form
-// their own group, listed last.
+// "other site" picker of step 4 of the journey. Missing country or location
+// form their own group, listed last.
 
 import { localized } from "../i18n";
 import type { Site } from "../types";

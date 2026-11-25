@@ -1,7 +1,8 @@
 --[[
 Plug-in Manager entry. Lightroom shows the version itself; this adds the link
-state, buttons to open the app (on Create Collections or on Settings), and the
-Dive Lens website and source code. All settings live in the app.
+state, buttons to open the app (on its journey, as the Library menu does,
+or on Settings), and the Dive Lens website and source code. All settings
+live in the app.
 
 Part of DiveLens, GPL-3.0-or-later.
 ]]
@@ -48,7 +49,7 @@ return {
                     f:spacer { fill_horizontal = 1 },
                     f:push_button {
                         title = LOC "$$$/DiveLens/PluginManager/Open=Open Dive Lens",
-                        action = function() Launch.open("collections") end,
+                        action = function() Launch.open("journey") end,
                     },
                     f:push_button {
                         title = LOC "$$$/DiveLens/PluginManager/OpenSettings=Open Settings",

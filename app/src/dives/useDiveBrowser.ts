@@ -1,5 +1,5 @@
-// The dive list's wiring, shared by Create Collections step 1 and Tag
-// Selection: filters, sort, and the focused dive that follows the visible list.
+// The dive list's wiring, at step 2 of the journey on either path: filters,
+// sort, and the focused dive that follows the visible list.
 
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { applyFilters, NO_FILTERS, searchIndex, sortDives, type Filters, type Sort } from "./filters";

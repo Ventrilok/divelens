@@ -1,4 +1,4 @@
-//! Tag Selection's rules: what a choice made on the screen writes, and
+//! The selection path's rules: what a choice made in the journey writes, and
 //! which refusal wins when several apply. Nothing here reads the dive log,
 //! the settings or Lightroom: those reads are handed in, as closures where
 //! a rule decides whether they happen, so they happen exactly when they
@@ -111,7 +111,7 @@ pub(super) fn apply_per_photo(
 }
 
 /// Where the selection goes when the collections are ticked: the collection
-/// of the chosen dive, named as Create Collections names it. Without the
+/// of the chosen dive, named as the catalog path names it. Without the
 /// tick, or without a dive to name it, no collection. `settings` gives the
 /// collection settings' parent and group, read only when a collection goes.
 pub(super) fn collection_place(
@@ -136,24 +136,24 @@ pub(super) struct Built {
     pub unreadable: Option<Error>,
 }
 
-/// What the diver ticked, when the screen sends options: the parts of the
-/// request kept, and where the dive's collection goes (`None`: no collection).
+/// What the diver ticked: the parts of the request kept, whether the depth
+/// goes to the GPS altitude (with the dive details only, see
+/// `WriteOptions::copies_altitude`), and where the dive's collection goes
+/// (`None`: no collection).
 pub(super) struct Ticked {
     pub kept: Kept,
+    pub altitude: bool,
     pub collection: Option<CollectionPlace>,
 }
 
-/// The request Tag Selection sends, in the order the refusals win: the dive
-/// data and location, then, for a dive with a profile, the per-photo values
-/// (`described` gives the selection the screen shows, `profile` reads the
-/// profile of a dive id: each only when needed), then the "depth to
-/// altitude" setting (`depth_to_altitude`, read last, so a refusal before it
-/// never reads it). A profile that cannot be read leaves the dive data alone.
-/// `ticked` is what the diver ticked; `None` (the current screens): the
-/// request is the one they always got. With options, nothing left to write
-/// is refused before anything is read; with the dive details unticked, the
-/// description still gives the offsets to remember, the profile is not read.
-#[allow(clippy::too_many_arguments)] // the reads handed in as closures, then what is ticked
+/// The request the selection path sends, in the order the refusals win: the dive
+/// data and location, then what the diver ticked (nothing left to write is
+/// refused before anything is read), then, for a dive with a profile, the
+/// per-photo values (`described` gives the selection the screen shows,
+/// `profile` reads the profile of a dive id: each only when needed). A
+/// profile that cannot be read leaves the dive data alone. With the dive
+/// details unticked, the description still gives the offsets to remember,
+/// the profile is not read. The depth goes to the altitude last, as ticked.
 pub(super) fn build_request(
     dive: Option<Dive>,
     location: Option<LocationTags>,
@@ -161,26 +161,24 @@ pub(super) fn build_request(
     source: &str,
     described: impl FnOnce(&Dive) -> Result<Option<(u64, Vec<InDive>)>, ApplyError>,
     profile: impl FnOnce(&str) -> Result<Vec<Sample>, Error>,
-    depth_to_altitude: impl FnOnce() -> bool,
-    ticked: Option<Ticked>,
+    ticked: Ticked,
 ) -> Result<Built, ApplyError> {
     let mut request = base_request(dive.as_ref(), location, units, source)?;
-    // Without options nothing is removed: a location with no field at all is
-    // still sent, as the current screens always did.
-    let mut dive_kept = true;
-    if let Some(Ticked { kept, collection }) = ticked {
-        request.collection = collection;
-        request.keep(kept);
-        if request.is_empty() {
-            return Err(ApplyError::NothingChosen);
-        }
-        dive_kept = kept.dive;
+    let Ticked {
+        kept,
+        altitude,
+        collection,
+    } = ticked;
+    request.collection = collection;
+    request.keep(kept);
+    if request.is_empty() {
+        return Err(ApplyError::NothingChosen);
     }
     let mut applied = BTreeMap::new();
     let mut unreadable = None;
     if let Some(dive) = dive.filter(|d| d.has_profile) {
         let described = described(&dive)?;
-        if dive_kept {
+        if kept.dive {
             let outcome = per_photo(&dive, described, units, || profile(&dive.id));
             (applied, unreadable) = apply_per_photo(&mut request, outcome)?;
         } else if let Some((_, in_dive)) = described {
@@ -190,7 +188,7 @@ pub(super) fn build_request(
             applied = applied_offsets(&in_dive);
         }
     }
-    with_altitude(&mut request, depth_to_altitude);
+    with_altitude(&mut request, altitude);
     Ok(Built {
         request,
         applied,
@@ -198,11 +196,11 @@ pub(super) fn build_request(
     })
 }
 
-/// The "depth to altitude" setting applied to the whole request, as Create
-/// Collections does: a request without per-photo values has nothing to copy.
-/// The setting is read here only, so a refusal before it never reads it.
-pub(super) fn with_altitude(req: &mut TagRequest, depth_to_altitude: impl FnOnce() -> bool) {
-    if depth_to_altitude() {
+/// The depth copied to the GPS altitude of the whole request when `on`, as
+/// the catalog path does: a request without per-photo values has nothing
+/// to copy.
+pub(super) fn with_altitude(req: &mut TagRequest, on: bool) {
+    if on {
         req.copy_depth_to_altitude();
     }
 }
@@ -210,8 +208,6 @@ pub(super) fn with_altitude(req: &mut TagRequest, depth_to_altitude: impl FnOnce
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use std::cell::Cell;
 
     use chrono::{Duration, NaiveDate};
     use divelens_core::profile::PhotoPoint;
@@ -261,7 +257,7 @@ mod tests {
     }
 
     #[test]
-    fn unknown_dive_or_site_is_refused() {
+    fn the_dive_is_found_by_its_id_or_refused() {
         assert!(matches!(
             find_dive(vec![], "x"),
             Err(ApplyError::UnknownDive)
@@ -403,7 +399,8 @@ mod tests {
         assert_eq!(request, TagRequest::default());
 
         // Per-photo values: the depth goes to the altitude only when the
-        // setting is on, which the caller applies to the whole request.
+        // altitude option is on, which the caller applies to the whole
+        // request.
         let values = || {
             Ok(PerPhoto::Values {
                 described: 42,
@@ -423,7 +420,7 @@ mod tests {
         for on in [false, true] {
             let mut request = TagRequest::default();
             let (applied, unreadable) = apply_per_photo(&mut request, values()).unwrap();
-            with_altitude(&mut request, || on);
+            with_altitude(&mut request, on);
             assert!(unreadable.is_none());
             assert_eq!(applied, BTreeMap::from([("TG-7|A1".to_string(), 240)]));
             assert_eq!(request.selection, Some(42));
@@ -433,8 +430,21 @@ mod tests {
         }
     }
 
+    /// What the selection path sends with the dive data and the
+    /// location ticked: everything but a collection, the altitude given.
+    fn everything(altitude: bool) -> Ticked {
+        Ticked {
+            kept: Kept {
+                collections: false,
+                ..Kept::ALL
+            },
+            altitude,
+            collection: None,
+        }
+    }
+
     #[test]
-    fn a_refusal_before_the_altitude_never_reads_the_setting() {
+    fn refusals_win_with_everything_ticked_and_the_altitude_on() {
         let build = |described: Option<(u64, Vec<InDive>)>, profile: Result<Vec<Sample>, Error>| {
             build_request(
                 Some(dive("A", 701)),
@@ -443,8 +453,7 @@ mod tests {
                 "MacDive",
                 |_| Ok(described),
                 |_| profile,
-                || panic!("setting read"),
-                None,
+                everything(true),
             )
         };
         // The screen showed no selection, the profile reads: it must be described.
@@ -463,8 +472,7 @@ mod tests {
             "MacDive",
             |_| Err(ApplyError::NoPhotos),
             |_| panic!("profile read"),
-            || panic!("setting read"),
-            None,
+            everything(true),
         );
         assert!(matches!(refused, Err(ApplyError::NoPhotos)));
         // Nothing chosen: refused before anything is read.
@@ -475,8 +483,7 @@ mod tests {
             "MacDive",
             |_| panic!("described"),
             |_| panic!("profile read"),
-            || panic!("setting read"),
-            None,
+            everything(true),
         );
         assert!(matches!(nothing, Err(ApplyError::NothingChosen)));
     }
@@ -495,7 +502,7 @@ mod tests {
     }
 
     #[test]
-    fn the_altitude_setting_decides_the_altitude_of_the_request_built() {
+    fn the_altitude_option_decides_the_altitude_of_the_request_built() {
         let sample = |time_s, depth_m| Sample {
             time_s,
             depth_m,
@@ -503,7 +510,6 @@ mod tests {
         };
         let profile = vec![sample(0, 0.0), sample(3000, 30.0)];
         for on in [false, true] {
-            let reads = Cell::new(0);
             let built = build_request(
                 Some(dive("A", 701)),
                 None,
@@ -511,25 +517,19 @@ mod tests {
                 "MacDive",
                 |_| Ok(Some((42, vec![photo_in_dive()]))),
                 |_| Ok(profile.clone()),
-                || {
-                    reads.set(reads.get() + 1);
-                    on
-                },
-                None,
+                everything(on),
             )
             .unwrap();
-            assert_eq!(reads.get(), 1);
             assert_eq!(built.request.selection, Some(42));
             assert_eq!(built.request.photos.len(), 1);
             assert_eq!(built.applied, BTreeMap::from([("TG-7|A1".to_string(), 0)]));
             let altitude = built.request.photos[0].gps_altitude;
-            assert_eq!(altitude, on.then_some(-15.0), "setting on: {on}");
+            assert_eq!(altitude, on.then_some(-15.0), "altitude on: {on}");
         }
-        // A dive without a profile: no per-photo step, the setting is still
-        // read, and there is nothing to copy.
+        // A dive without a profile: no per-photo step, the altitude on, and
+        // there is nothing to copy.
         let mut flat = dive("A", 701);
         flat.has_profile = false;
-        let reads = Cell::new(0);
         let built = build_request(
             Some(flat),
             None,
@@ -537,14 +537,9 @@ mod tests {
             "MacDive",
             |_| panic!("described"),
             |_| panic!("profile read"),
-            || {
-                reads.set(reads.get() + 1);
-                true
-            },
-            None,
+            everything(true),
         )
         .unwrap();
-        assert_eq!(reads.get(), 1);
         assert!(built.request.photos.is_empty());
         assert!(built.applied.is_empty());
     }
@@ -582,7 +577,7 @@ mod tests {
     }
 
     #[test]
-    fn without_options_the_request_is_todays() {
+    fn everything_ticked_and_the_altitude_on_give_todays_request() {
         let d = dive("A", 701);
         let sample = |time_s, depth_m| Sample {
             time_s,
@@ -598,8 +593,7 @@ mod tests {
             "MacDive",
             |_| Ok(Some((42, vec![photo_in_dive()]))),
             |_| Ok(profile.clone()),
-            || true,
-            None,
+            everything(true),
         )
         .unwrap();
         let request = built.request;
@@ -617,9 +611,9 @@ mod tests {
     }
 
     #[test]
-    fn without_options_a_site_with_no_field_is_sent_as_today() {
-        // A site with no name, country, place or position: its location is
-        // sent all empty, never dropped.
+    fn a_site_with_no_field_leaves_nothing_of_it_to_write() {
+        // A site with no name, country, place or position: nothing of it is
+        // left to write, so no location goes; the dive data still do.
         let mut d = dive("A", 701);
         d.site = Site::default();
         let empty = LocationTags::new(&d.site, None, None);
@@ -636,44 +630,30 @@ mod tests {
             "MacDive",
             |_| Ok(Some((42, vec![photo_in_dive()]))),
             |_| Ok(profile.clone()),
-            || false,
-            None,
+            everything(false),
         )
         .unwrap();
-        assert_eq!(
-            built.request.location,
-            Some(LocationTags {
-                country: None,
-                city: None,
-                location: None,
-                lat: None,
-                lon: None,
-            })
-        );
+        assert_eq!(built.request.location, None);
         assert_eq!(
             built.request.dive,
             Some(DiveTags::new(&d, Units::default(), "MacDive"))
         );
-        // The location alone, without a dive: sent too, not refused.
+        assert_eq!(built.request.selection, Some(42));
+        // The location alone, without a dive: nothing to write, refused
+        // before anything is read; never a write that changes nothing.
         let alone = build_request(
             None,
-            Some(empty.clone()),
+            Some(empty),
             Units::default(),
             "MacDive",
             |_| panic!("described"),
             |_| panic!("profile read"),
-            || false,
-            None,
+            everything(false),
         );
-        let Ok(alone) = alone else {
-            panic!("refused: {:?}", alone.err());
-        };
-        assert_eq!(
-            alone.request,
-            TagRequest {
-                location: Some(empty),
-                ..TagRequest::default()
-            }
+        assert!(
+            matches!(alone, Err(ApplyError::NothingChosen)),
+            "{:?}",
+            alone.map(|b| b.request)
         );
     }
 
@@ -693,11 +673,11 @@ mod tests {
             "MacDive",
             |_| Ok(Some((42, vec![photo_in_dive()]))),
             |_| panic!("profile read"),
-            || false,
-            Some(Ticked {
+            Ticked {
                 kept,
+                altitude: false,
                 collection: Some(place()),
-            }),
+            },
         )
         .unwrap();
         assert!(built.request.dive.is_none());
@@ -739,14 +719,14 @@ mod tests {
                 "MacDive",
                 |_| described,
                 |_| profile(),
-                || false,
-                Some(Ticked {
+                Ticked {
                     kept: Kept {
                         dive: dive_ticked,
                         ..Kept::ALL
                     },
+                    altitude: false,
                     collection: None,
-                }),
+                },
             )
         };
         let never = || -> Result<Vec<Sample>, Error> { panic!("profile read") };
@@ -777,6 +757,77 @@ mod tests {
         ));
     }
 
+    /// Selection description 2, numbered 42 by the plug-in: three photos
+    /// from a TG-7 on dive time, at 09:10 and 09:30 during the dive (09:00
+    /// to 09:50), and at 10:30, after it.
+    fn three_photos_two_in_the_dive() -> Mutex<Searches<Selection>> {
+        let photo = |id: &str, time: &str| FoundPhoto {
+            id: id.into(),
+            time: Some(time.into()),
+            model: Some("TG-7".into()),
+            serial: Some("A1".into()),
+        };
+        let found = vec![
+            photo("1", "2025-12-30T09:10:00"),
+            photo("2", "2025-12-30T09:30:00"),
+            photo("3", "2025-12-30T10:30:00"),
+        ];
+        let selections = Mutex::new(Searches::default());
+        assert!(selections.lock().unwrap().start(2));
+        assert!(
+            selections
+                .lock()
+                .unwrap()
+                .finish(2, Selection::new(42, found, &Offsets::default()))
+        );
+        selections
+    }
+
+    /// The request for the described selection, the dive details ticked or
+    /// not, everything else ticked.
+    fn built_for_selection(dive_ticked: bool) -> Built {
+        let d = dive("A", 701);
+        let selections = three_photos_two_in_the_dive();
+        let sample = |time_s, depth_m| Sample {
+            time_s,
+            depth_m,
+            temp_c: None,
+        };
+        let profile = vec![sample(0, 0.0), sample(3000, 30.0)];
+        build_request(
+            Some(d.clone()),
+            Some(LocationTags::new(&d.site, None, None)),
+            Units::default(),
+            "MacDive",
+            |dive| described(&selections, Some(2), dive, &HashMap::new()),
+            |_| {
+                assert!(dive_ticked, "profile read with the dive details unticked");
+                Ok(profile.clone())
+            },
+            Ticked {
+                kept: Kept {
+                    dive: dive_ticked,
+                    ..Kept::ALL
+                },
+                altitude: false,
+                collection: Some(place()),
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn tag_applied_counts_photos_with_depth() {
+        // Two of the three photos were taken during the dive: they get a
+        // depth, the third the dive data alone.
+        let ticked = built_for_selection(true);
+        assert_eq!(ticked.request.photos.len(), 2);
+        assert_eq!(ticked.request.with_depth(), 2);
+        // The same photos, the dive details unticked: no per-photo value.
+        let unticked = built_for_selection(false);
+        assert_eq!(unticked.request.with_depth(), 0);
+    }
+
     #[test]
     fn gps_alone_on_a_site_without_gps_is_refused() {
         let mut d = dive("A", 701);
@@ -795,11 +846,11 @@ mod tests {
             "MacDive",
             |_| panic!("described"),
             |_| panic!("profile read"),
-            || panic!("setting read"),
-            Some(Ticked {
+            Ticked {
                 kept,
+                altitude: true,
                 collection: Some(place()),
-            }),
+            },
         );
         assert!(matches!(built, Err(ApplyError::NothingChosen)));
     }
@@ -814,11 +865,11 @@ mod tests {
             "MacDive",
             |_| panic!("described"),
             |_| panic!("profile read"),
-            || false,
-            Some(Ticked {
+            Ticked {
                 kept: Kept::ALL,
+                altitude: false,
                 collection: None,
-            }),
+            },
         )
         .unwrap();
         assert_eq!(

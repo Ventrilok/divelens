@@ -1,4 +1,4 @@
-//! What "Create Collections" and "Tag Selection" share when they write to
+//! What the catalog path and the selection path share when they write to
 //! Lightroom: the clock offsets, the kept photo searches, the errors, and the
 //! requests to the plugin link.
 
@@ -22,7 +22,11 @@ use errors::ApplyError;
 /// Hands a request to the plugin link (never waits); its answer comes on the
 /// request's own reply channel.
 pub(crate) fn send(app: &AppHandle, command: Command) -> Result<(), ApplyError> {
-    let state = app.state::<Lightroom>();
+    send_to(&app.state::<Lightroom>(), command)
+}
+
+/// `send`, on the link state itself.
+pub(crate) fn send_to(state: &Lightroom, command: Command) -> Result<(), ApplyError> {
     if !state.status.lock().expect("lightroom state").connected {
         return Err(ApplyError::NotConnected);
     }

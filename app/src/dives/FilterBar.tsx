@@ -72,9 +72,11 @@ interface Props {
   capabilities: Capabilities;
   units: Units;
   shown: number;
+  /** The count at the right, in place of "{shown} of {total}". */
+  count?: string;
 }
 
-export function FilterBar({ dives, filters: f, onChange, capabilities, units, shown }: Props) {
+export function FilterBar({ dives, filters: f, onChange, capabilities, units, shown, count }: Props) {
   const set = (patch: Partial<Filters>) => onChange({ ...f, ...patch });
   const countries = useMemo(() => countryCounts(dives), [dives]);
   const countryName = (c: string) => c || t("filter.noCountry");
@@ -197,7 +199,7 @@ export function FilterBar({ dives, filters: f, onChange, capabilities, units, sh
         </button>
       )}
 
-      <span className="filter-count">{t("dives.shown", { shown: formatInt(shown), total: formatInt(dives.length) })}</span>
+      <span className="filter-count">{count ?? t("dives.shown", { shown: formatInt(shown), total: formatInt(dives.length) })}</span>
     </div>
   );
 }
