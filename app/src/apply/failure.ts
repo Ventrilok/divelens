@@ -35,11 +35,12 @@ export function applyFailure(e: ApplyError, feature: ApplyFeature): string {
     case "nothingToWrite":
       return tag ? t("tag.err.lightroom") : t("coll.err.nothingToWrite");
     case "badGps":
-      return tag ? t("tag.err.badGps") : t("coll.err.lightroom");
+      // Another site's position (both paths): the same refusal.
+      return t("tag.err.badGps");
     case "unknownDive":
       return tag ? t("tag.err.unknownDive") : t("coll.err.lightroom");
     case "unknownSite":
-      return tag ? t("tag.err.unknownSite") : t("coll.err.lightroom");
+      return t("tag.err.unknownSite");
     case "lightroom":
       break;
   }
@@ -61,9 +62,8 @@ export function applyFailure(e: ApplyError, feature: ApplyFeature): string {
     case "staleSearch": // Collections only
       if (!tag) return t("coll.err.noPhotos");
       break;
-    case "parentNotFound": // Collections only
-      if (!tag) return t("coll.parentMissing", { path: e.detail ?? "" });
-      break;
+    case "parentNotFound": // Collections, on either path
+      return t("coll.parentMissing", { path: e.detail ?? "" });
     case "badRequest":
       // Its detail is internal ("bad group"): never shown.
       return tag ? t("tag.err.badRequest") : t("coll.err.badRequest");
@@ -71,6 +71,11 @@ export function applyFailure(e: ApplyError, feature: ApplyFeature): string {
       break; // Lightroom's own message is the detail: worded as an unknown reason
   }
   return unknownReason(e.detail, feature);
+}
+
+/** Catalog path: Apply was refused because the photos found are gone, so they are looked for again. */
+export function searchAgain(e: ApplyError): boolean {
+  return e.error === "noPhotos" || (e.error === "lightroom" && e.reason === "staleSearch");
 }
 
 /**

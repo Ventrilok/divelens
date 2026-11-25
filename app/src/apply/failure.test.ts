@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage } from "../i18n";
-import { applyFailure, searchFailure } from "./failure";
+import { applyFailure, searchAgain, searchFailure } from "./failure";
 import type { ApplyError } from "../types";
 
 const DETAIL = "disk full";
@@ -176,5 +176,50 @@ describe.each(["en", "fr"] as const)("Create Collections write failure texts (%s
       expect(text).toContain(undo);
     }
     expect(applyFailure({ error: "linkLost" }, "collections")).not.toContain(nothingWritten);
+  });
+});
+
+// The journey: the selection path may create a collection, and the catalog path may
+// write another site; each refusal reads the same on both paths (spec F5).
+describe.each(["en", "fr"] as const)("Refusals both paths share (%s)", (lang) => {
+  beforeEach(() => setLanguage(lang));
+
+  it("a missing collection set is named on the selection path as on the catalog path", () => {
+    const e: ApplyError = { error: "lightroom", reason: "parentNotFound", detail: "Trips › 2025" };
+    expect(applyFailure(e, "tag")).toBe(applyFailure(e, "collections"));
+    expect(applyFailure(e, "tag")).toBe(
+      lang === "en"
+        ? "The collection set chosen in Settings (Trips › 2025) is no longer in the catalog. Choose another place in Settings."
+        : "L'ensemble choisi dans les réglages (Trips › 2025) n'est plus dans le catalogue. Choisissez un autre emplacement dans les réglages.",
+    );
+  });
+
+  it("another site refused on the catalog path reads as on the selection path", () => {
+    for (const error of ["badGps", "unknownSite"] as const) {
+      expect(applyFailure({ error }, "collections")).toBe(applyFailure({ error }, "tag"));
+    }
+    expect(applyFailure({ error: "unknownSite" }, "collections")).toContain(
+      lang === "en" ? "This site is no longer in the dive log." : "Ce site n'est plus dans le carnet de plongée.",
+    );
+  });
+});
+
+describe("searchAgain: the catalog path looks for the photos again after a refused Apply", () => {
+  it("when the photos found are gone", () => {
+    expect(searchAgain({ error: "noPhotos" })).toBe(true);
+    expect(searchAgain({ error: "lightroom", reason: "staleSearch", detail: null })).toBe(true);
+  });
+
+  it("never otherwise", () => {
+    const others: ApplyError[] = [
+      { error: "notConnected" },
+      { error: "linkLost" },
+      { error: "nothingToWrite" },
+      { error: "logChanged" },
+      { error: "lightroom", reason: "busy", detail: null },
+      { error: "lightroom", reason: "gpsNotWritten", detail: null },
+      { error: "lightroom", reason: "selectionChanged", detail: null },
+    ];
+    for (const e of others) expect(searchAgain(e), JSON.stringify(e)).toBe(false);
   });
 });
