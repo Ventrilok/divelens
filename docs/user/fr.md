@@ -151,7 +151,7 @@ Dans le chemin **Les photos sélectionnées dans Lightroom** :
 
 **Collections**
 
-- **Créer les collections** (une option de cette étape, plus un menu de Lightroom) : dans le chemin **Tout le catalogue**, une collection « numéro - site » par plongée qui a des photos ; dans le chemin **Les photos sélectionnées dans Lightroom**, la collection de la plongée choisie, qui reçoit toutes les photos sélectionnées. Une photo déjà dans la collection n'y est pas ajoutée deux fois. L'emplacement des collections se règle dans les Réglages : le lien **Emplacement dans Réglages** les ouvre (section 8).
+- **Créer les collections** (une option de cette étape, et non plus un menu de Lightroom) : dans le chemin **Tout le catalogue**, une collection « numéro - site » par plongée qui a des photos ; dans le chemin **Les photos sélectionnées dans Lightroom**, la collection de la plongée choisie, qui reçoit toutes les photos sélectionnées. Une photo déjà dans la collection n'y est pas ajoutée deux fois. L'emplacement des collections se règle dans les Réglages : le lien **Emplacement dans Réglages** les ouvre (section 8).
 
 **À savoir avant d'appliquer** liste ce qui ne reçoit rien ou moins : les plongées sans photo et les photos hors plongée (**Tout le catalogue**), les photos qui n'auront pas de profondeur (**Les photos sélectionnées dans Lightroom**), et les unités utilisées.
 
