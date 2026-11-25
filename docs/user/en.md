@@ -59,17 +59,17 @@ Your photos keep their dive data and their collections in the catalog: they come
 Dive Lens has no window inside Lightroom. Everything happens in the Dive Lens app, which Lightroom opens for you:
 
 - **Library › Plug-in Extras › Open Dive Lens…** opens the app at step 1 of the journey (section 3), whether photos are selected or not.
-- **Help › Plug-in Extras › Dive Lens Settings…** opens it on **Settings** (section 8).
+- **Help › Plug-in Extras › Dive Lens Settings…** opens it on **Settings** (section 9).
 
 The Dive Lens entry in **File › Plug-in Manager…** also has **Open Dive Lens** and **Open Settings** buttons, and links to the Dive Lens website and to its source code on GitHub.
 
 If the app is already open, the menu brings its window to the front. Chosen during the journey, **Open Dive Lens…** takes you back to step 1 and keeps your choices; chosen on the summary, it starts a new run.
 
-Lightroom must stay open while you use the app. The first time, check **Settings** (section 8): the dive application and the location of your log.
+Lightroom must stay open while you use the app. The first time, check **Settings** (section 9): the dive application and the location of your log.
 
 ### The window
 
-- **At the top**: Dive Lens on the left; on the right, the gear opens **Settings** (section 8). The gear is greyed while Dive Lens writes to Lightroom.
+- **At the top**: Dive Lens on the left; on the right, the gear opens **Settings** (section 9). The gear is greyed while Dive Lens writes to Lightroom.
 - **At the bottom**, the status bar. On the left, Lightroom:
   - **Lightroom connected**, **Lightroom not connected**, or **Restart Lightroom**;
   - **Catalog:** the name of the catalog open in Lightroom;
@@ -92,7 +92,7 @@ The bar with **Back** and **Next** (or **Apply to N photos**) stays at the botto
 Step 1 asks the one real question: which photos?
 
 - **Entire catalog**: you tick one or more dives, and Dive Lens looks in the whole catalog for the photos taken during each one. Each photo goes to the dive that matches its time. For a whole trip or a series of dives. The photos selected in Lightroom are ignored.
-- **Lightroom selection**: the photos you selected in Lightroom. You choose one dive, and all of them are attached to it, whatever their time. For photos without a reliable time, to attach photos to a dive by hand, or to give them only a location (section 6).
+- **Lightroom selection**: the photos you selected in Lightroom. You choose one dive, and all of them are attached to it, whatever their time. For photos without a reliable time, to attach photos to a dive by hand, or to give them only a location (section 7).
 
 Choosing the other path at step 1 starts the next steps again: dives, clocks and options.
 
@@ -109,7 +109,7 @@ Each row has three marks at its end, in colour when the dive has it and greyed w
 - **Entire catalog**: tick one or more dives, then **Next**. The bar shows how many are ticked and their days; **Deselect all** unticks them.
 - **Lightroom selection**: click one dive, then **Next**.
   - The dive whose times cover the selection carries the **Covers the selection** badge. It uses the last offset applied to each camera, then the offsets you set at step 3. It is only a hint: you choose.
-  - The first row, **No dive — location only**, is for giving the photos only a location (section 6).
+  - The first row, **No dive — location only**, is for giving the photos only a location (section 7).
 
 A dive **without a profile** (entered by hand, or from an older dive computer whose download MacDive did not keep) still works: its photos get the dive data and the site, but no depth, temperature or time.
 
@@ -120,16 +120,16 @@ A dive **without a profile** (entered by hand, or from an older dive computer wh
 - **Suggest** proposes the offset that puts the most photos in the dives. It tries every quarter of an hour between −14 h and +14 h, so it also finds a forgotten time zone.
 - **Suggest for all** does it for every camera at once, without touching cameras you set by hand or ignore.
 - You can also type the offset (hours:minutes) or adjust it yourself.
-- Each card starts from the last offset applied to that camera, on either path (**remembered offset**); with none, it starts at 0:00. Offsets are remembered separately for each dive application. **Settings › Remembered clock offsets** lists them and forgets the one of a camera (section 8).
+- Each card starts from the last offset applied to that camera, on either path (**remembered offset**); with none, it starts at 0:00. Offsets are remembered separately for each dive application. **Settings › Remembered clock offsets** lists them and forgets the one of a camera (section 9).
 
-**Preview by dive.** The counts follow your settings: photos per dive, cameras, and the per-photo data each dive gives (**Depth · temp. · time**, **No profile: dive data only**, **Surface photos only**). For a dive with no photo, its count, 0, and **No photo — clock changed?** are written in orange: a camera clock was often changed during the trip (section 10).
+**Preview by dive.** The counts follow your settings: photos per dive, cameras, and the per-photo data each dive gives (**Depth · temp. · time**, **No profile: dive data only**, **Surface photos only**). For a dive with no photo, its count, 0, and **No photo — clock changed?** are written in orange: a camera clock was often changed during the trip (section 11).
 
 On the **Entire catalog** path:
 
 - Dive Lens looks in the whole catalog for the photos taken over the period of the dives ticked.
 - **Ignore** leaves out a camera, for example a phone that stayed on the boat: its photos are neither counted nor tagged.
 - **Include photos taken at the surface**: up to N minutes before and after each dive, for photos taken on the boat just before going in or just after getting out. 0 minutes by default, and back to 0 on every run (**Handle dive N separately** and **Handle these dives separately** keep it). These photos get the dive data, without depth.
-- **Outside the dives**: the photos of the period that fall in no dive, even with the margin (on land, on the boat…). They get nothing (section 6).
+- **Outside the dives**: the photos of the period that fall in no dive, even with the margin (on land, on the boat…). They get nothing (section 7).
 
 On the **Lightroom selection** path:
 
@@ -141,12 +141,12 @@ On the **Lightroom selection** path:
 
 ### Step 4 — Review & Apply
 
-"What Dive Lens writes in Lightroom." The same options on both paths. They are all ticked on every run, except **Copy depth to GPS altitude**, which is unticked on every run: nothing is remembered from one run to the next. On the right of each option, its effect on this run, for example "12 photos · 9 with depth".
+"What Dive Lens writes in Lightroom." The same options on both paths. They are all ticked on every run, except **Copy depth to GPS altitude**, which is unticked on every run: nothing is remembered from one run to the next. On the right of each option, its effect on this run, for example "12 photos · 9 with depth". [Section 4](#4-which-options-for-which-need) shows what each combination of options writes on the photos, and which options to choose for which need.
 
 **Metadata**
 
 - **Dive details**: dive number, start, end, duration, max depth, temperatures, rating and source (the dive application). On the photos taken during the dive, also the depth, temperature and time into the dive, and the clock offset.
-  - **Copy depth to GPS altitude**, under it, greyed when **Dive details** is unticked: also writes the depth in the GPS altitude, as a negative value, in metres, on the photos that have a depth (section 5).
+  - **Copy depth to GPS altitude**, under it, greyed when **Dive details** is unticked: also writes the depth in the GPS altitude, as a negative value, in metres, on the photos that have a depth (section 6).
 - **Site details**: the location and GPS of the dive's site, or of another site of your log.
   - **Entire catalog**: **Each dive's site**, or **Other site, the same for all photos…**.
   - **Lightroom selection**: **Dive's site: <name>**, or **Other site…**.
@@ -155,7 +155,7 @@ On the **Lightroom selection** path:
 
 **Collections**
 
-- **Create collections** (an option of this step, no longer a Lightroom menu): on the **Entire catalog** path, one "<number> - <site>" collection per dive that has photos; on the **Lightroom selection** path, the chosen dive's collection, which gets all the selected photos. A photo already in the collection is not added twice. Where the collections go is set in Settings: the link **Place in Settings** opens them (section 8).
+- **Create collections** (an option of this step, no longer a Lightroom menu): on the **Entire catalog** path, one "<number> - <site>" collection per dive that has photos; on the **Lightroom selection** path, the chosen dive's collection, which gets all the selected photos. A photo already in the collection is not added twice. Where the collections go is set in Settings: the link **Place in Settings** opens them (section 9).
 
 **Good to know before applying** lists what gets nothing or less: the dives without photo and the photos outside the dives (**Entire catalog**), the photos that will get no depth (**Lightroom selection**), and the units used.
 
@@ -172,14 +172,115 @@ The bar at the bottom sums up what will be written ("N photos · N collections")
 
 ### Step 5 — Summary
 
-**Written in Lightroom**: **Photos tagged** (the photos written, those only put in a collection included), **With depth**, and **Collections**, then each collection with its number of photos, **created** or **added to**. Then the warnings (dives without photo, photos outside the dives, photos without depth) and the reminder of how to undo (section 7).
+**Written in Lightroom**: **Photos tagged** (the photos written, those only put in a collection included), **With depth**, and **Collections**, then each collection with its number of photos, **created** or **added to**. Then the warnings (dives without photo, photos outside the dives, photos without depth) and the reminder of how to undo (section 8).
 
-- **Entire catalog**: **Back to scope selection** returns to step 1 and starts a new run: **Entire catalog** is still chosen, no dive is ticked and the options are back to their defaults. When a dive got no photo, **Handle dive N separately** (or **Handle these dives separately**) goes straight to step 3 with only those dives ticked, and looks for their photos again: give their camera its own offset (section 10).
+- **Entire catalog**: **Back to scope selection** returns to step 1 and starts a new run: **Entire catalog** is still chosen, no dive is ticked and the options are back to their defaults. When a dive got no photo, **Handle dive N separately** (or **Handle these dives separately**) goes straight to step 3 with only those dives ticked, and looks for their photos again: give their camera its own offset (section 11).
 - **Lightroom selection**: **Done** returns to step 1 and starts a new run in the same way, the **Lightroom selection** card still chosen.
 
 ---
 
-## 4. What is written
+## 4. Which options for which need
+
+The options of step 4 decide what Dive Lens writes on each photo. This section shows what each combination writes, path by path, then which options to choose in situations divers often meet. The detailed rules are in [section 5](#5-what-is-written).
+
+### How the options combine
+
+- **Dive details**, **Site details** and **Create collections** are independent: what one of them writes never depends on the others, so the rows of the tables below combine. For example, **Dive details** and **Create collections** ticked without **Site details** write the dive data and the collections, and leave the location and GPS as they are.
+- **Copy depth to GPS altitude** works only with **Dive details**: unticking **Dive details** greys it.
+- Under **Site details**, **Location** and **GPS** are independent too; unticking both is the same as unticking **Site details**. Both come from the dive's own site, or from **Other site**.
+- **Other site** changes only the location and GPS written on the photos: each collection keeps the name of its dive's own site.
+- Even with **Dive details** unticked, the photos are still matched to their dive by their time (**Entire catalog**), for the site and the collections.
+- **No dive — location only** (**Lightroom selection** path) leaves only **Site details**: **Dive details** and **Create collections** are greyed, and the site is always **Other site…**.
+
+The photos written:
+
+- **Entire catalog**: the photos placed in a dive ticked, taken during the dive or in its surface margin. Ignored cameras and photos outside the dives are not touched.
+- **Lightroom selection**: every photo selected at the moment you click **Apply**, whatever its time.
+
+### What each photo gets
+
+In the tables, "Kept" means that Dive Lens does not touch the field: the photo keeps what it had, from an earlier run, from the camera or from you. "None" under **Collection** means that no collection is created or changed: the photo stays in the collections it was already in. A site without a country, city, location or GPS leaves that value on the photo as it was. The dive fields written describe one dive only: a value the dive does not have, such as a temperature or a rating, is emptied.
+
+**Entire catalog**
+
+| Ticked at step 4 | Dive fields | Depth, temperature, time | Clock offset | GPS altitude | Country, city, location | GPS | Collection |
+|---|---|---|---|---|---|---|---|
+| Everything (the default) | Written | During the dive¹ | Written | Kept² | Each dive's site | Each dive's site | Its dive's |
+| Everything, and **Copy depth to GPS altitude** | Written | During the dive¹ | Written | The depth³ | Each dive's site | Each dive's site | Its dive's |
+| **Dive details** only | Written | During the dive¹ | Written | Kept² | Kept | Kept | None |
+| **Dive details** and **Copy depth to GPS altitude** only | Written | During the dive¹ | Written | The depth³ | Kept | Kept | None |
+| **Site details** only (**Location** and **GPS**) | Kept | Kept | Kept | Kept | Each dive's site | Each dive's site | None |
+| **Location** only | Kept | Kept | Kept | Kept | Each dive's site | Kept | None |
+| **GPS** only | Kept | Kept | Kept | Kept | Kept | Each dive's site | None |
+| Everything, with **Other site, the same for all photos…** | Written | During the dive¹ | Written | Kept² | The other site | The other site⁴ | Its dive's⁵ |
+| **Create collections** only | Kept | Kept | Kept | Kept | Kept | Kept | Its dive's |
+
+**Lightroom selection**
+
+| Ticked at step 4 | Dive fields | Depth, temperature, time | Clock offset | GPS altitude | Country, city, location | GPS | Collection |
+|---|---|---|---|---|---|---|---|
+| Everything (the default) | Written | During the dive¹ | During the dive¹ | Kept² | The dive's site | The dive's site | The dive's |
+| Everything, and **Copy depth to GPS altitude** | Written | During the dive¹ | During the dive¹ | The depth³ | The dive's site | The dive's site | The dive's |
+| **Dive details** only | Written | During the dive¹ | During the dive¹ | Kept² | Kept | Kept | None |
+| **Dive details** and **Copy depth to GPS altitude** only | Written | During the dive¹ | During the dive¹ | The depth³ | Kept | Kept | None |
+| **Site details** only (**Location** and **GPS**) | Kept | Kept | Kept | Kept | The dive's site | The dive's site | None |
+| **Location** only | Kept | Kept | Kept | Kept | The dive's site | Kept | None |
+| **GPS** only | Kept | Kept | Kept | Kept | Kept | The dive's site | None |
+| Everything, with **Other site…** | Written | During the dive¹ | During the dive¹ | Kept² | The other site | The other site⁴ | The dive's⁵ |
+| **Create collections** only | Kept | Kept | Kept | Kept | Kept | Kept | The dive's |
+| **No dive — location only**, with **Location** and **GPS** | Kept | Kept | Kept | Kept | The other site | The other site⁴ | None |
+| **No dive — location only**, with **Location** only | Kept | Kept | Kept | Kept | The other site | Kept | None |
+| **No dive — location only**, with **GPS** only | Kept | Kept | Kept | Kept | Kept | The other site⁴ | None |
+
+1. On the photos taken during a dive that has a profile: the depth, temperature and time into the dive at the moment of the photo.
+   - **Entire catalog**: the other photos placed in a dive (in the surface margin, or in a dive without a profile) have these three values emptied. Every photo placed in a dive gets the clock offset.
+   - **Lightroom selection**: the clock offset goes only on the photos taken during the dive, with their depth. The other photos keep their values when they already carry the same dive; when they carried another dive, its depth, temperature, time and clock offset are emptied.
+2. Kept, except an altitude Dive Lens copied itself: it is cleared when the photo is attached to another dive without a new altitude and, on the **Entire catalog** path, when the photo is found again without a depth ([section 6](#6-depth-in-the-gps-altitude)).
+3. On the photos that get a depth: that depth, as a negative GPS altitude in metres. The other photos as in note 2.
+4. The GPS of the site picked, or the position you typed under it. Emptying both coordinates writes the site's own position: to keep the photos' GPS, untick **GPS**.
+5. The collection keeps the name of the dive's own site.
+
+### When Apply stays greyed
+
+| Situation | What the bar says |
+|---|---|
+| **Dive details**, **Site details** and **Create collections** all unticked; with **No dive — location only**, **Location** and **GPS** both unticked | "Tick at least one option" |
+| **Other site** chosen, or imposed (**No dive — location only**, or a chosen dive that has no site), and no site picked yet | "Choose a site" |
+| The position typed under **Other site** is not valid, while **GPS** is ticked | "Latitude between -90 and 90, longitude between -180 and 180, or both empty." |
+| The options ticked leave nothing to write on any photo: for example **GPS** alone on a site without GPS, or **Location** alone on a site with no name, country or city | "Nothing to write with these options." |
+| **Entire catalog**: no photo falls in the dives ticked | "No photo falls in the dives: adjust the clock offsets." |
+| **Lightroom selection**: no photo selected | "Select photos in Lightroom" |
+| **Create collections** ticked, and the collection set chosen in Settings is no longer in the catalog | "The collection set chosen in Settings (<place>) is no longer in the catalog. Choose another place in Settings.", with **Open Settings** |
+
+On the **Entire catalog** path, **GPS** alone (or **Location** alone) is not refused when only some of the dives' sites give it: only the photos of those dives get it. The effect on the right of **Site details** counts the photos that really get something, while **Apply to N photos** still counts every photo found.
+
+### Use cases
+
+**Tagging a whole trip, the first time.** **Entire catalog**; tick the trip's dives; at step 3, **Suggest for all**, then check each camera's card and the preview by dive; leave the options as they are; **Apply**. Each photo taken during a dive gets the dive data, its site's location and GPS, the clock offset and, when the dive has a profile, its depth, temperature and time into the dive. Each dive with photos gets its "<number> - <site>" collection. The photos outside the dives get nothing: see the boat and the beach, below.
+
+**Adding the collections later, without touching the photos' data.** **Entire catalog**, the same dives; at step 3 the cards start from the offsets remembered at the first run; at step 4, untick **Dive details** and **Site details** and keep **Create collections**. The bar reads "N collections · nothing is written on the photos". Each dive's photos go into its collection; a photo already in it is not added twice. The other way round works too: untick only **Create collections** to write the data without any collection.
+
+**Photos taken on the boat or the beach between dives.** On the **Entire catalog** path they fall outside the dives and get nothing. Select them in Lightroom, then choose **Lightroom selection** and **No dive — location only**; at step 4, pick the site by country › location › site and, if the beach is not where the site is, type its position under it; **Apply**. They get only the country, city, location and GPS: no dive field and no collection, and the dive data some of them may already carry stay as they are. To give them a dive's data instead, choose that dive: they get its data, its site and its collection, without depth ([section 7](#7-location-only-and-photos-outside-the-dives)).
+
+**A dive without a profile.** A dive entered by hand, or whose computer download the dive application did not keep, needs nothing special. Its photos get the dive data, the site and the collection, without depth, temperature or time, so **Copy depth to GPS altitude** has nothing to copy for them. On the **Entire catalog** path the clock offset still decides which photos belong to the dive, and is written on them; the preview by dive reads "No profile: dive data only". On the **Lightroom selection** path, step 3 reads "No profile: no per-photo data" and no clock offset is written.
+
+**Correcting the site of photos already tagged.** Select the photos in Lightroom, choose **Lightroom selection** and their dive; at step 4, untick **Dive details** and **Create collections**, choose **Other site…** and the right site; **Apply**. Only the country, city, location and GPS change: the dive data and the collections stay. A value the new site does not have is not cleared: if the old site had a city and the new one has none, the old city stays; clear it in Lightroom. For the photos of several dives at once, do the same on the **Entire catalog** path with **Other site, the same for all photos…**. If the site is wrong in your dive log, correct it there instead and run the dive again: the photos get the new site, and with **Create collections** ticked, a collection with the new site's name is created next to the old one.
+
+**Keeping a GPS position from the camera or set by hand.** Untick **GPS** under **Site details**: the country, city and location are written, the position stays. Even with **GPS** ticked, a site without a position leaves the photo's own. If a position was replaced by mistake, **Edit › Undo Dive Lens** in Lightroom brings it back.
+
+**The depth as GPS altitude, for maps and other software.** Tick **Copy depth to GPS altitude**, under **Dive details**: each photo that gets a depth also gets it as a negative GPS altitude. The option is unticked on every run, so that you decide each time, knowing four things: the Dive Lens **Depth** field stays in Lightroom and is lost on export; the GPS altitude travels with exported photos and shows in other software; it is always in metres, whatever your units; and it replaces an altitude already on the photo (**Edit › Undo** brings it back). Details in [section 6](#6-depth-in-the-gps-altitude).
+
+**Running Dive Lens again on photos already tagged.** **Entire catalog**: running dives again only adds. Nothing is duplicated, the photos found again get their values written again with the offsets shown, and a photo that now falls in another dive gets that dive's data and collection but also stays in its old collection: remove it from there by hand. **Lightroom selection**: with the dive the photos already carry, the dive data are written again, and so are the depth, temperature, time and clock offset of the photos taken during the dive; the other photos keep theirs. With another dive, its data replace the old dive's, and the photos stay in the old dive's collection.
+
+**Photos from two cameras with different clocks.** **Entire catalog** handles them in one run: each camera has its own card at step 3 and its own offset; **Suggest for all** sets them all at once, without touching a card you set by hand; two bodies of the same model are told apart by their serial number. **Ignore** a camera whose photos have nothing to do with the dives, such as a phone that stayed on the boat. After **Apply**, each camera's offset is remembered for next time (**Settings › Remembered clock offsets**). A clock changed in the middle of the trip is another matter: run the days before and after the change separately, each with its own offset ([section 11](#11-troubleshooting)).
+
+**Photos outside the dive's times, on the Lightroom selection path.** They are attached to the chosen dive anyway: they get its data, its site and its collection, but no depth, temperature, time or clock offset. Step 3 lists them under **Outside the dive's times**, step 4 under **Good to know before applying**, and the summary counts them as photos without depth. Not meant for that dive? Remove them from the selection in Lightroom before **Apply**. On the **Entire catalog** path, **Include photos taken at the surface** does the same for photos taken just before or just after a dive: they get the dive data, the site, the clock offset and the collection, without depth.
+
+**Undo.** Whatever the options, one **Apply** is one step in Lightroom: **Edit › Undo Dive Lens** takes back everything it wrote, GPS and altitude included ([section 8](#8-undo)).
+
+---
+
+## 5. What is written
 
 - **Create collections**: one collection per dive, named **"<dive number> - <site>"**, in the **Dive Lens** collection set (the place can be changed in Settings). A dive without a number gets its start date and time in place of the number.
 - **Dive details**: on each photo, dive number, start and end, duration, max depth, min and max temperatures, rating and the dive application the data come from. On the photos taken during a dive that has a profile, also the photo's **depth, temperature and time into the dive**, estimated between the two profile points around the moment of the photo. And the clock offset applied: on every photo placed in a dive (**Entire catalog**), on the photos taken during the dive, when it has a profile (**Lightroom selection**).
@@ -190,6 +291,7 @@ Good to know, on both paths:
 - The photo's time is its **original capture time**, so a TIFF that came back from Photoshop is matched like its original.
 - A site without country, city or GPS leaves the values already on the photo untouched (a GPS position from a phone stays).
 - With **Dive details** unticked, Dive Lens does not touch the dive fields at all; the photos are still attached to the dives for the site and the collections.
+- A value the dive does not have (temperature, rating…) clears the old Dive Lens value on the photo, so the fields always describe a single dive.
 - The units chosen in Settings apply to the values written. Photos already tagged keep the units in use when they were written.
 
 On the **Entire catalog** path:
@@ -204,8 +306,7 @@ On the **Lightroom selection** path:
 
 - Every photo selected at the moment of the click is written.
 - A photo taken outside the dive's times gets the dive data and the location, without per-photo data or clock offset.
-- A value the chosen dive does not have (temperature, rating…) clears the old Dive Lens value on the photo, so the fields always describe a single dive.
-- With **Dive details**, a photo that already carries a **different** dive loses that dive's own values: depth, temperature, time into the dive and clock offset, replaced by the new ones when the photo was taken during the new dive. Its GPS altitude follows section 5. The photo stays in the collection of its old dive: move it yourself if needed.
+- With **Dive details**, a photo that already carries a **different** dive loses that dive's own values: depth, temperature, time into the dive and clock offset, replaced by the new ones when the photo was taken during the new dive. Its GPS altitude follows section 6. The photo stays in the collection of its old dive: move it yourself if needed.
 - Tagging a photo with the dive it already carries rewrites its per-photo data when it was taken during the dive, with the offset shown; the other photos keep theirs.
 - If the selection changes in Lightroom just as you click **Apply** while per-photo data are written, nothing is written: "The selection changed in Lightroom. Nothing was written: check the per-photo data, then apply again."
 - A profile that cannot be read never blocks: the dive data are written without per-photo data.
@@ -214,7 +315,7 @@ After **Apply**, Dive Lens remembers the offset of each camera for next time, on
 
 ---
 
-## 5. Depth in the GPS altitude
+## 6. Depth in the GPS altitude
 
 The option **Copy depth to GPS altitude** sits at step 4, under **Dive details**. It is unticked on every run: tick it each time you want it. Four things to know:
 
@@ -234,7 +335,7 @@ And the rules that follow:
 
 ---
 
-## 6. Location only, and photos outside the dives
+## 7. Location only, and photos outside the dives
 
 On the **Entire catalog** path, photos taken outside any dive (on the boat, on the beach, while snorkelling) get nothing: step 3 shows them under **Outside the dives**, and so do the summary and **Good to know before applying**.
 
@@ -249,7 +350,7 @@ With **No dive — location only**, step 3 is skipped. At step 4, only **Site de
 
 ---
 
-## 7. Undo
+## 8. Undo
 
 **Edit › Undo** in Lightroom reverts everything one **Apply** wrote, in one step, GPS and altitude included, on both paths. Lightroom's Edit menu names it **Undo Dive Lens**.
 
@@ -259,7 +360,7 @@ With **No dive — location only**, step 3 is skipped. At step 4, only **Site de
 
 ---
 
-## 8. Settings
+## 9. Settings
 
 The gear at the top opens Settings, as does **Help › Plug-in Extras › Dive Lens Settings…** in Lightroom. They take the whole window. **Back** returns to the journey, at the step where you were, with your choices; if the dive log changed meanwhile, the journey starts again at step 1. The gear is greyed while Dive Lens writes to Lightroom.
 
@@ -274,7 +375,7 @@ Every change is saved at once.
 
 **Display**
 - **Language**: the system's by default. The menus and fields inside Lightroom follow Lightroom's language.
-- **Depth** and **Temperature**: **As MacDive** / **As Subsurface** (the units chosen in that application), or forced to metres / feet and °C / °F. They apply in the app and to the values written on photos. The GPS altitude is always in metres (section 5).
+- **Depth** and **Temperature**: **As MacDive** / **As Subsurface** (the units chosen in that application), or forced to metres / feet and °C / °F. They apply in the app and to the values written on photos. The GPS altitude is always in metres (section 6).
 
 **Collections**
 - **Place in**: the catalog root or an existing collection set (Lightroom must be connected to browse them). This is where the **Create collections** option of step 4 puts the collections.
@@ -311,7 +412,7 @@ Every change is saved at once.
 
 ---
 
-## 9. The Dive Lens fields in Lightroom
+## 10. The Dive Lens fields in Lightroom
 
 In the **Library** module, open the **Metadata** panel and choose **Dive Lens** in its menu. The fields are in four groups:
 
@@ -324,7 +425,7 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 
 ---
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 **A dive has no photo.** Check the camera clock at step 3: use **Suggest**, or set the difference by hand. If a camera clock or the dive computer's clock was changed during the trip, run the days before and after the change as two separate groups, each with its own offset: **Handle dive N separately** on the summary does this for the dives left without photos.
 
@@ -344,7 +445,7 @@ The Dive Lens fields stay in the Lightroom catalog: they are not written into th
 
 ---
 
-## 11. Privacy
+## 12. Privacy
 
 - Your dive log is only read, never modified. MacDive or Subsurface can stay open meanwhile.
 - Dive Lens sends no dive data anywhere. It goes on the Internet for two things only:
