@@ -1,4 +1,4 @@
-// Step 1 of the journey, "Photos" (spec F5): which photos to work on, two
+// Step 1 of the journey, "Scope" (spec F5): which photos to work on, two
 // cards separated by "or". "Entire catalog" leads to ticking dives; "The N
 // photos selected in Lightroom" to choosing one dive, with the selection's
 // cameras, day and live thumbnails (up to six). That card is always shown,
@@ -73,7 +73,7 @@ export function PhotosStep({
         <h2>{t("journey.photos.title")}</h2>
         <p className="muted small">{t("journey.photos.hint")}</p>
       </div>
-      <div className="choices" role="radiogroup" aria-label={t("journey.steps.photos")}>
+      <div className="choices" role="radiogroup" aria-label={t("journey.steps.scope")}>
         <label className={`choice ${onCatalog ? "choice-on" : ""}`}>
           <input
             type="radio"

@@ -220,7 +220,7 @@ export const en = {
   "coll.search.err.divesGone": "The dives chosen are no longer in the dive log: go back and choose other dives. To see the dive log as it is now, reopen Dive Lens.",
 
   // The journey (spec F5). Texts the app already had keep their key.
-  "journey.steps.photos": "Photos",
+  "journey.steps.scope": "Scope",
   "journey.steps.dives": "Dives",
   "journey.steps.clocks": "Clocks",
   "journey.steps.review": "Review & Apply",
@@ -271,7 +271,7 @@ export const en = {
   "journey.clocks.outside_other": "Outside the dives · {n} photos",
   "journey.clocks.outsideText": "Photos from the period that fall in no dive, even with the margin: on land, on the boat… They get nothing.",
   "journey.clocks.cameraCount": "{n} {camera}",
-  "journey.clocks.outsideHow": "To attach some to a dive anyway, or give them only a location: select them in Lightroom, then choose \"The selected photos\" at the Photos step.",
+  "journey.clocks.outsideHow": "To attach some to a dive anyway, or give them only a location: select them in Lightroom, then choose \"The selected photos\" at the Scope step.",
   "journey.clocks.emptyDive": "Dive {dive}: no photo — clock changed?",
   "journey.clocks.selectionHead_one": "The photo is attached to {dive}, whatever its time. The clock only gives it a depth: it gets one only if taken during the dive.",
   "journey.clocks.selectionHead_other": "The {n} photos are attached to {dive}, whatever their time. The clock only gives them a depth: only those taken during the dive get one.",

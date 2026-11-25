@@ -1,4 +1,4 @@
-// The journey (spec F5): one screen in five steps, Photos › Dives › Clocks ›
+// The journey (spec F5): one screen in five steps, Scope › Dives › Clocks ›
 // Review & Apply › Summary, on the path chosen at step 1. It holds the
 // journey's one state and the two photo readings, mounted once, so that what
 // the diver chose and set survives going back and forth between steps, and

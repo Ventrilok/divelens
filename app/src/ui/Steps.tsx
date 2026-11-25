@@ -8,7 +8,7 @@ import { t, type Key } from "../i18n";
 import type { Step, StepState } from "../journey/state";
 import { Icon } from "./Icon";
 
-const labels: Key[] = ["journey.steps.photos", "journey.steps.dives", "journey.steps.clocks", "journey.steps.review", "steps.summary"];
+const labels: Key[] = ["journey.steps.scope", "journey.steps.dives", "journey.steps.clocks", "journey.steps.review", "steps.summary"];
 
 export function Steps({ states, onGo }: { states: StepState[]; onGo?: (step: Step) => void }) {
   return (

@@ -222,7 +222,7 @@ export const fr: Record<Key, string> = {
   "coll.search.err.divesGone": "Les plongées choisies ne sont plus dans le carnet de plongée : revenez en arrière et choisissez d'autres plongées. Pour voir le carnet de plongée à jour, rouvrez Dive Lens.",
 
   // Le parcours (spécification F5). Les textes que l'application avait déjà gardent leur clé.
-  "journey.steps.photos": "Photos",
+  "journey.steps.scope": "Périmètre",
   "journey.steps.dives": "Plongées",
   "journey.steps.clocks": "Horloges",
   "journey.steps.review": "Vérifier et appliquer",
@@ -273,7 +273,7 @@ export const fr: Record<Key, string> = {
   "journey.clocks.outside_other": "Hors plongée · {n} photos",
   "journey.clocks.outsideText": "Photos de la période qui ne tombent dans aucune plongée, même avec la marge : à terre, sur le bateau… Elles ne reçoivent rien.",
   "journey.clocks.cameraCount": "{n} {camera}",
-  "journey.clocks.outsideHow": "Pour en rattacher quand même à une plongée, ou leur poser seulement un lieu : sélectionnez-les dans Lightroom, puis choisissez « Les photos sélectionnées » à l'étape Photos.",
+  "journey.clocks.outsideHow": "Pour en rattacher quand même à une plongée, ou leur poser seulement un lieu : sélectionnez-les dans Lightroom, puis choisissez « Les photos sélectionnées » à l'étape Périmètre.",
   "journey.clocks.emptyDive": "Plongée {dive} : aucune photo — horloge changée ?",
   "journey.clocks.selectionHead_one": "La photo est rattachée à {dive}, quelle que soit son heure. L'horloge sert seulement à lui donner une profondeur : elle n'en reçoit une que si elle est prise pendant la plongée.",
   "journey.clocks.selectionHead_other": "Les {n} photos sont rattachées à {dive}, quelle que soit leur heure. L'horloge sert seulement à leur donner une profondeur : seules celles prises pendant la plongée en reçoivent une.",
