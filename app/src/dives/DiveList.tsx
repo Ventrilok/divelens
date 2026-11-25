@@ -184,28 +184,16 @@ export function DiveList({ dives, mode, grouped, focusedId, onFocus, selected, o
                   )}
                   {capabilities.profile && (
                     <td>
-                      {d.hasProfile ? (
-                        <Icon name="curve" className="accent" label={t("list.hasProfile")} />
-                      ) : (
-                        <Icon name="noCurve" className="dim" label={t("list.noProfile")} />
-                      )}
+                      {d.hasProfile && <Icon name="curve" className="accent" label={t("list.hasProfile")} />}
                     </td>
                   )}
                   {capabilities.gps && (
                     <td>
-                      {hasGps(d) ? (
-                        <Icon name="pin" className="accent" label={t("list.hasGps")} />
-                      ) : (
-                        <Icon name="pin" className="dim" label={t("list.noGps")} />
-                      )}
+                      {hasGps(d) && <Icon name="pin" className="accent" label={t("list.hasGps")} />}
                     </td>
                   )}
                   <td>
-                    {hasNotes(d) ? (
-                      <Icon name="note" className="accent" label={t("list.hasNotes")} />
-                    ) : (
-                      <Icon name="note" className="dim" label={t("list.noNotes")} />
-                    )}
+                    {hasNotes(d) && <Icon name="note" className="accent" label={t("list.hasNotes")} />}
                   </td>
                 </tr>
                 {mark?.id === d.id && mark.note && (

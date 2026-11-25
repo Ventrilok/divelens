@@ -61,11 +61,8 @@ export const en = {
   "list.selectAll": "Select all shown dives",
   "list.select": "Select dive {n}",
   "list.hasProfile": "Profile available",
-  "list.noProfile": "No profile",
   "list.hasGps": "Site GPS available",
-  "list.noGps": "No site GPS",
   "list.hasNotes": "Notes available",
-  "list.noNotes": "No notes",
   "list.invalid": "Invalid",
   "list.invalidHint": "Marked invalid in {source}",
 

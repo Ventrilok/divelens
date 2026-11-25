@@ -104,7 +104,7 @@ Choisir l'autre chemin à l'étape 1 fait repartir de zéro les étapes suivante
 
 La liste montre toutes les plongées de votre carnet, regroupées par mois. Cherchez par numéro, site, lieu ou pays, et affinez avec les filtres (**Période**, **Pays**, **Profondeur**, **Note**, **Avec courbe**, **Avec GPS**, **Avec notes**). **Trier** ordonne la liste (**Plus récentes d'abord**, **Plus anciennes d'abord**, **Profondeur max**) ; Dive Lens retient votre choix. Un clic sur une plongée affiche sa fiche à droite : courbe, durée, profondeur max, températures, note, GPS du site avec une carte, et vos notes.
 
-Chaque ligne se termine par trois repères, en couleur quand la plongée en a, grisés sinon : **Courbe**, **GPS** (son site a une position GPS) et **Notes**. Survolez un repère pour le lire, par exemple « GPS du site disponible » ou « Pas de notes ». La colonne **GPS** et le filtre **Avec GPS** n'apparaissent que si l'application de plongée donne la position des sites, comme MacDive et Subsurface.
+Chaque ligne se termine par trois repères, affichés seulement quand la plongée en a : **Courbe**, **GPS** (son site a une position GPS) et **Notes**. Sinon la case reste vide. Survolez un repère pour le lire, par exemple « GPS du site disponible ». La colonne **GPS** et le filtre **Avec GPS** n'apparaissent que si l'application de plongée donne la position des sites, comme MacDive et Subsurface.
 
 - **Tout le catalogue** : cochez une ou plusieurs plongées, puis **Suivant**. La barre indique combien sont cochées et leurs jours ; **Tout désélectionner** les décoche.
 - **Les photos sélectionnées dans Lightroom** : cliquez sur une plongée, puis **Suivant**.

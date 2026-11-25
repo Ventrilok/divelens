@@ -609,7 +609,7 @@ export function SettingsScreen({
   return (
     <main className="screen screen-scroll">
       <div className="settings">
-        <button type="button" className="btn btn-g settings-back" onClick={onBack}>
+        <button type="button" className="btn btn-s settings-back" onClick={onBack}>
           <Icon name="back" />
           {t("settings.back")}
         </button>

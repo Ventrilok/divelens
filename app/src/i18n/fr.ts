@@ -63,11 +63,8 @@ export const fr: Record<Key, string> = {
   "list.selectAll": "Sélectionner toutes les plongées affichées",
   "list.select": "Sélectionner la plongée {n}",
   "list.hasProfile": "Courbe disponible",
-  "list.noProfile": "Pas de courbe",
   "list.hasGps": "GPS du site disponible",
-  "list.noGps": "Pas de GPS du site",
   "list.hasNotes": "Notes disponibles",
-  "list.noNotes": "Pas de notes",
   "list.invalid": "Invalide",
   "list.invalidHint": "Marquée invalide dans {source}",
 

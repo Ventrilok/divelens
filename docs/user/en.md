@@ -104,7 +104,7 @@ Choosing the other path at step 1 starts the next steps again: dives, clocks and
 
 The list shows every dive of your log, grouped by month. Search by number, site, location or country, and narrow down with the filters (**Period**, **Country**, **Depth**, **Rating**, **With profile**, **With GPS**, **With notes**). **Sort** orders the list (**Newest first**, **Oldest first**, **Max depth**); Dive Lens remembers your choice. Click a dive to see its details on the right: profile, duration, max depth, temperatures, rating, site GPS with a map, and your notes.
 
-Each row has three marks at its end, in colour when the dive has it and greyed when not: **Profile**, **GPS** (its site has a GPS position) and **Notes**. Hover over a mark to read it, for example "Site GPS available" or "No notes". The **GPS** column and the **With GPS** filter show only when the dive application gives site positions, as MacDive and Subsurface do.
+Each row has three marks at its end, shown only when the dive has it: **Profile**, **GPS** (its site has a GPS position) and **Notes**. Otherwise the cell stays empty. Hover over a mark to read it, for example "Site GPS available". The **GPS** column and the **With GPS** filter show only when the dive application gives site positions, as MacDive and Subsurface do.
 
 - **Entire catalog**: tick one or more dives, then **Next**. The bar shows how many are ticked and their days; **Deselect all** unticks them.
 - **Lightroom selection**: click one dive, then **Next**.
