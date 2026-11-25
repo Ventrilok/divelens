@@ -11,8 +11,9 @@
 // what was read and set.
 //
 // `forgotten`: the cameras whose remembered offset Settings forgot, in order, never
-// shortened. Each one is no longer shown as remembered on the selection described; the
-// offset shown stays, and the next description reads the offsets file again.
+// shortened. Each one is no longer shown as remembered, and its card goes back to 0:00
+// while it still showed that offset, not set by hand (afterForget); a description under
+// way when it was forgotten does not bring it back.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { findSelectionPhotos, suggestTagOffsets, tagPreview } from "../api";
@@ -21,10 +22,12 @@ import { searchFailure } from "../apply/failure";
 import { logRef, nextSearchNumber } from "../diveLog";
 import { useProfile } from "../dives/DiveDetail";
 import { t } from "../i18n";
-import type { ApplyError, Dive, DiveLog, LightroomStatus, SelectionPhotos, TagPreview } from "../types";
+import type { ApplyError, Camera, Dive, DiveLog, LightroomStatus, SelectionPhotos, TagPreview } from "../types";
 import { coveringDive } from "./covers";
 import type { SelectionReview } from "./rules";
 import {
+  afterForget,
+  arrivedForgetting,
   camerasToSuggest,
   currentDescription,
   describedForgetting,
@@ -108,6 +111,12 @@ export function useSelectionPhotos(
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [counts, setCounts] = useState<Counts | null>(null);
   const asked = useRef(0);
+  // The offsets forgotten in Settings so far, and the cameras of the last description
+  // (kept while the selection is not read).
+  const forgottenNow = useRef(forgotten);
+  forgottenNow.current = forgotten;
+  const lastCameras = useRef<Camera[]>([]);
+  if (described) lastCameras.current = described.photos.cameras;
 
   // A new run: what was read and set is thrown away, and counts asked before
   // are no longer wanted. Before the reading below, which starts again.
@@ -139,9 +148,12 @@ export function useSelectionPhotos(
     const version = lr.selectionVersion;
     setReading(true);
     setReadFailure(null);
+    const seen = forgottenNow.current.length;
     findSelectionPhotos(logRef(log.source), nextSearchNumber())
-      .then((photos) => {
+      .then((found) => {
         if (!live) return;
+        // An offset forgotten in Settings meanwhile is not remembered on these photos either.
+        const photos = arrivedForgetting(found, forgottenNow.current, seen);
         setOffsets((o) => keepOffsets(o, photos.cameras));
         setTouched((s) => onlyCameras(s, photos.cameras));
         setNotes((n) => notesOfCameras(n, photos.cameras));
@@ -164,12 +176,17 @@ export function useSelectionPhotos(
   }, [wanted, lr.selectionVersion, again, run]);
   const current = currentDescription(described, lr.selectionVersion, reading, readFailure);
 
-  // Offsets forgotten in Settings since the last time: no longer shown as remembered.
+  // Offsets forgotten in Settings since the last time: no longer remembered, and back to
+  // 0:00 on the cards that still showed them (the counts and "Covers the selection" follow).
   const forgottenSeen = useRef(forgotten.length);
   useEffect(() => {
     const keys = forgotten.slice(forgottenSeen.current);
     forgottenSeen.current = forgotten.length;
-    if (keys.length > 0) setDescribed((d) => describedForgetting(d, keys));
+    if (keys.length === 0) return;
+    const after = afterForget(lastCameras.current, offsets, touched, keys);
+    lastCameras.current = after.cameras;
+    if (after.offsets !== offsets) setOffsets(after.offsets);
+    setDescribed((d) => describedForgetting(d, keys));
   }, [forgotten]);
 
   // Live counts for the dive chosen and the offsets shown: the latest answer

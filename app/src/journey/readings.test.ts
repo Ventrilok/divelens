@@ -2,6 +2,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { setLanguage, t } from "../i18n";
 import {
+  afterForget,
+  arrivedForgetting,
   camerasToSuggest,
   currentDescription,
   describeAgain,
@@ -124,6 +126,51 @@ describe("an offset forgotten in Settings", () => {
     expect(searchForgetting(searching, ["Z9"])).toBe(searching);
     const same = { state: "ready" as const, period };
     expect(searchForgetting(same, ["Nikon"])).toBe(same);
+  });
+
+  it("sends a card still showing it back to 0:00, as a new search would show it", () => {
+    const offsets = { "TG-6": 240, Z9: 60, GoPro: 0 };
+    const after = afterForget(cameras, offsets, new Set(), ["TG-6"]);
+    expect(after.offsets).toEqual({ "TG-6": 0, Z9: 60, GoPro: 0 });
+    expect(after.cameras.map((c) => [c.key, c.remembered])).toEqual([
+      ["TG-6", null],
+      ["Z9", 60],
+      ["GoPro", null],
+    ]);
+  });
+
+  it("keeps an offset set by hand, or a suggested one", () => {
+    // Set by hand, even back to the remembered value: the diver's.
+    const byHand = afterForget(cameras, { "TG-6": 240, Z9: 75, GoPro: 0 }, new Set(["TG-6", "Z9"]), ["TG-6", "Z9"]);
+    expect(byHand.offsets).toEqual({ "TG-6": 240, Z9: 75, GoPro: 0 });
+    // Suggested: no longer the remembered value, and not set by hand.
+    const suggested = afterForget(cameras, { "TG-6": 255, Z9: 60, GoPro: 0 }, new Set(), ["TG-6"]);
+    expect(suggested.offsets).toEqual({ "TG-6": 255, Z9: 60, GoPro: 0 });
+    expect(suggested.cameras[0].remembered).toBeNull();
+  });
+
+  it("changes nothing on screen when no camera shown had it", () => {
+    const offsets = { "TG-6": 240, Z9: 60, GoPro: 0 };
+    const touched = new Set<string>();
+    for (const keys of [["Nikon"], ["GoPro"], []]) {
+      const after = afterForget(cameras, offsets, touched, keys);
+      expect(after.cameras).toBe(cameras);
+      expect(after.offsets).toBe(offsets);
+    }
+  });
+
+  it("reaches a reading under way when it arrives: only what was forgotten after it started", () => {
+    const found = { search: 4, photos: 30, undated: 0, cameras };
+    // Two offsets forgotten before the reading started (already read from the file), one after.
+    const arrived = arrivedForgetting(found, ["Nikon", "Z9", "TG-6"], 2);
+    expect(arrived.cameras.map((c) => [c.key, c.remembered])).toEqual([
+      ["TG-6", null],
+      ["Z9", 60],
+      ["GoPro", null],
+    ]);
+    expect(arrived.search).toBe(4);
+    expect(arrivedForgetting(found, ["TG-6"], 1)).toBe(found);
+    expect(arrivedForgetting(found, [], 0)).toBe(found);
   });
 
   it("reaches the selection described, once described", () => {
