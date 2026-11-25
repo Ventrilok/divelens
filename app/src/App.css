@@ -322,6 +322,27 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .tbl tr.row-warn td { background: rgba(242, 118, 46, 0.07); }
 .coll-total { padding: 14px 20px; }
 
+/* The journey, step 1: two cards separated by "or" */
+.photos-head { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.photos-head h2 { font-size: 18px; font-weight: 700; }
+.choices { display: flex; flex-direction: column; gap: 12px; max-width: 760px; }
+.choice { display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); cursor: pointer; }
+.choice input[type="radio"] { width: 18px; height: 18px; margin-top: 2px; flex: none; }
+.choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.choice-on { border-color: var(--accent); background: rgba(105, 183, 191, 0.08); }
+.choice-off { cursor: not-allowed; }
+.choice-off .choice-text { opacity: 0.55; }
+.choice-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 13px; line-height: 1.45; color: var(--text-3); }
+.choice-text b { font-size: 16px; font-weight: 700; color: var(--text); }
+.choice-text .thumbs { margin-top: 6px; }
+.choices-or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.choices-or::before, .choices-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+/* The journey, step 2: the "Photos: …" line, "No dive" and why a dive covers the selection */
+.dives-head { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tbl tr.mark-note td { height: auto; padding: 7px 12px 9px 48px; background: rgba(105, 183, 191, 0.14); color: var(--accent-text); font-size: 12px; white-space: normal; }
+.mark-note-text { display: flex; align-items: center; gap: 8px; }
+
 /* The journey, step 3 */
 .journey-line { color: var(--text-2); }
 .clocks-note { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; font-size: 13px; color: var(--text-2); }
