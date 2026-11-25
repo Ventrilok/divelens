@@ -115,6 +115,8 @@ export function useCatalogPhotos(
     }
     let live = true;
     setSearch({ state: "searching" });
+    // Counts still asked for the search before this one are no longer wanted.
+    asked.current++;
     setPreview(null);
     setPreviewFailed(false);
     findCollectionPhotos(logRef(log.source), nextSearchNumber(), diveKey.split(","))

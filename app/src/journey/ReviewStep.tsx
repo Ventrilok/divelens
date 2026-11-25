@@ -155,7 +155,11 @@ export function ReviewStep({
    */
   const answered = (runAtClick: number, perPhoto: boolean, error: ApplyError | null, show: () => void) => {
     busy.current = false;
-    if (staleAnswer(runAtClick, runNow.current, mounted.current)) return;
+    if (staleAnswer(runAtClick, runNow.current, mounted.current)) {
+      // Still shown for another run: the write it waited for is over.
+      if (mounted.current) setRun({ state: "idle" });
+      return;
+    }
     show();
     const again = readAgain(path, perPhoto, error);
     if (again.searchAgain) catalog.searchAgain();
