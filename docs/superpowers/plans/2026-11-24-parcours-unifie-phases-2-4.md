@@ -44,7 +44,7 @@ Faits pour ce plan, visibles à l'écran, à corriger s'ils ne conviennent pas :
 1. La sélection change dans Lightroom entre l'étape 3 et « Appliquer » : rien n'est écrit, le refus s'affiche à l'étape 4, la sélection est relue, on reste à l'étape 4 (Tasks 2, 6, 7).
 2. La sélection devient vide en cours de parcours : on reste sur l'étape, « Appliquer » grisé avec « Sélectionnez des photos dans Lightroom » ; à l'étape 1, la carte se grise et « Suivant » aussi si ce chemin était choisi (Tasks 5, 8).
 3. Lightroom se déconnecte à l'étape 3 ou 4, puis revient : avertissement, « Appliquer » grisé, puis nouvelle recherche des photos qui garde les décalages, les appareils ignorés et la marge déjà réglés (Task 6).
-4. Le carnet change pendant que les Réglages sont ouverts : « Retour » ramène à l'étape 1 avec le bandeau, plus aucune plongée de l'ancien carnet n'est cochée ni envoyée (Tasks 1, 5, 8).
+4. Le carnet change pendant que les Réglages sont ouverts : « Retour » ramène à l'étape 1 sans bandeau : il n'apparaît qu'après un refus (F2) ; plus aucune plongée de l'ancien carnet n'est cochée ni envoyée (Tasks 1, 5, 8).
 5. « GPS » seul coché avec un site sans GPS, ou les trois options décochées : « Appliquer » grisé ou refus « rien à écrire » affiché, jamais une écriture vide qui crée une étape d'annulation (Tasks 5, 7).
 
 ---
