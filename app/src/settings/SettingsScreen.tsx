@@ -574,28 +574,6 @@ export function SettingsScreen({
           </Row>
         </section>
 
-        <section className="card" aria-labelledby="s-write">
-          <h2 id="s-write" className="sec">
-            {t("settings.writing")}
-          </h2>
-          <Row title={t("settings.altitude")} hint={t("settings.altitudeHint")} top>
-            <input
-              className="sw"
-              type="checkbox"
-              role="switch"
-              aria-label={t("settings.altitude")}
-              checked={settings.depthToAltitude}
-              onChange={(e) => onChange({ depthToAltitude: e.target.checked })}
-            />
-            <div className="set-explain">
-              <span>{t("settings.altitude1")}</span>
-              <span>{t("settings.altitude2")}</span>
-              <span>{t("settings.altitudeMetres")}</span>
-              <span className="set-warn">{t("settings.altitude3")}</span>
-            </div>
-          </Row>
-        </section>
-
         <CollectionsSection settings={settings} lr={lr} onChange={onChange} />
 
         <BackupSection settings={settings} logState={logState} writing={writing} onChange={onChange} />

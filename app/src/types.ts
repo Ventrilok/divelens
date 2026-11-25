@@ -355,8 +355,7 @@ export interface Settings {
   source: { kind: SourceKind; locations: Record<SourceKind, string> };
   units: { depth: "source" | "m" | "ft"; temp: "source" | "c" | "f" };
   language: "system" | "en" | "fr";
-  depthToAltitude: boolean;
-  /** Where Create Collections puts the collections. */
+  /** Where "Create collections" (step 4 of the journey) puts the collections. */
   collections: { parent: string[]; group: string };
   logLevel: "normal" | "detailed";
   diveSort: Sort | null;
