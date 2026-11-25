@@ -152,6 +152,7 @@ button.flow-link:focus-visible { outline: 2px solid var(--accent); outline-offse
 .dives-body { flex: 1; min-height: 0; display: flex; gap: 16px; align-items: stretch; }
 .list-card { flex: 1 1 auto; min-width: 0; overflow: auto; outline: none; }
 .list-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.list-empty-under { padding: 32px 16px; }
 .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl th { position: sticky; top: 0; z-index: 1; background: var(--bg-head); text-align: left; font-weight: 600; font-size: 12px; color: var(--muted); padding: 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .tbl td { padding: 0 10px; height: 44px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; color: var(--text-2); cursor: default; }

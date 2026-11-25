@@ -11,7 +11,7 @@
 import { useEffect, useMemo } from "react";
 import { DiveDetail } from "../dives/DiveDetail";
 import { DiveList } from "../dives/DiveList";
-import { EmptyList } from "../dives/EmptyList";
+import { EmptyList, EmptyMessage } from "../dives/EmptyList";
 import { FilterBar } from "../dives/FilterBar";
 import { useDiveBrowser } from "../dives/useDiveBrowser";
 import type { Sort } from "../dives/filters";
@@ -117,7 +117,8 @@ export function DivesStep({
       />
 
       <div className="dives-body">
-        {shown.length > 0 ? (
+        {/* Selection path: "No dive — location only" stays, above the message, when no dive is listed. */}
+        {shown.length > 0 || !multi ? (
           <DiveList
             dives={shown}
             mode={multi ? "multi" : "single"}
@@ -140,6 +141,7 @@ export function DivesStep({
                     onChoose: () => dispatch({ type: "pickDive", pick: { kind: "noDive" } }),
                   }
             }
+            empty={<EmptyMessage filters={filters} onChange={setFilters} />}
             capabilities={capabilities}
             units={units}
             source={source}
