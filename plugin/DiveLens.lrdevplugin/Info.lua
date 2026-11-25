@@ -3,8 +3,8 @@ DiveLens plugin manifest.
 
 The plugin is invisible: it declares the DiveLens metadata fields, keeps a
 local link with the DiveLens app, and offers one Library menu item that
-opens the app at the start of its journey and one Help menu item that opens
-it on Settings. All user interface lives in the app.
+opens the app on its journey and one Help menu item that opens it on
+Settings. All user interface lives in the app.
 
 The version is a copy of app/package.json's: change it with
 `npm run set-version <version>` from app/, never by hand (the app's tests
@@ -32,8 +32,7 @@ return {
     LrMetadataProvider = "Metadata.lua",
     LrMetadataTagsetFactory = "Tagset.lua",
 
-    -- Always enabled: without photos selected, the journey's first step
-    -- greys out only its "selection" path (spec section 3).
+    -- Always enabled, with or without photos selected (spec section 3).
     LrLibraryMenuItems = {
         {
             title = LOC "$$$/DiveLens/Menu/Open=Open Dive Lens…",

@@ -1,8 +1,8 @@
 --[[
 Plug-in Manager entry. Lightroom shows the version itself; this adds the link
-state, buttons to open the app (at the start of its journey, as the Library
-menu does, or on Settings), and the Dive Lens website and source code. All
-settings live in the app.
+state, buttons to open the app (on its journey, as the Library menu does,
+or on Settings), and the Dive Lens website and source code. All settings
+live in the app.
 
 Part of DiveLens, GPL-3.0-or-later.
 ]]

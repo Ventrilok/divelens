@@ -459,32 +459,55 @@ fn a_collection_already_there_is_completed_not_created() {
     );
 }
 
-/// Whether "Tag Selection" writes its collection in the catalogue (the
-/// envelope makes or completes `plan.collection` with the selected photos):
-/// only when the request names one, with photos selected, as for the
-/// groups of "Create Collections". The photos' writes do not depend on it.
+/// The collection "Tag Selection" writes and what the app is told of it are
+/// one value (Tagging.selectionCollectionToWrite): the envelope makes or
+/// completes its `collection` with the selected photos, and sends it as it
+/// is. Only when the request names one, with photos selected, as for the
+/// groups of "Create Collections"; what the app is told is what it was told
+/// before (selectionCollection, with the number of photos selected).
 #[test]
-fn the_selection_writes_its_collection_only_when_named() {
-    run(
+fn the_selection_is_told_the_collection_it_writes() {
+    use serde_json::json;
+    let out = json_of(
         &lua(),
         r#"
+        local Json = require "Json"
         local Tagging = require "Tagging"
-        local changes = { { kind = "raw", field = "location", value = "Coral Garden" } }
         local p1, p2 = { id = "p1" }, { id = "p2" }
-        local function idOf(p) return p.id end
         local name = "101 - Three Arches Reef"
-        local named = Tagging.tagWrites(changes, { p1, p2 }, {}, nil, idOf, name)
-        local unnamed = Tagging.tagWrites(changes, { p1, p2 }, {}, nil, idOf)
-        assert(named.collection == name, tostring(named.collection))
-        assert(unnamed.collection == nil, tostring(unnamed.collection))
-        assert(#named.writes == 2 and #unnamed.writes == 2)
-        for i, w in ipairs(named.writes) do
-            assert(w.photo == unnamed.writes[i].photo and #w.changes == #unnamed.writes[i].changes)
-        end
-        local none = Tagging.tagWrites(changes, {}, {}, nil, idOf, name)
-        assert(none.collection == nil, tostring(none.collection))
+        local function told(c) return c == nil and Json.null or c end
+        local new = Tagging.selectionCollectionToWrite(name, { p1, p2 }, {})
+        local there = Tagging.selectionCollectionToWrite(name, { p1, p2 }, { [name] = true })
+        return Json.encode {
+            new = told(new),
+            there = told(there),
+            unchanged = Json.encode(new) == Json.encode(Tagging.selectionCollection(name, 2, {}))
+                and Json.encode(there) == Json.encode(Tagging.selectionCollection(name, 2, { [name] = true })),
+            none = told(Tagging.selectionCollectionToWrite(nil, { p1, p2 }, {})),
+            noPhoto = told(Tagging.selectionCollectionToWrite(name, {}, {})),
+        }
         "#,
     );
+    assert_eq!(
+        out,
+        json!({
+            "new": { "collection": "101 - Three Arches Reef", "count": 2, "created": true },
+            "there": { "collection": "101 - Three Arches Reef", "count": 2, "created": false },
+            "unchanged": true,
+            "none": null,
+            "noPhoto": null,
+        })
+    );
+    // The envelope takes that one value for both: it asks for it once and
+    // never makes the answer on its own.
+    let envelope = std::fs::read_to_string(common::plugin_dir().join("ApplyTags.lua")).unwrap();
+    assert_eq!(
+        envelope
+            .matches("Tagging.selectionCollectionToWrite(")
+            .count(),
+        1
+    );
+    assert!(!envelope.contains("Tagging.selectionCollection("));
 }
 
 /// What `lua` returns, a JSON text (Json.encode), as a value to compare.

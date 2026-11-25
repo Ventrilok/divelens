@@ -102,8 +102,8 @@ function ApplyCollections.run(s, message)
                     if step.photo then CatalogWrite.write(step.photo, step.changes) end
                     advance()
                 end
-                if group.collection then
-                    local collection = cat:createCollection(group.collection, container, true)
+                if group.collectionToWrite then
+                    local collection = cat:createCollection(group.collectionToWrite, container, true)
                     collection:addPhotos(group.photos)
                 end
             end

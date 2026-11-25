@@ -574,7 +574,7 @@ fn a_second_group_of_the_same_new_name_is_completed() {
 }
 
 /// Which groups write their collection in the catalogue (the envelope makes
-/// or completes `plan.groups[gi].collection` with the group's photos found):
+/// or completes `plan.groups[gi].collectionToWrite` with the group's photos found):
 /// only a group with a name and at least one photo found, whether the
 /// collection is new or already there.
 #[test]
@@ -591,10 +591,10 @@ fn only_a_named_group_with_a_photo_found_writes_its_collection() {
         local function written(plan)
             local out = {{}}
             for gi, g in ipairs(plan.groups) do
-                if g.collection then
+                if g.collectionToWrite then
                     local ids = {{}}
                     for i, p in ipairs(g.photos) do ids[i] = p.id end
-                    out[#out + 1] = {{ group = gi, collection = g.collection, photos = ids }}
+                    out[#out + 1] = {{ group = gi, collection = g.collectionToWrite, photos = ids }}
                 end
             end
             return #out > 0 and out or Json.emptyArray

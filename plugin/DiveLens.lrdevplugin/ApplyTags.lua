@@ -30,9 +30,10 @@ local ApplyTags = {}
 -- The photos taken during the dive get their values, and the other dive's
 -- are not cleared on them first (Tagging.notOverwritten). When the request
 -- names a collection (Tagging.planCollection), the selected photos also go
--- in it, made when missing, in the first write (Tagging.tagWrites); where
--- it goes is looked up before any photo is written (CatalogWrite.holder).
--- Always answers the app.
+-- in it, made when missing, in the first write; where it goes is looked up
+-- before any photo is written (CatalogWrite.holder). The collection written
+-- and the app's answer about it are one value
+-- (Tagging.selectionCollectionToWrite). Always answers the app.
 function ApplyTags.run(s, message)
     local id = message.id
     s.applyStage = { id = id, stage = "before" }
@@ -65,6 +66,9 @@ function ApplyTags.run(s, message)
         if not holder then return end
         for _, c in ipairs(holder:getChildCollections()) do existing[c:getName()] = true end
     end
+    -- The collection the first write makes or completes, as the app is told
+    -- of it; nil for none.
+    local collection = Tagging.selectionCollectionToWrite(place and place.name, photos, existing)
 
     CatalogWrite.apply(s, id, {
         catalog = catalog,
@@ -75,14 +79,14 @@ function ApplyTags.run(s, message)
             return Tagging.writesDive(changes) and CatalogWrite.photosBefore(cat, photos) or {}
         end,
         writeFirst = function(cat, before, advance)
-            local planned = Tagging.tagWrites(changes, photos, before, perPhoto, Tagging.photoId, place and place.name)
+            local planned = Tagging.tagWrites(changes, photos, before, perPhoto, Tagging.photoId)
             for _, w in ipairs(planned.writes) do
                 CatalogWrite.write(w.photo, w.changes)
                 advance()
             end
-            if planned.collection then
+            if collection then
                 -- All the selected photos: Lightroom ignores those already in it.
-                cat:createCollection(planned.collection, container, true):addPhotos(photos)
+                cat:createCollection(collection.collection, container, true):addPhotos(photos)
             end
             return { later = planned.later, cleared = planned.cleared, withValues = planned.withValues }
         end,
@@ -91,7 +95,7 @@ function ApplyTags.run(s, message)
                 type = "applied",
                 id = id,
                 count = total,
-                collection = place and Tagging.selectionCollection(place.name, total, existing) or nil,
+                collection = collection,
             }
         end,
         log = function(result, second)
