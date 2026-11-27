@@ -517,7 +517,7 @@ Un fichier journal est conservé pour le diagnostic, consultable depuis les rég
 **Emplacement [Décidé, 2026-11-12]** : l'application écrit son journal (`DiveLens App.log`) dans le dossier des journaux de Lightroom, à côté de celui du plugin (`DiveLens.log`) : `~/Library/Logs/Adobe/Lightroom/LrClassicLogs/` sur Mac, `%LOCALAPPDATA%\Adobe\Lightroom\Logs\LrClassicLogs\` sur Windows. « Afficher le journal » ouvre ce dossier, avec les deux fichiers côte à côte. Le niveau choisi (Normal / Détaillé) s'applique aux deux. Le journal de l'application est limité en taille : au-delà, l'ancien est gardé une fois puis remplacé.
 
 **Signaler un problème [Décidé, 2026-11-14]** :
-- Les journaux ne sont jamais joints à un ticket GitHub : le dépôt est public, et les journaux contiennent les sites de plongée et des chemins de fichiers. Le problème se décrit dans un ticket ; si les journaux sont nécessaires, ils sont demandés, puis envoyés par e-mail à divelens@querton.com seulement, avec le numéro du ticket. Le guide (F12), le formulaire de signalement de bug, `CONTRIBUTING.md` et `README.md` le disent.
+- Les journaux ne sont jamais joints à un ticket GitHub : le dépôt est public, et les journaux contiennent les sites de plongée et des chemins de fichiers. Le problème se décrit dans un ticket ; si les journaux sont nécessaires, ils sont demandés, puis envoyés par e-mail à divelens@querton.com seulement, avec le numéro du ticket. Le guide (F12) et le formulaire de signalement de bug le disent.
 - Prise en charge d'une nouvelle application de plongée : les carnets réels anonymisés envoyés par le public sont acceptés, en plus des carnets fictifs, en privé à la même adresse, jamais joints publiquement. Ils servent aux essais. Le dépôt, lui, ne contient que des données de test fictives ou correctement anonymisées, jamais un carnet réel tel quel.
 - Le signalement privé des vulnérabilités de GitHub est activé. Une faille ou un secret exposé se signale par là ou à la même adresse, jamais dans un ticket ou une pull request publics (`SECURITY.md`, en anglais). Seule la dernière version publiée est prise en charge.
 
@@ -563,7 +563,7 @@ Diffusion **[Décidé]** : un seul texte source, publié à deux endroits :
 
 **Sauvegarde des réglages [2026-11-14]** : F11 étant livré, le guide la décrit dans la section Réglages (contenu, export, import, carnet introuvable, fin de la reprise de l'ancien module après un import).
 
-**Guide des contributeurs [2026-11-14]** : `CONTRIBUTING.md` (en anglais) a une section « Adding a dive application » : ticket « Support a new dive application » d'abord, puis la fiche de l'application, le lecteur copié du lecteur d'exemple, le carnet de référence, les tests communs, la vérification locale `verify_log` (sa sortie est une donnée personnelle, jamais dans le dépôt, un ticket ou une pull request) et la liste de vérification de la pull request, qui demande aussi de citer la nouvelle application dans le README et le guide **[Décidé, 2026-11-15]** ; les étapes restent dans `docs/contributing/reference-log.md`. `CLAUDE.md` importe `CONTRIBUTING.md` au lieu d'en recopier les règles. **[Décidé, 2026-11-14]**
+**Guide des contributeurs [Décidé, 2026-11-27]** : `CONTRIBUTING.md` est supprimé et le README n'a plus de section « Contributing ». Les pages de `docs/contributing/` restent ; les étapes pour ajouter une application de plongée sont dans `docs/contributing/reference-log.md`.
 
 ### F13 — Mises à jour automatiques
 
