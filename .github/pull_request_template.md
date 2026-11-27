@@ -2,7 +2,7 @@
 The title follows Conventional Commits, like a commit message:
 <type>(<scope>): <description>, imperative, lower-case, no trailing period,
 at most 72 characters. Pull requests are squash-merged: the title becomes the
-commit on main. See CONTRIBUTING.md.
+commit on main.
 
 This repository is public: never attach or paste a real dive log, a dive-log
 database, output produced from one, the log files DiveLens.log and
@@ -27,7 +27,7 @@ Crop or blur screenshots.
 
 ## Checks run
 
-<!-- Tick what you ran, for what you changed (see "Checks before you commit" in CONTRIBUTING.md). -->
+<!-- Tick what you ran, for what you changed (see "Checks before committing" in CLAUDE.md). -->
 
 - [ ] `cargo fmt --all --check`
 - [ ] Core: `cargo clippy -p divelens-core -p libdivecomputer-sys --all-targets -- -D warnings` and `cargo test -p divelens-core`

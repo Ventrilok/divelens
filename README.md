@@ -1,44 +1,98 @@
+<div align="center">
+
+<img src="app/icon-source/logo-color.svg" alt="" width="96">
+
 # Dive Lens
 
-Dive Lens links your underwater photos in Adobe Lightroom Classic with your dive log.
+**Your underwater photos, linked to your dive log, right inside Lightroom Classic.**
 
-One Library menu item in Lightroom, **Library › Plug-in Extras › Open Dive Lens…**, opens a journey in five steps: Scope, Dives, Clocks, Review & Apply, Summary. It works on:
+[![Latest release](https://img.shields.io/github/v/release/Ventrilok/divelens)](https://github.com/Ventrilok/divelens/releases/latest)
+![Platforms: macOS and Windows](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-blue)
+![Lightroom Classic 14+](https://img.shields.io/badge/Lightroom%20Classic-14%2B-31a8ff)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-green)](LICENSE)
 
-- **the entire catalog**: you tick dives, and Dive Lens finds the photos taken during each one from their capture time, creates one collection per dive, and tags every photo with the dive data, the dive site, and the **depth, water temperature and elapsed time at the moment the photo was taken**;
-- **the Lightroom selection**: the photos selected in Lightroom are attached to one dive you choose, whatever their time, or given only a dive site.
+[**Download**](https://github.com/Ventrilok/divelens/releases/latest) ·
+User guide: [English](docs/user/en.md) · [Français](docs/user/fr.md) · [Deutsch](docs/user/de.md) ·
+[Report a problem](https://github.com/Ventrilok/divelens/issues/new/choose)
 
-You choose what is written before applying, and one Undo in Lightroom takes it all back.
+<img src="docs/images/lightroom.jpg" alt="Lightroom Classic showing a diver photo with its depth, water temperature, dive and site, and one collection per dive" width="900">
 
-Dive Lens reads your dive log directly, read-only. Nothing to export.
+</div>
 
-## Status
+## Why Dive Lens
 
-Version 2 is in development. It replaces the 0.x plugin with a dedicated desktop app.
+Back from a trip, you have hundreds of photos and a dive log, and nothing connects them. How deep were you when you took that shot? Which dive was it, on which site?
 
-| | V1 of the new app |
+Dive Lens reads your dive log, matches each photo to its dive by its capture time, and writes the answers in your Lightroom catalog.
+
+## What you get
+
+- **The moment of each shot:** depth, water temperature and time into the dive, when the dive has a profile.
+- **The dive:** number, start and end, duration, max depth, temperatures and rating.
+- **The site:** its name, city, country and GPS position, in Lightroom's standard location fields.
+- **One collection per dive**, such as "42 - Blue Reef".
+- **Whole trips or a few photos:** let Dive Lens sort the entire catalog by time, or attach the photos you selected to one dive, or give them only a location.
+
+## How it works
+
+In Lightroom, choose **Library › Plug-in Extras › Open Dive Lens…**. The Dive Lens app opens and guides you through five steps.
+
+### 1. Choose the photos
+
+The entire catalog, or the photos selected in Lightroom.
+
+<img src="docs/images/step-scope.png" alt="Step 1: entire catalog or Lightroom selection" width="800">
+
+### 2. Pick your dives
+
+Search and filter your log, with the profile, site and map of each dive.
+
+<img src="docs/images/step-dives.png" alt="Step 2: the list of dives, with the profile and map of the selected one" width="800">
+
+### 3. Set the camera clocks
+
+A camera is rarely on time with the dive computer, and is often still on the time of home. **Suggest** finds the offset for each camera, and a preview shows how many photos fall in each dive.
+
+<img src="docs/images/step-clocks.png" alt="Step 3: the clock offset of each camera and the number of photos per dive" width="800">
+
+### 4. Review and apply
+
+Choose what gets written: dive details, site details, collections, and if you wish the depth as GPS altitude. Nothing is written before you click **Apply**.
+
+### 5. Done
+
+A summary of what was written. Changed your mind? One **Edit › Undo** in Lightroom takes it all back.
+
+<img src="docs/images/step-summary.png" alt="Step 5: photos tagged, photos with depth and collections created" width="800">
+
+## Install
+
+You need Lightroom Classic and your dive application on the same computer.
+
+1. Quit Lightroom.
+2. Download the installer from the [latest release](https://github.com/Ventrilok/divelens/releases/latest): `.pkg` for macOS, `Setup.exe` for Windows. No administrator password needed.
+3. Start Lightroom: Dive Lens is in **Library › Plug-in Extras**.
+
+The Windows installer is not signed yet: if Windows shows "Windows protected your PC", click **More info**, then **Run anyway**.
+
+The [user guide](docs/user/en.md#1-install) also covers the zip install, uninstalling, and moving from the 0.x plug-in.
+
+## Compatibility
+
+| | |
 |---|---|
-| Dive logs | MacDive, Subsurface |
-| Platforms | macOS (Intel and Apple Silicon), Windows |
-| Lightroom | Lightroom Classic 14+ |
+| **Dive logs** | MacDive (macOS), Subsurface (macOS and Windows) |
+| **Computers** | macOS (Intel and Apple Silicon), Windows |
+| **Lightroom** | Lightroom Classic 14 or later |
+| **Languages** | English, French, German |
 
-BlueDive and Submersion are planned next.
+BlueDive and Submersion are planned next. Using another dive application? [Ask for it](https://github.com/Ventrilok/divelens/issues/new/choose).
 
-The product specification (in French) is in [`docs/spec-v1.md`](docs/spec-v1.md).
+## Your data stays yours
+
+- Your dive log is **read directly and never modified**. Nothing to export.
+- **No dive data is sent anywhere.** Dive Lens goes online only for the site map and for updates ([details](docs/user/en.md#12-privacy)).
 
 ## License
 
-Dive Lens is free and open source, under the [GNU General Public License v3.0](LICENSE).
-
-It includes [libdivecomputer](https://www.libdivecomputer.org) (LGPL 2.1, in `third_party/libdivecomputer`) to decode dive-computer data.
-
-## Building
-
-Clone with `git clone --recursive`, or run `git submodule update --init` after cloning.
-
-## Contributing
-
-Contributions are welcome. [`CONTRIBUTING.md`](CONTRIBUTING.md) explains how the project is built, the commands, and the rules for branches, commits and pull requests.
-
-To report a bug, suggest a feature or ask for another dive application, use the [issue templates](https://github.com/Ventrilok/divelens/issues/new/choose). The repository is public: never attach a real dive log, a dive-log database or the Dive Lens log files. If the log files are needed, you will be asked for them: send them only by e-mail to [divelens@querton.com](mailto:divelens@querton.com), with the issue number.
-
-To report a security vulnerability or an exposed secret, see [`SECURITY.md`](SECURITY.md): privately, never in a public issue.
+Dive Lens is free and open source, under the [GNU General Public License v3.0](LICENSE). It includes [libdivecomputer](https://www.libdivecomputer.org) (LGPL 2.1, in `third_party/libdivecomputer`) to decode dive-computer data.
